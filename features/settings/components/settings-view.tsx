@@ -29,8 +29,8 @@ const TABS = [
 
 export function SettingsView() {
   return (
-    <div className="scroll setgrid">
-      <Tabs.Root defaultValue="Account">
+    <div className="scroll">
+      <Tabs.Root defaultValue="Account" className="setgrid">
         <Tabs.List className="pills pills-col" aria-label="Settings sections">
           {TABS.map((t) => (
             <Tabs.Trigger key={t} value={t} className="pill">
@@ -66,9 +66,17 @@ function Panel({ tab }: { tab: string }) {
   switch (tab) {
     case "Account":
       return (
-        <Card label="Account"
+        <Card
+          label="Account"
           footer={
-            <Btn kind="soft" sm icon="edit" onClick={() => toast("Profile editing arrives with account service", "edit")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="edit"
+              onClick={() =>
+                toast("Profile editing arrives with account service", "edit")
+              }
+            >
               Edit identity
             </Btn>
           }
@@ -106,16 +114,52 @@ function Panel({ tab }: { tab: string }) {
               />
             }
           />
-          <KvRow k="Voice replies" v={<Switch on={prefs.voice} onChange={(v) => setPref("voice", v)} label="Voice replies" />} />
+          <KvRow
+            k="Voice replies"
+            v={
+              <Switch
+                on={prefs.voice}
+                onChange={(v) => setPref("voice", v)}
+                label="Voice replies"
+              />
+            }
+          />
         </Card>
       );
 
     case "Notifications":
       return (
         <Card label="Notifications">
-          <KvRow k="Reminders" v={<Switch on={prefs.reminders} onChange={(v) => setPref("reminders", v)} label="Reminders" />} />
-          <KvRow k="Appointments" v={<Switch on={prefs.notif} onChange={(v) => setPref("notif", v)} label="Appointment notifications" />} />
-          <KvRow k="Sharing / access alerts" v={<Switch on={prefs.shareAlerts} onChange={(v) => setPref("shareAlerts", v)} label="Sharing alerts" />} />
+          <KvRow
+            k="Reminders"
+            v={
+              <Switch
+                on={prefs.reminders}
+                onChange={(v) => setPref("reminders", v)}
+                label="Reminders"
+              />
+            }
+          />
+          <KvRow
+            k="Appointments"
+            v={
+              <Switch
+                on={prefs.notif}
+                onChange={(v) => setPref("notif", v)}
+                label="Appointment notifications"
+              />
+            }
+          />
+          <KvRow
+            k="Sharing / access alerts"
+            v={
+              <Switch
+                on={prefs.shareAlerts}
+                onChange={(v) => setPref("shareAlerts", v)}
+                label="Sharing alerts"
+              />
+            }
+          />
         </Card>
       );
 
@@ -124,7 +168,12 @@ function Panel({ tab }: { tab: string }) {
         <Card
           label="Privacy"
           footer={
-            <Btn kind="soft" sm icon="shield" onClick={() => router.push("/sharing")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="shield"
+              onClick={() => router.push("/sharing")}
+            >
               Access history
             </Btn>
           }
@@ -136,13 +185,25 @@ function Panel({ tab }: { tab: string }) {
                 on={prefs.personalMem}
                 onChange={(v) => {
                   setPref("personalMem", v);
-                  toast(v ? "Personal memory on" : "Personal memory paused", "lock");
+                  toast(
+                    v ? "Personal memory on" : "Personal memory paused",
+                    "lock",
+                  );
                 }}
                 label="Personal memory"
               />
             }
           />
-          <KvRow k="Health memory (shareable)" v={<Switch on={prefs.healthMem} onChange={(v) => setPref("healthMem", v)} label="Health memory" />} />
+          <KvRow
+            k="Health memory (shareable)"
+            v={
+              <Switch
+                on={prefs.healthMem}
+                onChange={(v) => setPref("healthMem", v)}
+                label="Health memory"
+              />
+            }
+          />
         </Card>
       );
 
@@ -151,7 +212,12 @@ function Panel({ tab }: { tab: string }) {
         <Card
           label="Security"
           footer={
-            <Btn kind="soft" sm icon="lock" onClick={() => toast("Password reset link sent", "lock")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="lock"
+              onClick={() => toast("Password reset link sent", "lock")}
+            >
               Change password
             </Btn>
           }
@@ -160,7 +226,10 @@ function Panel({ tab }: { tab: string }) {
           <KvRow
             k="Web · Chrome"
             v={
-              <button className="link" onClick={() => toast("Session signed out", "out")}>
+              <button
+                className="link"
+                onClick={() => toast("Session signed out", "out")}
+              >
                 Sign out
               </button>
             }
@@ -172,8 +241,8 @@ function Panel({ tab }: { tab: string }) {
       return (
         <Card label="Data & History">
           <p className="small">
-            Raw chats, embeddings and media follow retention policy. Derived summaries
-            always point back to source evidence.
+            Raw chats, embeddings and media follow retention policy. Derived
+            summaries always point back to source evidence.
           </p>
           <div className="actrow">
             <Btn
@@ -185,17 +254,33 @@ function Panel({ tab }: { tab: string }) {
                 downloadJson("mhistree-health-history.json", {
                   profile: "Nati Adeyemi",
                   events: s.events,
-                  documents: useDocumentsStore.getState().documents.map((d) => d.name),
+                  documents: useDocumentsStore
+                    .getState()
+                    .documents.map((d) => d.name),
                 });
                 toast("Health history exported", "download");
               }}
             >
               Download health history
             </Btn>
-            <Btn kind="soft" sm icon="edit" onClick={() => toast("Correction requests reviewed within 72h", "edit")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="edit"
+              onClick={() =>
+                toast("Correction requests reviewed within 72h", "edit")
+              }
+            >
               Correction requests
             </Btn>
-            <Btn kind="soft" sm icon="x" onClick={() => toast("Deletion request logged for review", "alert")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="x"
+              onClick={() =>
+                toast("Deletion request logged for review", "alert")
+              }
+            >
               Request deletion
             </Btn>
           </div>
@@ -217,7 +302,8 @@ function Panel({ tab }: { tab: string }) {
             }
           />
           <p className="small">
-            Soft-float surface system · one saturated hero · one dark primary action.
+            Soft-float surface system · one saturated hero · one dark primary
+            action.
           </p>
         </Card>
       );
@@ -227,7 +313,12 @@ function Panel({ tab }: { tab: string }) {
         <Card
           label="Help"
           footer={
-            <Btn kind="soft" sm icon="chat" onClick={() => router.push("/chat")}>
+            <Btn
+              kind="soft"
+              sm
+              icon="chat"
+              onClick={() => router.push("/chat")}
+            >
               Talk to Mhistree
             </Btn>
           }
@@ -235,13 +326,15 @@ function Panel({ tab }: { tab: string }) {
           <MiniRow>
             <Icon n="spark" s={16} c="#478BEE" />
             <span className="small">
-              What can Mhistree remember? Only what you share or upload — always with provenance.
+              What can Mhistree remember? Only what you share or upload — always
+              with provenance.
             </span>
           </MiniRow>
           <MiniRow>
             <Icon n="shield" s={16} c="#2F8F5B" />
             <span className="small">
-              Who sees my diary? Nobody. Personal Context is architecturally excluded from clinician access.
+              Who sees my diary? Nobody. Personal Context is architecturally
+              excluded from clinician access.
             </span>
           </MiniRow>
         </Card>

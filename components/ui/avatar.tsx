@@ -10,7 +10,12 @@ type AvatarProps = {
   name?: string;
 };
 
-export function Avatar({ img, ring = "#C7C6F2", size = 44, name = "?" }: AvatarProps) {
+export function Avatar({
+  img,
+  ring = "#C7C6F2",
+  size = 44,
+  name = "?",
+}: AvatarProps) {
   const initial = (name[0] ?? "?").toUpperCase();
   return (
     <AvatarPrimitive.Root
@@ -19,6 +24,7 @@ export function Avatar({ img, ring = "#C7C6F2", size = 44, name = "?" }: AvatarP
         width: size,
         height: size,
         minWidth: size,
+        borderRadius: "50%",
         overflow: "hidden",
         boxShadow: `0 5px 12px rgba(0,0,0,.12), 0 0 0 3px ${ring} inset`,
       }}
@@ -27,12 +33,27 @@ export function Avatar({ img, ring = "#C7C6F2", size = 44, name = "?" }: AvatarP
         <AvatarPrimitive.Image
           src={img}
           alt={name}
-          style={{ width: "100%", height: "100%", objectFit: "cover" }}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            borderRadius: "50%",
+          }}
         />
       ) : null}
       <AvatarPrimitive.Fallback
         className="av-init"
-        style={{ background: ring, width: "100%", height: "100%" }}
+        style={{
+          background: ring,
+          width: "100%",
+          height: "100%",
+          borderRadius: "50%",
+          display: "grid",
+          placeItems: "center",
+          fontWeight: 800,
+          fontSize: Math.round(size * 0.38),
+          color: "#181818",
+        }}
         delayMs={img ? 300 : 0}
       >
         {initial}

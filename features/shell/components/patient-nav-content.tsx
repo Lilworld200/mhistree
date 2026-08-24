@@ -107,34 +107,33 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
           <Icon n="steth" s={17} />
           Clinician workspace
         </button>
-        <Link href="/settings" onClick={onClose} className="nav-item">
-          <Icon n="gear" s={17} />
-          Settings
-        </Link>
-        <button
-          className="nav-item"
-          onClick={() => toast("Support: care@mhistree.app · replies < 24h", "chat")}
+        <div
+          className="prow-container"
+          style={{ display: "flex", alignItems: "center", gap: 6 }}
         >
-          <Icon n="chat" s={17} />
-          Help
-        </button>
-        <button
-          className="nav-item"
-          onClick={() => {
-            onClose?.();
-            toast("Signed out (demo)", "out");
-          }}
-        >
-          <Icon n="out" s={17} />
-          Sign out
-        </button>
-        <div className="prow" role="link" tabIndex={0} onClick={() => go("/profile")} onKeyDown={(e) => e.key === "Enter" && go("/profile")}>
-          <Avatar img={AVATARS.nati} ring="#F4A8AC" size={36} name="Nati" />
-          <div className="pmeta">
-            <b>{PATIENT.name}</b>
-            <span>Patient · O+</span>
+          <div
+            className="prow"
+            style={{ flex: 1 }}
+            role="link"
+            tabIndex={0}
+            onClick={() => go("/profile")}
+            onKeyDown={(e) => e.key === "Enter" && go("/profile")}
+          >
+            <Avatar img={AVATARS.nati} ring="#F4A8AC" size={36} name="Nati" />
+            <div className="pmeta">
+              <b>{PATIENT.name}</b>
+              <span>Patient · O+</span>
+            </div>
           </div>
-          <Icon n="chev" s={16} />
+          <button
+            className="btn btn-icon btn-ghost"
+            style={{ width: 36, height: 36, minWidth: 36, borderRadius: "50%" }}
+            title="Settings"
+            aria-label="Settings"
+            onClick={() => go("/settings")}
+          >
+            <Icon n="gear" s={18} />
+          </button>
         </div>
       </div>
     </>
