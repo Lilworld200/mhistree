@@ -27,7 +27,6 @@ export const PATIENT_TITLES: Record<string, string> = {
   "/health": "Health",
   "/documents": "Documents",
   "/sharing": "Sharing",
-  "/profile": "Profile",
   "/settings": "Settings",
 };
 
@@ -57,7 +56,6 @@ export const TOPBAR_ACTIONS: Record<
   "/health": { id: "ask-health", icon: "spark", title: "Ask Mhistree" },
   "/documents": { id: "upload", icon: "up", title: "Upload document" },
   "/sharing": { id: "share", icon: "plus", title: "Share health information" },
-  "/profile": { id: "settings", icon: "gear", title: "Settings" },
   "/settings": { id: "back-to-chat", icon: "chev", title: "Back to chat" },
   "/clinician/dashboard": { id: "alerts", icon: "bell", title: "Alerts" },
   "/clinician/patients": { id: "search", icon: "search", title: "Search" },

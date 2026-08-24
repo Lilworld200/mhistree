@@ -117,6 +117,7 @@
   /* ── Sidebar shell ──────────────────────────────────────────── */
   .side {
     background: linear-gradient(180deg, var(--shell2), var(--shell));
+    position: relative;
     border: 1px solid var(--bl);
     border-radius: 28px;
     box-shadow: var(--sh3);
@@ -143,10 +144,10 @@
     place-items: center;
   }
   .brand {
+    position: absolute;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 4px 10px 16px;
     font-weight: 800;
     font-size: 17px;
     letter-spacing: -0.02em;

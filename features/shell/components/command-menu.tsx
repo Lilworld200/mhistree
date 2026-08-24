@@ -57,7 +57,6 @@ export function CommandMenu() {
       icon: "share",
       run: () => useSharingStore.getState().setWizardOpen(true),
     },
-    { label: "Open profile", icon: "user", run: () => router.push("/profile") },
     {
       label: "Open settings",
       icon: "gear",

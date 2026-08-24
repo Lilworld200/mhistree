@@ -1,19 +1,24 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { Btn } from "@/components/ui/button";
-import { Icon, Logo } from "@/components/ui/icons";
-import { toast } from "@/components/ui/toast-store";
+import { Icon } from "@/components/ui/icons";
 import { AVATARS, PATIENT } from "@/lib/demo/people";
 import { cn } from "@/lib/utils/cn";
 import { useChatStore } from "@/features/chat/store";
 import { PATIENT_NAV, SESSION_GROUPS } from "../config/navigation";
+import { useShellStore } from "../store";
+
+import logoBlack from "@/app/assets/images/logos/mhistree_black_logo.png";
+import logoWhite from "@/app/assets/images/logos/mhistree_white_logo.png";
 
 export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
+  const theme = useShellStore((s) => s.theme);
   const sessions = useChatStore((s) => s.sessions);
   const activeId = useChatStore((s) => s.activeSessionId);
   const newChat = useChatStore((s) => s.newChat);
@@ -27,8 +32,12 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   return (
     <>
       <div className="brand">
-        <Logo />
-        <span>Mhistree</span>
+        <Image
+          src={theme === "dark" ? logoWhite : logoBlack}
+          alt="Mhistree"
+          height={260}
+          priority
+        />
         {onClose && (
           <button className="dx" onClick={onClose} aria-label="Close menu">
             <Icon n="x" s={16} />
@@ -59,15 +68,6 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
             {nv.label}
           </Link>
         ))}
-
-        <Link
-          href="/profile"
-          onClick={onClose}
-          className={cn("nav-item", pathname === "/profile" && "on")}
-        >
-          <Icon n="user" s={17} />
-          Profile
-        </Link>
 
         <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
           RECENT CONVERSATIONS

@@ -1,13 +1,19 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
-import { Icon, Logo } from "@/components/ui/icons";
+import { Icon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast-store";
 import { AVATARS, CLINICIAN } from "@/lib/demo/people";
+import { useShellStore } from "../store";
+
+import logoBlack from "@/app/assets/images/logos/mhistree_black_logo.png";
+import logoWhite from "@/app/assets/images/logos/mhistree_white_logo.png";
 
 export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
   const router = useRouter();
+  const theme = useShellStore((s) => s.theme);
   const go = (href: string) => {
     onClose?.();
     router.push(href);
@@ -16,9 +22,13 @@ export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
   return (
     <>
       <div className="brand">
-        <Logo />
+        <Image
+          src={theme === "dark" ? logoWhite : logoBlack}
+          alt="Mhistree"
+          height={32}
+          priority
+        />
         <span>
-          Mhistree
           <b className="clinlab">Clinical</b>
         </span>
         {onClose && (
