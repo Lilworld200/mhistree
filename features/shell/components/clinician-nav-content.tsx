@@ -25,7 +25,8 @@ export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
         <Image
           src={theme === "dark" ? logoWhite : logoBlack}
           alt="Mhistree"
-          height={32}
+          height={60}
+          style={{ height: 60, width: 175, objectFit: "contain" }}
           priority
         />
         <span>
