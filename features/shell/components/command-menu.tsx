@@ -36,17 +36,33 @@ export function CommandMenu() {
   }
 
   const allItems: CommandItem[] = [
-    { label: "New chat", icon: "plus", run: () => useChatStore.getState().newChat() },
-    { label: "Open timeline", icon: "pulse", run: () => router.push("/timeline") },
+    {
+      label: "New chat",
+      icon: "plus",
+      run: () => useChatStore.getState().newChat(),
+    },
+    {
+      label: "Open timeline",
+      icon: "pulse",
+      run: () => router.push("/timeline"),
+    },
     { label: "Open health", icon: "heart", run: () => router.push("/health") },
-    { label: "Upload document", icon: "up", run: () => useDocumentsStore.getState().upload() },
+    {
+      label: "Upload document",
+      icon: "up",
+      run: () => useDocumentsStore.getState().upload(),
+    },
     {
       label: "Share health context",
       icon: "share",
       run: () => useSharingStore.getState().setWizardOpen(true),
     },
     { label: "Open profile", icon: "user", run: () => router.push("/profile") },
-    { label: "Open settings", icon: "gear", run: () => router.push("/settings") },
+    {
+      label: "Open settings",
+      icon: "gear",
+      run: () => router.push("/settings"),
+    },
     {
       label: "Switch to clinician",
       icon: "steth",
@@ -104,7 +120,11 @@ export function CommandMenu() {
           <button
             key={it.label}
             className="nav-item"
-            style={i === hi ? { background: "var(--card)", color: "var(--ink)" } : undefined}
+            style={
+              i === hi
+                ? { background: "var(--card)", color: "var(--ink)" }
+                : undefined
+            }
             onMouseEnter={() => setHi(i)}
             onClick={() => runAt(i)}
           >

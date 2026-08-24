@@ -35,7 +35,6 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
           </button>
         )}
       </div>
-
       <Btn
         kind="dark"
         icon="plus"
@@ -48,60 +47,60 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
       >
         New chat
       </Btn>
+      <div className="nav-body">
+        {PATIENT_NAV.map((nv) => (
+          <Link
+            key={nv.href}
+            href={nv.href}
+            onClick={onClose}
+            className={cn("nav-item", pathname === nv.href && "on")}
+          >
+            <Icon n={nv.icon} s={17} />
+            {nv.label}
+          </Link>
+        ))}
 
-      {PATIENT_NAV.map((nv) => (
         <Link
-          key={nv.href}
-          href={nv.href}
+          href="/profile"
           onClick={onClose}
-          className={cn("nav-item", pathname === nv.href && "on")}
+          className={cn("nav-item", pathname === "/profile" && "on")}
         >
-          <Icon n={nv.icon} s={17} />
-          {nv.label}
+          <Icon n="user" s={17} />
+          Profile
         </Link>
-      ))}
 
-      <Link
-        href="/profile"
-        onClick={onClose}
-        className={cn("nav-item", pathname === "/profile" && "on")}
-      >
-        <Icon n="user" s={17} />
-        Profile
-      </Link>
-
-      <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
-        RECENT CONVERSATIONS
+        <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
+          RECENT CONVERSATIONS
+        </div>
+        <div className="recents">
+          {SESSION_GROUPS.map((g) => {
+            const list = sessions.filter((s) => s.group === g);
+            if (!list.length) return null;
+            return (
+              <div key={g}>
+                <div className="glabel">{g}</div>
+                {list.map((s) => (
+                  <button
+                    key={s.id}
+                    className={cn(
+                      "nav-item",
+                      activeId === s.id && pathname === "/chat" && "on",
+                    )}
+                    onClick={() => {
+                      onClose?.();
+                      openSession(s.id);
+                      router.push("/chat");
+                    }}
+                  >
+                    <Icon n="chat" s={14} />
+                    <span className="ell">{s.title}</span>
+                  </button>
+                ))}
+              </div>
+            );
+          })}
+        </div>
       </div>
-      <div className="recents">
-        {SESSION_GROUPS.map((g) => {
-          const list = sessions.filter((s) => s.group === g);
-          if (!list.length) return null;
-          return (
-            <div key={g}>
-              <div className="glabel">{g}</div>
-              {list.map((s) => (
-                <button
-                  key={s.id}
-                  className={cn(
-                    "nav-item",
-                    activeId === s.id && pathname === "/chat" && "on",
-                  )}
-                  onClick={() => {
-                    onClose?.();
-                    openSession(s.id);
-                    router.push("/chat");
-                  }}
-                >
-                  <Icon n="chat" s={14} />
-                  <span className="ell">{s.title}</span>
-                </button>
-              ))}
-            </div>
-          );
-        })}
-      </div>
-
       <div className="sidefoot">
         <button className="nav-item" onClick={() => go("/clinician/dashboard")}>
           <Icon n="steth" s={17} />

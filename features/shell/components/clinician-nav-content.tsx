@@ -28,38 +28,52 @@ export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
         )}
       </div>
 
-      {[
-        { href: "/clinician/dashboard", icon: "pulse" as const, label: "Dashboard" },
-        { href: "/clinician/patients", icon: "user" as const, label: "Patients" },
-      ].map((nv) => (
-        <button key={nv.href} className="nav-item" onClick={() => go(nv.href)}>
-          <Icon n={nv.icon} s={17} />
-          {nv.label}
+      <div className="nav-body">
+        {[
+          {
+            href: "/clinician/dashboard",
+            icon: "pulse" as const,
+            label: "Dashboard",
+          },
+          {
+            href: "/clinician/patients",
+            icon: "user" as const,
+            label: "Patients",
+          },
+        ].map((nv) => (
+          <button
+            key={nv.href}
+            className="nav-item"
+            onClick={() => go(nv.href)}
+          >
+            <Icon n={nv.icon} s={17} />
+            {nv.label}
+          </button>
+        ))}
+
+        <button
+          className="nav-item"
+          onClick={() => {
+            onClose?.();
+            toast("2 alerts need review", "alert");
+          }}
+        >
+          <Icon n="alert" s={17} />
+          Alerts
+          <span className="nav-badge">2</span>
         </button>
-      ))}
 
-      <button
-        className="nav-item"
-        onClick={() => {
-          onClose?.();
-          toast("2 alerts need review", "alert");
-        }}
-      >
-        <Icon n="alert" s={17} />
-        Alerts
-        <span className="nav-badge">2</span>
-      </button>
-
-      <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
-        ACTIVE LEASES
+        <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
+          ACTIVE LEASES
+        </div>
+        <button
+          className="nav-item on"
+          onClick={() => go("/clinician/patients/p1")}
+        >
+          <Avatar img={AVATARS.nati} ring="#F4A8AC" size={24} name="N" />
+          <span className="ell">Nati Adeyemi</span>
+        </button>
       </div>
-      <button
-        className="nav-item on"
-        onClick={() => go("/clinician/patients/p1")}
-      >
-        <Avatar img={AVATARS.nati} ring="#F4A8AC" size={24} name="N" />
-        <span className="ell">Nati Adeyemi</span>
-      </button>
 
       <div className="sidefoot">
         <button className="nav-item" onClick={() => go("/chat")}>

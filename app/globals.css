@@ -207,10 +207,44 @@
     padding: 2px 7px;
     border-radius: 999px;
   }
-  .recents {
+  .nav-body {
     flex: 1;
     overflow-y: auto;
-    min-height: 40px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding-right: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: var(--bs) transparent;
+  }
+  .nav-body::-webkit-scrollbar,
+  .scroll::-webkit-scrollbar,
+  .msgs::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .nav-body::-webkit-scrollbar-track,
+  .scroll::-webkit-scrollbar-track,
+  .msgs::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .nav-body::-webkit-scrollbar-thumb,
+  .scroll::-webkit-scrollbar-thumb,
+  .msgs::-webkit-scrollbar-thumb {
+    background: var(--bs);
+    border-radius: 999px;
+  }
+  .nav-body::-webkit-scrollbar-thumb:hover,
+  .scroll::-webkit-scrollbar-thumb:hover,
+  .msgs::-webkit-scrollbar-thumb:hover {
+    background: var(--ink3);
+  }
+  .recents {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
   }
   .sidefoot {
     border-top: 1px solid var(--bs);
