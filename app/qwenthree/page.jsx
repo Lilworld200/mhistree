@@ -1,4 +1,4 @@
-"use client";
+"use client"
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AreaChart, Area, ResponsiveContainer } from 'recharts';
@@ -6,8 +6,8 @@ import { AreaChart, Area, ResponsiveContainer } from 'recharts';
 /* ══════════════════════════════════════════════════════════════════
    MHISTREE — Longitudinal Health Companion (MVP Frontend)
    React + Zustand-style store + Framer Motion + Recharts
-   Visual language: Soft-Float UI (second_design_principle.md)
-   Architecture: ai_scaffold.md (updated mobile nav: drawer, not bottom tabs)
+   Visual language: Soft-Float UI · Dark theme restyled after the
+   layered near-black music-player reference (theme only, not layout)
 ═══════════════════════════════════════════════════════════════════ */
 
 /* ---------- tiny zustand-compatible store ---------- */
@@ -98,7 +98,7 @@ const PROV = {
   self: { label: 'Patient reported', c: '#478BEE' },
   device: { label: 'Device', c: '#8A63D2' },
   lab: { label: 'Laboratory', c: '#2F8F5B' },
-  clinician: { label: 'Clinician verified', c: '#181818' },
+  clinician: { label: 'Clinician verified', c: '#55555A' },
   ai: { label: 'AI inferred', c: '#C08A2D' },
 };
 const STATUS_C = { verified: '#2F8F5B', reported: '#478BEE', inferred: '#C08A2D', corrected: '#C08A2D', disputed: '#CC5348', rejected: '#CC5348' };
@@ -108,9 +108,10 @@ const TYPE_META = {
   Condition: { icon: 'heart', c: '#D96459' },
   Vital: { icon: 'pulse', c: '#2F8F5B' },
   Lab: { icon: 'drop', c: '#C08A2D' },
-  Visit: { icon: 'cal', c: '#181818' },
-  Document: { icon: 'doc', c: '#6E6E6E' },
+  Visit: { icon: 'cal', c: '#7A7A80' },
+  Document: { icon: 'doc', c: '#8A8A90' },
 };
+const NEUTRAL_CHIP = { background: 'rgba(128,128,138,.16)', color: '#9A9AA0' };
 const T0 = Date.now();
 const seedEvents = [
   { id: 'e1', type: 'Symptom', title: 'Breathing difficulty', when: '19 Aug · 7:00 PM', ts: T0 - 86e6, desc: 'Breathing heavily for ~20 minutes after school practicals; skipped lunch.', src: 'self', status: 'reported', ep: 'ep1', session: 's1', sourceMsg: '“Today was exhausting… around 7pm I was breathing heavily for about 20 minutes.”' },
@@ -152,7 +153,7 @@ const seedMessages = {
 
 /* ---------- store ---------- */
 const store = createStore((set, get) => ({
-  theme: 'light', role: 'patient', page: 'chat', clinPage: 'dashboard', clinPatient: 'p1',
+  theme: 'dark', role: 'patient', page: 'chat', clinPage: 'dashboard', clinPatient: 'p1',
   drawer: false,
   sessions: seedSessions, activeSession: 's1', messages: seedMessages, typing: false,
   events: seedEvents, episodes: EPISODES, documents: seedDocs,
@@ -460,7 +461,7 @@ function Sidebar() {
   return <aside className="side">{role === 'patient' ? <PatientSideContent /> : <ClinSideContent />}</aside>;
 }
 
-/* ═════════════ MOBILE: TOP BAR + LEFT NAV DRAWER (ChatGPT-style, no bottom nav) ═════════════ */
+/* ═════════════ MOBILE: TOP BAR + LEFT NAV DRAWER ═════════════ */
 const PAGE_TITLES = { chat: 'Mhistree', timeline: 'Timeline', health: 'Health', documents: 'Documents', sharing: 'Sharing', profile: 'Profile', settings: 'Settings' };
 const C_TITLES = { dashboard: 'Dashboard', patients: 'Patients', patient: 'Patient record' };
 function MobileTopBar() {
@@ -644,7 +645,7 @@ function TimelinePage() {
         {list.map((ev, i2) => (
           <Reveal key={ev.id} d={Math.min(i2 * 0.04, 0.2)}>
             <button className="card evcard" onClick={() => set2({ evidenceId: ev.id })}>
-              <span className="tic" style={{ background: (TYPE_META[ev.type]?.c || '#666') + '22', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon || 'pulse'} s={17} /></span>
+              <span className="tic" style={{ background: (TYPE_META[ev.type]?.c || '#888') + '26', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon || 'pulse'} s={17} /></span>
               <span className="evmain">
                 <b>{ev.title}</b>
                 <span className="evwhen">{ev.when}</span>
@@ -720,7 +721,7 @@ function HealthPage() {
           <Label right={<button className="link" onClick={() => act.nav('timeline')}>Open timeline</button>}>Recent activity</Label>
           {recent.map((ev) => (
             <button key={ev.id} className="minirow" onClick={() => set2({ evidenceId: ev.id })}>
-              <span className="tic sm" style={{ background: (TYPE_META[ev.type]?.c || '#666') + '22', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={14} /></span>
+              <span className="tic sm" style={{ background: (TYPE_META[ev.type]?.c || '#888') + '26', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={14} /></span>
               <span className="ell"><b>{ev.title}</b><span className="small block">{ev.when}</span></span>
               <StatusBadge st={ev.status} />
             </button>
@@ -728,10 +729,10 @@ function HealthPage() {
         </div></Reveal>
         <Reveal d={0.2}><div className="card">
           <Label>Upcoming</Label>
-          <div className="minirow"><span className="tic sm" style={{ background: '#18181814', color: '#181818' }}><I n="cal" s={14} /></span>
+          <div className="minirow"><span className="tic sm" style={NEUTRAL_CHIP}><I n="cal" s={14} /></span>
             <span><b>Spirometry — Central Clinic</b><span className="small block">28 Aug · 10:30 AM · Dr. Emeka Obi</span></span>
           </div>
-          <div className="minirow"><span className="tic sm" style={{ background: '#478BEE22', color: '#478BEE' }}><I n="chat" s={14} /></span>
+          <div className="minirow"><span className="tic sm" style={{ background: '#478BEE26', color: '#478BEE' }}><I n="chat" s={14} /></span>
             <span><b>Weekly reflection</b><span className="small block">Mhistree will summarise your week on Sunday</span></span>
           </div>
         </div></Reveal>
@@ -756,7 +757,7 @@ function DocumentsPage() {
         {docs.map((d, i2) => (
           <Reveal key={d.id} d={i2 * 0.05}>
             <button className="card doccard" onClick={() => set2({ docView: d.id })}>
-              <span className="tic" style={{ background: '#C08A2D22', color: '#C08A2D' }}><I n="doc" s={18} /></span>
+              <span className="tic" style={{ background: '#C08A2D26', color: '#C08A2D' }}><I n="doc" s={18} /></span>
               <span className="evmain"><b>{d.name}</b><span className="evwhen">{d.type} · {d.date}</span>
                 <span className="evbadges">{d.processing ? <span className="badge" style={{ color: 'var(--amber)' }}><i className="dot" style={{ background: 'var(--amber)' }} />Processing</span> : <span className="badge" style={{ color: 'var(--green)' }}><i className="dot" style={{ background: 'var(--green)' }} />Processed</span>}</span>
               </span>
@@ -834,7 +835,7 @@ function SharingPage() {
           <div className="card">
             <Label>Access history</Label>
             {accessLog.slice(0, 6).map((a, i2) => (
-              <div key={i2} className="minirow"><span className="tic sm" style={{ background: '#2F8F5B22', color: '#2F8F5B' }}><I n="shield" s={14} /></span>
+              <div key={i2} className="minirow"><span className="tic sm" style={{ background: '#2F8F5B26', color: '#2F8F5B' }}><I n="shield" s={14} /></span>
                 <span><b>{a.actor}</b> <span className="small">{a.action}</span><span className="small block">{a.at} · {a.purpose}</span></span>
               </div>
             ))}
@@ -1052,9 +1053,9 @@ function ClinDashboard() {
         <span className="hpill dark"><I n="clock" s={13} />3 consultations today</span></div>
       <div className="grid3">
         <Reveal><div className="card"><Label right={<span className="badge" style={{ color: 'var(--red)' }}><i className="dot" style={{ background: 'var(--red)' }} />Urgent</span>}>Alerts</Label>
-          <button className="minirow" onClick={() => act.navClin('patient')}><span className="tic sm" style={{ background: '#8A63D222', color: '#8A63D2' }}><I n="pulse" s={14} /></span>
+          <button className="minirow" onClick={() => act.navClin('patient')}><span className="tic sm" style={{ background: '#8A63D226', color: '#8A63D2' }}><I n="pulse" s={14} /></span>
             <span><b>Nati · HR 118 bpm at rest</b><span className="small block">Device reading · 19 Aug, post-episode</span></span></button>
-          <button className="minirow" onClick={() => act.navClin('patient')}><span className="tic sm" style={{ background: '#C08A2D22', color: '#C08A2D' }}><I n="spark" s={14} /></span>
+          <button className="minirow" onClick={() => act.navClin('patient')}><span className="tic sm" style={{ background: '#C08A2D26', color: '#C08A2D' }}><I n="spark" s={14} /></span>
             <span><b>AI hypothesis awaiting review</b><span className="small block">Possible exercise-induced asthma</span></span></button>
         </div></Reveal>
         <Reveal d={0.06}><div className="card"><Label right={<span className="badge">{need} pending</span>}>Needs verification</Label>
@@ -1062,8 +1063,8 @@ function ClinDashboard() {
           <Btn kind="dark" sm icon="check" onClick={() => act.navClin('patient')}>Review queue</Btn>
         </div></Reveal>
         <Reveal d={0.12}><div className="card"><Label>Upcoming</Label>
-          <div className="minirow"><span className="tic sm" style={{ background: '#18181814' }}><I n="cal" s={14} /></span><span><b>Nati Adeyemi</b><span className="small block">28 Aug · Spirometry</span></span></div>
-          <div className="minirow"><span className="tic sm" style={{ background: '#18181814' }}><I n="cal" s={14} /></span><span><b>Musa Ibrahim</b><span className="small block">29 Aug · Follow-up (no lease yet)</span></span></div>
+          <div className="minirow"><span className="tic sm" style={NEUTRAL_CHIP}><I n="cal" s={14} /></span><span><b>Nati Adeyemi</b><span className="small block">28 Aug · Spirometry</span></span></div>
+          <div className="minirow"><span className="tic sm" style={NEUTRAL_CHIP}><I n="cal" s={14} /></span><span><b>Musa Ibrahim</b><span className="small block">29 Aug · Follow-up (no lease yet)</span></span></div>
         </div></Reveal>
       </div>
     </div>
@@ -1137,7 +1138,7 @@ function ClinPatient() {
           <div className="pills" style={{ marginBottom: 12 }}>{['Timeline', 'Vitals', 'Documents'].map((t) => <button key={t} className={`pill tiny ${tab === t ? 'on' : ''}`} onClick={() => setTab(t)}>{t}</button>)}</div>
           {tab === 'Timeline' && events.map((ev) => (
             <button key={ev.id} className="minirow" onClick={() => set2({ evidenceId: ev.id })}>
-              <span className="tic sm" style={{ background: (TYPE_META[ev.type]?.c || '#666') + '22', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={14} /></span>
+              <span className="tic sm" style={{ background: (TYPE_META[ev.type]?.c || '#888') + '26', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={14} /></span>
               <span className="ell"><b>{ev.title}</b><span className="small block">{ev.when}</span></span>
               <StatusBadge st={ev.status} />
             </button>
@@ -1145,7 +1146,7 @@ function ClinPatient() {
           {tab === 'Vitals' && (<><div className="vitalhead"><b className="vnum">79</b><span className="small">bpm latest · spike 118 on 19 Aug</span></div>
             <div style={{ height: 90 }}><ResponsiveContainer width="100%" height="100%"><AreaChart data={HR_DATA}><defs><linearGradient id="hrg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#478BEE" stopOpacity={0.35} /><stop offset="100%" stopColor="#478BEE" stopOpacity={0} /></linearGradient></defs><Area type="monotone" dataKey="v" stroke="#478BEE" strokeWidth={2.4} fill="url(#hrg2)" /></AreaChart></ResponsiveContainer></div></>)}
           {tab === 'Documents' && S().documents.map((d) => (
-            <div key={d.id} className="minirow"><span className="tic sm" style={{ background: '#C08A2D22', color: '#C08A2D' }}><I n="doc" s={14} /></span><span><b>{d.name}</b><span className="small block">{d.date}</span></span></div>
+            <div key={d.id} className="minirow"><span className="tic sm" style={{ background: '#C08A2D26', color: '#C08A2D' }}><I n="doc" s={14} /></span><span><b>{d.name}</b><span className="small block">{d.date}</span></span></div>
           ))}
         </div></Reveal>
         <Reveal d={0.15}><div className="card">
@@ -1177,7 +1178,7 @@ function ClinPatient() {
           <Label right={<span className="badge">Clinician-authored</span>}>Encounter note</Label>
           <textarea id="encNote" className="tarea" placeholder="Write your assessment…" value={note} onChange={(e) => setNote(e.target.value)} />
           <Btn kind="soft" sm icon="plus" onClick={() => { if (!note.trim()) return; store.setState({ notes: [{ id: 'n' + Date.now(), text: note, by: 'Dr. Amara Okafor', at: 'Today' }, ...notes] }); setNote(''); act.toast('Note committed as clinician-authored fact', 'check'); }}>Add note</Btn>
-          {notes.map((nt) => <div key={nt.id} className="minirow"><I n="edit" s={14} c="#6E6E6E" /><span className="small">{nt.text} — <b>{nt.by}, {nt.at}</b></span></div>)}
+          {notes.map((nt) => <div key={nt.id} className="minirow"><I n="edit" s={14} c="#9A9AA0" /><span className="small">{nt.text} — <b>{nt.by}, {nt.at}</b></span></div>)}
           <Label>Ask about this patient</Label>
           <div className="qchips">{['Summarize the last 30 days', 'What changed?', 'What remains unverified?', 'What information is missing?'].map((p) => <button key={p} className="pill tiny" onClick={() => askAI(p)}>{p}</button>)}</div>
           <div className="feed">{feed.map((f, i2) => (
@@ -1189,7 +1190,6 @@ function ClinPatient() {
           </form>
         </div></Reveal>
       </div>
-      {/* mobile clinical action toolbar (actions, not navigation) */}
       <div className="ctoolbar">
         <button onClick={() => set2({ aiDrawer: { context: 'patient' } })}><I n="spark" s={18} />AI</button>
         <button onClick={() => { const u = unverified[0]; if (u) set2({ evidenceId: u.id }); else act.toast('Queue clear — all verified', 'check'); }}><I n="check" s={18} />Verify</button>
@@ -1210,7 +1210,7 @@ function EvidenceDrawer() {
         <>
           <div className="dhead"><b className="ptitle sm">Why is this here?</b><IconBtn ghost icon="x" size={36} onClick={() => set2({ evidenceId: null })} /></div>
           <div className="scroll" style={{ padding: '0 22px 22px' }}>
-            <div className="evhead"><span className="tic" style={{ background: (TYPE_META[ev.type]?.c || '#666') + '22', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={18} /></span>
+            <div className="evhead"><span className="tic" style={{ background: (TYPE_META[ev.type]?.c || '#888') + '26', color: TYPE_META[ev.type]?.c }}><I n={TYPE_META[ev.type]?.icon} s={18} /></span>
               <div><b>{ev.title}</b><span className="small block">{ev.when}</span></div></div>
             <div className="evbadges"><ProvBadge src={ev.src} /><StatusBadge st={ev.status} />{ev.verifiedBy && <span className="badge"><i className="dot" style={{ background: '#2F8F5B' }} />by {ev.verifiedBy}</span>}</div>
             <p className="small" style={{ margin: '12px 0' }}>{ev.desc}</p>
@@ -1341,8 +1341,10 @@ export default function App() {
 }
 
 /* ══════════════════════════════════════════════════════════════════
-   SOFT-FLOAT UI — CSS (second_design_principle.md tokens)
-   Mobile nav: ChatGPT-style left drawer + top bar (no bottom tabs)
+   SOFT-FLOAT UI — CSS
+   Light: warm gray soft-float · Dark: layered near-black music-player
+   theme (stage #0E0E10 → shells #191A1C → cards #28292C → active
+   pills #3C3D42), subtle white keylines, full-radius controls.
 ═══════════════════════════════════════════════════════════════════ */
 const CSS = `
 @import url('https://cdn.jsdelivr.net/fontsource/css/manrope@latest/index.css');
@@ -1359,16 +1361,9 @@ input,textarea{font:inherit;color:inherit}
   --green:#2F8F5B; --amber:#C08A2D; --red:#CC5348;
   color:var(--ink); font-family:'Manrope',system-ui,sans-serif; letter-spacing:-0.01em;
 }
-.app[data-theme='dark']{
-  --stage:#141416; --shell:#1D1E21; --shell2:#232427; --card:#26272B;
-  --ink:#F2F2F2; --ink2:#B9B9B9; --ink3:#8A8A8A;
-  --bl:rgba(255,255,255,.12); --bs:rgba(255,255,255,.07);
-  --sh1:0 3px 8px rgba(0,0,0,.3); --sh2:0 6px 14px rgba(0,0,0,.35); --sh3:0 22px 45px rgba(0,0,0,.5);
-}
 .app{min-height:100vh}
 .stage{min-height:100vh;display:grid;grid-template-columns:288px 1fr;gap:20px;max-width:1480px;margin:0 auto;padding:20px;
   background:radial-gradient(circle at 50% 30%, var(--bl), transparent 60%) var(--stage);}
-.app[data-theme='dark'] .stage{background:radial-gradient(circle at 50% 20%, rgba(255,255,255,.05), transparent 55%) var(--stage);}
 /* sidebar (desktop) */
 .side{background:linear-gradient(180deg,var(--shell2),var(--shell));border:1px solid var(--bl);border-radius:28px;box-shadow:var(--sh3);
   padding:18px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:20px;height:calc(100vh - 40px);overflow:hidden}
@@ -1388,9 +1383,9 @@ input,textarea{font:inherit;color:inherit}
 .prow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:18px;cursor:pointer}
 .prow:hover{background:var(--card)}
 .pmeta{flex:1;text-align:left}.pmeta b{font-size:13px;display:block}.pmeta span{font-size:11px;color:var(--ink2)}
-/* mobile top bar (hamburger · title · contextual action) */
+/* mobile top bar */
 .topbar{display:none}
-/* mobile left navigation drawer (ChatGPT-style) */
+/* mobile left navigation drawer */
 .drawer-left{position:fixed;top:0;left:0;bottom:0;width:min(86vw,360px);z-index:80;display:flex;flex-direction:column;gap:4px;
   background:linear-gradient(180deg,var(--shell2),var(--shell));border:1px solid var(--bl);border-left:none;border-radius:0 28px 28px 0;
   box-shadow:var(--sh3);overflow-y:auto;padding:16px 12px 20px}
@@ -1458,7 +1453,7 @@ button.card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.
 .ptitle.sm{font-size:17px}
 .psub{color:var(--ink2);font-size:13px;margin-top:4px;font-weight:600}
 .searchpill{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--bl);border-radius:999px;padding:10px 16px;box-shadow:var(--sh1);color:var(--ink3)}
-.searchpill input{border:none;outline:none;background:transparent;width:170px;font-size:13px;font-weight:600}
+.searchpill input{border:none;outline:none;background:transparent;width:170px;font-size:13px;font-weight:600;color:var(--ink)}
 .searchpill.big{padding:14px 18px;margin-bottom:12px}.searchpill.big input{width:100%}
 /* timeline */
 .tl{position:relative;padding-left:22px;margin-top:6px}
@@ -1509,7 +1504,7 @@ button.card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.
 .tdots i:nth-child(2){animation-delay:.15s}.tdots i:nth-child(3){animation-delay:.3s}
 @keyframes tb{30%{transform:translateY(-4px);opacity:.5}}
 .composer{display:flex;gap:10px;align-items:center;padding:16px 22px;border-top:1px solid var(--bs)}
-.cinput{flex:1;background:var(--card);border:1px solid var(--bl);border-radius:999px;padding:13px 20px;font-size:14px;font-weight:600;outline:none;box-shadow:inset 0 1px 2px rgba(255,255,255,.5)}
+.cinput{flex:1;background:var(--card);border:1px solid var(--bl);border-radius:999px;padding:13px 20px;font-size:14px;font-weight:600;outline:none;box-shadow:inset 0 1px 2px rgba(255,255,255,.5);color:var(--ink)}
 .cinput:focus{border-color:var(--hero2)}
 .send{width:50px;height:50px;padding:0;border-radius:50%}
 /* health */
@@ -1544,7 +1539,7 @@ button.card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.
 .setgrid{display:grid;grid-template-columns:220px 1fr;gap:18px;align-items:start}
 .setgrid .pills{margin-top:0}
 @media(max-width:900px){.setgrid{grid-template-columns:1fr}}
-.tarea{width:100%;min-height:84px;background:var(--shell);border:1px solid var(--bs);border-radius:16px;padding:12px 14px;font-size:13px;font-weight:600;outline:none;margin:8px 0 10px;resize:vertical}
+.tarea{width:100%;min-height:84px;background:var(--shell);border:1px solid var(--bs);border-radius:16px;padding:12px 14px;font-size:13px;font-weight:600;outline:none;margin:8px 0 10px;resize:vertical;color:var(--ink)}
 /* wizard */
 .steps{display:flex;gap:6px;margin-bottom:16px}
 .steps i{height:5px;flex:1;border-radius:99px;background:var(--bs)}
@@ -1566,7 +1561,6 @@ button.card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.
 .vrow{display:flex;flex-direction:column;gap:8px;padding:10px 0;border-bottom:1px solid var(--bs)}
 .feed{display:flex;flex-direction:column;gap:10px;margin:10px 0}
 .feeditem{background:var(--shell);border:1px solid var(--bs);border-radius:16px;padding:10px 12px}
-/* mobile clinical action toolbar (actions only — not navigation) */
 .ctoolbar{display:none}
 /* overlays */
 .scrim{position:fixed;inset:0;background:rgba(15,15,15,.35);backdrop-filter:blur(6px);z-index:60}
@@ -1588,6 +1582,57 @@ button.card:hover{transform:translateY(-2px);box-shadow:0 10px 22px rgba(0,0,0,.
 .sw.on{background:linear-gradient(145deg,#68A4FF,#2F74D8);border-color:transparent}
 .sw i{position:absolute;top:2px;left:2px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 2px 6px rgba(0,0,0,.2);transition:.2s}
 .sw.on i{left:20px}
+
+/* ═══════════ DARK THEME — layered near-black player aesthetic ═══════════
+   stage #0E0E10 · shells #191A1C · cards #28292C · active pills #3C3D42
+   subtle white keylines · deep black shadows · single blue hero accent   */
+.app[data-theme='dark']{
+  --stage:#0E0E10; --shell:#191A1C; --shell2:#1F2023; --card:#28292C;
+  --ink:#F4F4F5; --ink2:#A8A8AD; --ink3:#77777C;
+  --bl:rgba(255,255,255,.10); --bs:rgba(255,255,255,.06);
+  --sh1:0 3px 10px rgba(0,0,0,.35); --sh2:0 8px 20px rgba(0,0,0,.4); --sh3:0 24px 50px rgba(0,0,0,.55);
+  --green:#4CC38A; --amber:#E0A83F; --red:#E5695E;
+}
+.app[data-theme='dark'] .stage{background:radial-gradient(circle at 50% 16%, rgba(255,255,255,.05), transparent 55%) var(--stage)}
+.app[data-theme='dark'] .side,.app[data-theme='dark'] .main,.app[data-theme='dark'] .drawer-left,
+.app[data-theme='dark'] .drawer,.app[data-theme='dark'] .panel,.app[data-theme='dark'] .topbar{
+  background:linear-gradient(180deg,var(--shell2),var(--shell));border-color:var(--bl)}
+.app[data-theme='dark'] .nav.on{background:#3C3D42;border-color:rgba(255,255,255,.14);box-shadow:0 2px 10px rgba(0,0,0,.4)}
+.app[data-theme='dark'] .nav:hover{background:#26272A}
+.app[data-theme='dark'] .prow:hover,.app[data-theme='dark'] .dx:hover{background:#26272A}
+.app[data-theme='dark'] .btn.soft{background:linear-gradient(180deg,#2F3034,#26272B);box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 1px rgba(255,255,255,.07)}
+.app[data-theme='dark'] .btn.icon{background:#2F3034;box-shadow:0 3px 10px rgba(0,0,0,.4), inset 0 1px 1px rgba(255,255,255,.06)}
+.app[data-theme='dark'] .btn.dark{border-color:rgba(255,255,255,.2);box-shadow:0 8px 18px rgba(0,0,0,.55), inset 0 1px 1px rgba(255,255,255,.22)}
+.app[data-theme='dark'] .pill{background:#26272B;box-shadow:0 2px 8px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.05)}
+.app[data-theme='dark'] .pill.on{background:#3C3D42;border-color:rgba(255,255,255,.16);box-shadow:0 4px 12px rgba(0,0,0,.45)}
+.app[data-theme='dark'] .card{box-shadow:0 8px 20px rgba(0,0,0,.35), inset 0 1px 1px rgba(255,255,255,.05)}
+.app[data-theme='dark'] button.card:hover{box-shadow:0 12px 26px rgba(0,0,0,.5)}
+.app[data-theme='dark'] .card.inset{background:transparent;box-shadow:none}
+.app[data-theme='dark'] .bubble{box-shadow:0 4px 12px rgba(0,0,0,.3), inset 0 1px 1px rgba(255,255,255,.05)}
+.app[data-theme='dark'] .bubble.userb{background:linear-gradient(180deg,#45464B,#333439);border-color:rgba(255,255,255,.14)}
+.app[data-theme='dark'] .aav,.app[data-theme='dark'] .syschip{background:var(--card)}
+.app[data-theme='dark'] .searchpill{border-color:rgba(255,255,255,.16)}
+.app[data-theme='dark'] .cinput{background:#232428;box-shadow:none}
+.app[data-theme='dark'] .tarea{background:#232428}
+.app[data-theme='dark'] .preview{background:#232428}
+.app[data-theme='dark'] .feeditem{background:#232428}
+.app[data-theme='dark'] .quote{background:#232428}
+.app[data-theme='dark'] .hpill.dark{background:#2C2D31;color:var(--ink2)}
+.app[data-theme='dark'] .badge{background:#2E2F33}
+.app[data-theme='dark'] .opt{background:#26272B}
+.app[data-theme='dark'] .opt.locked{background:transparent}
+.app[data-theme='dark'] .sw{background:#333438}
+.app[data-theme='dark'] .toast{background:linear-gradient(180deg,#26262A,#151517);border:1px solid rgba(255,255,255,.14)}
+.app[data-theme='dark'] .leasepill{border:1px solid rgba(255,255,255,.2)}
+.app[data-theme='dark'] .scrim{background:rgba(0,0,0,.55)}
+.app[data-theme='dark'] .brand .clinlab{color:#8CC9FF}
+.app[data-theme='dark'] .memchip{color:#8CC9FF;background:rgba(71,134,239,.16)}
+.app[data-theme='dark'] .av{border-color:rgba(255,255,255,.85)}
+.app[data-theme='dark'] .tl>div::before{box-shadow:0 0 0 3px var(--stage)}
+.app[data-theme='dark'] .hero{box-shadow:inset 0 1px 1px rgba(255,255,255,.5), 0 16px 40px rgba(0,0,0,.5)}
+.app[data-theme='dark'] .ctoolbar{background:linear-gradient(180deg,var(--shell2),var(--shell));border-color:var(--bl)}
+.app[data-theme='dark'] .ctoolbar button:active{background:#2C2D31}
+
 /* ── responsive: tablet & mobile → top bar + left drawer, NO bottom nav ── */
 @media(max-width:980px){
   .topbar{display:flex;align-items:center;gap:8px;padding:8px 10px;background:linear-gradient(180deg,var(--shell2),var(--shell));border:1px solid var(--bl);border-radius:20px;box-shadow:var(--sh2);position:sticky;top:12px;z-index:40}
