@@ -35,7 +35,7 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
         <Image
           src={theme === "dark" ? logoWhite : logoBlack}
           alt="Mhistree"
-          height={260}
+          height={160}
           priority
         />
         {onClose && (
