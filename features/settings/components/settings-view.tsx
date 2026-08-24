@@ -17,36 +17,37 @@ import { useShellStore } from "@/features/shell/store";
 import { useSettingsStore } from "../store";
 
 const TABS = [
-  "Account",
-  "Conversation",
-  "Notifications",
-  "Privacy",
-  "Security",
-  "Data & History",
-  "Appearance",
-  "Help",
+  { id: "Account", label: "Account", icon: "user" as const },
+  { id: "Conversation", label: "Conversation", icon: "chat" as const },
+  { id: "Notifications", label: "Notifications", icon: "alert" as const },
+  { id: "Privacy", label: "Privacy", icon: "lock" as const },
+  { id: "Security", label: "Security", icon: "shield" as const },
+  { id: "Data & History", label: "Data & History", icon: "doc" as const },
+  { id: "Appearance", label: "Appearance", icon: "spark" as const },
+  { id: "Help", label: "Help", icon: "steth" as const },
 ];
 
 export function SettingsView() {
   return (
-    <div className="scroll">
-      <Tabs.Root defaultValue="Account" className="setgrid">
-        <Tabs.List className="pills pills-col" aria-label="Settings sections">
+    <div className="scroll setcontainer">
+      <Tabs.Root defaultValue="Account" className="setlayout">
+        <Tabs.List className="settabs" aria-label="Settings sections">
           {TABS.map((t) => (
-            <Tabs.Trigger key={t} value={t} className="pill">
-              {t}
+            <Tabs.Trigger key={t.id} value={t.id} className="settab">
+              <Icon n={t.icon} s={16} />
+              <span>{t.label}</span>
             </Tabs.Trigger>
           ))}
         </Tabs.List>
-        <div>
+        <div className="setbody">
           {TABS.map((t) => (
-            <Tabs.Content key={t} value={t}>
+            <Tabs.Content key={t.id} value={t.id}>
               <motion.div
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
+                transition={{ duration: 0.18 }}
               >
-                <Panel tab={t} />
+                <Panel tab={t.id} />
               </motion.div>
             </Tabs.Content>
           ))}

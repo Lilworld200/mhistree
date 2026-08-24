@@ -83,31 +83,31 @@
 
 .app {
   min-height: 100vh;
+  width: 100%;
   color: var(--ink);
   font-family: var(--font-manrope), "Manrope", system-ui, sans-serif;
   letter-spacing: -0.01em;
+  background: radial-gradient(circle at 50% 30%, var(--bl), transparent 60%)
+    var(--stage);
+}
+[data-theme="dark"] .app {
+  background: radial-gradient(
+      circle at 50% 20%,
+      rgba(255, 255, 255, 0.05),
+      transparent 55%
+    )
+    var(--stage);
 }
 
 @layer components {
   /* ── Stage layout ───────────────────────────────────────────── */
   .stage {
     min-height: 100vh;
+    width: 100%;
     display: grid;
     grid-template-columns: 288px 1fr;
     gap: 20px;
-    max-width: 1480px;
-    margin: 0 auto;
     padding: 20px;
-    background: radial-gradient(circle at 50% 30%, var(--bl), transparent 60%)
-      var(--stage);
-  }
-  [data-theme="dark"] .stage {
-    background: radial-gradient(
-        circle at 50% 20%,
-        rgba(255, 255, 255, 0.05),
-        transparent 55%
-      )
-      var(--stage);
   }
 
   /* ── Sidebar shell ──────────────────────────────────────────── */
@@ -1026,14 +1026,79 @@
   }
 
   /* ── Settings ───────────────────────────────────────────────── */
-  .setgrid {
-    display: grid;
-    grid-template-columns: 220px 1fr;
-    gap: 18px;
-    align-items: start;
+  .setcontainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
   }
-  .setgrid .pills {
-    margin-top: 0;
+  .setlayout {
+    display: flex;
+    gap: 24px;
+    align-items: flex-start;
+    width: 100%;
+  }
+  .settabs {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 220px;
+    min-width: 220px;
+    flex-shrink: 0;
+  }
+  .settab {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 16px;
+    border-radius: 999px;
+    background: var(--card);
+    border: 1px solid var(--bl);
+    font-size: 13.5px;
+    font-weight: 700;
+    color: var(--ink2);
+    box-shadow: var(--sh1);
+    transition: all 0.18s ease;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .settab:hover {
+    color: var(--ink);
+    background: var(--shell2);
+  }
+  .settab.on,
+  .settab[data-state="on"],
+  .settab[data-state="active"] {
+    background: var(--cta-bg);
+    color: var(--cta-ink);
+    border-color: var(--cta-border);
+    box-shadow: var(--cta-shadow);
+  }
+  .setbody {
+    flex: 1;
+    min-width: 0;
+  }
+
+  @media (max-width: 860px) {
+    .setlayout {
+      flex-direction: column;
+      gap: 16px;
+    }
+    .settabs {
+      width: 100%;
+      min-width: 100%;
+      flex-direction: row;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      -webkit-overflow-scrolling: touch;
+    }
+    .settab {
+      width: auto;
+      white-space: nowrap;
+      flex-shrink: 0;
+      padding: 9px 15px;
+      font-size: 12.5px;
+    }
   }
   .tarea {
     width: 100%;
