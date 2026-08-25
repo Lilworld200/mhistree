@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
@@ -14,6 +15,9 @@ import { useShellStore } from "../store";
 import logoBlack from "@/app/assets/images/logos/mhistree_black_logo.png";
 import logoWhite from "@/app/assets/images/logos/mhistree_white_logo.png";
 
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
+
 export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -22,6 +26,56 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   const activeId = useChatStore((s) => s.activeSessionId);
   const newChat = useChatStore((s) => s.newChat);
   const openSession = useChatStore((s) => s.openSession);
+  const fetchHistory = useChatStore((s) => s.fetchHistory);
+  const loaded = useChatStore((s) => s.loaded);
+
+  const [user, setUser] = useState<{
+    email?: string;
+    first_name?: string;
+  } | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setUser({
+          email: data.user.email,
+          first_name: data.user.user_metadata?.first_name || "Patient",
+        });
+      }
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          email: session.user.email,
+          first_name: session.user.user_metadata?.first_name || "Patient",
+        });
+      } else {
+        setUser(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setUser(null);
+    onClose?.();
+    router.push("/chat");
+  };
+
+  useEffect(() => {
+    if (!loaded) {
+      fetchHistory();
+    }
+  }, [loaded, fetchHistory]);
 
   const go = (href: string) => {
     onClose?.();
@@ -115,34 +169,54 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
           <Icon n="steth" s={17} />
           Clinician workspace
         </button>
-        <div
-          className="prow-container"
-          style={{ display: "flex", alignItems: "center", gap: 6 }}
-        >
+
+        {user ? (
           <div
-            className="prow"
-            style={{ flex: 1 }}
-            role="link"
-            tabIndex={0}
-            onClick={() => go("/profile")}
-            onKeyDown={(e) => e.key === "Enter" && go("/profile")}
+            className="prow-container"
+            style={{ display: "flex", alignItems: "center", gap: 6 }}
           >
-            <Avatar ring="#F4A8AC" size={36} name="P" />
-            <div className="pmeta">
-              <b>Patient Profile</b>
-              <span>Health Record</span>
+            <div
+              className="prow"
+              style={{ flex: 1 }}
+              role="link"
+              tabIndex={0}
+              onClick={() => go("/profile")}
+              onKeyDown={(e) => e.key === "Enter" && go("/profile")}
+            >
+              <Avatar ring="#F4A8AC" size={36} name={user.first_name || "P"} />
+              <div className="pmeta">
+                <b>{user.first_name || "Patient Profile"}</b>
+                <span>{user.email || "Health Record"}</span>
+              </div>
             </div>
+            <button
+              className="btn btn-icon btn-ghost"
+              style={{
+                width: 36,
+                height: 36,
+                minWidth: 36,
+                borderRadius: "50%",
+              }}
+              title="Sign Out"
+              aria-label="Sign Out"
+              onClick={handleSignOut}
+            >
+              <Icon n="out" s={18} />
+            </button>
           </div>
-          <button
-            className="btn btn-icon btn-ghost"
-            style={{ width: 36, height: 36, minWidth: 36, borderRadius: "50%" }}
-            title="Settings"
-            aria-label="Settings"
-            onClick={() => go("/settings")}
+        ) : (
+          <Btn
+            kind="dark"
+            style={{
+              width: "100%",
+              marginTop: "8px",
+              justifyContent: "center",
+            }}
+            onClick={() => go("/auth")}
           >
-            <Icon n="gear" s={18} />
-          </button>
-        </div>
+            Sign In / Sign Up
+          </Btn>
+        )}
       </div>
     </>
   );

@@ -15,6 +15,15 @@ export function ChatView() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const session = sessions.find((s) => s.id === activeId);
 
+  const fetchHistory = useChatStore((s) => s.fetchHistory);
+  const loaded = useChatStore((s) => s.loaded);
+
+  useEffect(() => {
+    if (!loaded) {
+      fetchHistory();
+    }
+  }, [loaded, fetchHistory]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;

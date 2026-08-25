@@ -19,6 +19,7 @@ import { searchMedicalChunks } from "@/lib/ai/rag";
 import { logAuditEvent } from "@/lib/security/audit";
 import { sanitizeInput } from "@/lib/security/sanitize";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import { getOrCreateDefaultPatientId } from "@/lib/supabase/patient-helper";
 import type {
   DBHealthMemory,
   DBVital,
@@ -151,8 +152,52 @@ export async function POST(request: Request) {
     ...sanitizedMessages,
   ];
 
-  // 5. Stream response via OpenRouter Gateway (SSE)
+  // 5. Stream response via OpenRouter Gateway (SSE) & Persist to Supabase
   const encoder = new TextEncoder();
+  let fullAiText = "";
+  const supabase = createAdminSupabaseClient();
+
+  // Resolve patient_id if omitted
+  let resolvedPatientId = body.patient_id;
+  if (!resolvedPatientId) {
+    resolvedPatientId =
+      (await getOrCreateDefaultPatientId(supabase)) || undefined;
+  }
+
+  // Ensure session & user message are saved to Supabase
+  const activeSessionId = body.sessionId;
+  if (activeSessionId && resolvedPatientId && lastUserMessage) {
+    const sessionTitle =
+      lastUserMessage.content.slice(0, 30) +
+      (lastUserMessage.content.length > 30 ? "…" : "");
+
+    // Upsert session
+    const { error: sessErr } = await supabase.from("chat_sessions").upsert(
+      {
+        id: activeSessionId,
+        patient_id: resolvedPatientId,
+        title: sessionTitle,
+        session_group: "Today",
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "id" },
+    );
+    if (sessErr) {
+      console.error("[Chat Session Upsert Error]:", sessErr);
+    }
+
+    // Save user message
+    const { error: userMsgErr } = await supabase.from("chat_messages").insert({
+      session_id: activeSessionId,
+      role: "user",
+      content: lastUserMessage.content,
+      tokens_used: 0,
+      attachments: [],
+    });
+    if (userMsgErr) {
+      console.error("[Chat User Message Insert Error]:", userMsgErr);
+    }
+  }
 
   const stream = new ReadableStream({
     async start(controller) {
@@ -163,6 +208,7 @@ export async function POST(request: Request) {
 
         for await (const chunk of chunks) {
           if (chunk.delta) {
+            fullAiText += chunk.delta;
             controller.enqueue(
               encoder.encode(
                 `data: ${JSON.stringify({ delta: chunk.delta })}\n\n`,
@@ -180,13 +226,33 @@ export async function POST(request: Request) {
         );
       } finally {
         controller.close();
+
+        // Persist completed AI response to Supabase
+        if (activeSessionId && fullAiText.trim()) {
+          try {
+            await supabase.from("chat_messages").insert({
+              session_id: activeSessionId,
+              role: "assistant",
+              content: fullAiText,
+              tokens_used: 0,
+              attachments: [],
+            });
+
+            await supabase
+              .from("chat_sessions")
+              .update({ updated_at: new Date().toISOString() })
+              .eq("id", activeSessionId);
+          } catch (e) {
+            console.error("[Chat Stream Save Error]:", e);
+          }
+        }
       }
     },
   });
 
   // 6. Asynchronous Audit Logging & Continuous Health Memory Extraction (Non-blocking background)
-  if (body.patient_id && lastUserMessage) {
-    const pId = body.patient_id;
+  if (resolvedPatientId && lastUserMessage) {
+    const pId = resolvedPatientId;
     const userMsg = lastUserMessage.content;
 
     Promise.allSettled([
@@ -206,7 +272,6 @@ export async function POST(request: Request) {
           });
 
           if (extraction.memories && extraction.memories.length > 0) {
-            const supabase = createAdminSupabaseClient();
             const memoryRows = extraction.memories.map((mem) => ({
               patient_id: pId,
               contributor_role: "ai_extractor",

@@ -13,7 +13,7 @@ This document tracks all reviewed, verified, and working code workflows in the M
 2. **Non-Breaking Preservation Guarantee**:
    - All workflows documented in `WORKING_WORKFLOW.md` are **CRITICAL VERIFIED SYSTEM WORKFLOWS**.
    - AI Agents MUST NOT break, alter, or regress any documented workflow during future edits.
-   - Refactoring underlying implementation details is allowed only if the functional behavior, user experience, and defined API/UI contracts remain 100% intact and verified.
+   - Refactoring underlying implementation details is allowed only if the functional behavior, user experience, and defined API/UI contracts remain 100% intact and verified or if the user explicitly requests a change to the workflow.
 
 ---
 
