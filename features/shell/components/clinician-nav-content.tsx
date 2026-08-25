@@ -5,7 +5,6 @@ import Image from "next/image";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icons";
 import { toast } from "@/components/ui/toast-store";
-import { AVATARS, CLINICIAN } from "@/lib/demo/people";
 import { useShellStore } from "../store";
 
 import logoBlack from "@/app/assets/images/logos/mhistree_black_logo.png";
@@ -66,24 +65,22 @@ export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
           className="nav-item"
           onClick={() => {
             onClose?.();
-            toast("2 alerts need review", "alert");
+            toast("No pending clinical alerts", "check");
           }}
         >
           <Icon n="alert" s={17} />
           Alerts
-          <span className="nav-badge">2</span>
         </button>
 
         <div className="mlabel" style={{ margin: "14px 14px 6px" }}>
           ACTIVE LEASES
         </div>
-        <button
-          className="nav-item on"
-          onClick={() => go("/clinician/patients/p1")}
+        <div
+          className="glabel"
+          style={{ padding: "4px 14px", fontStyle: "italic", opacity: 0.7 }}
         >
-          <Avatar img={AVATARS.nati} ring="#F4A8AC" size={24} name="N" />
-          <span className="ell">Nati Adeyemi</span>
-        </button>
+          No active patient access lease
+        </div>
       </div>
 
       <div className="sidefoot">
@@ -99,10 +96,10 @@ export function ClinicianNavContent({ onClose }: { onClose?: () => void }) {
           Help
         </button>
         <div className="prow">
-          <Avatar img={AVATARS.amara} ring="#F4A8AC" size={36} name="A" />
+          <Avatar ring="#F4A8AC" size={36} name="C" />
           <div className="pmeta">
-            <b>{CLINICIAN.name}</b>
-            <span>{CLINICIAN.role}</span>
+            <b>Clinician Portal</b>
+            <span>General Practice</span>
           </div>
         </div>
       </div>

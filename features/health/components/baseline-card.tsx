@@ -15,10 +15,10 @@ export function BaselineCard({ onViewAll }: { onViewAll: () => void }) {
       >
         Medical baseline
       </Label>
-      <FactRow k="Allergy" v="Penicillin" src="clinician" />
-      <FactRow k="Condition" v="Asthma — provisional" src="ai" />
-      <FactRow k="Medication" v="Salbutamol inhaler PRN" src="clinician" />
-      <FactRow k="Blood group" v="O+" src="self" />
+      <FactRow k="Allergies" v="None recorded" src="clinician" />
+      <FactRow k="Conditions" v="None recorded" src="ai" />
+      <FactRow k="Medications" v="None recorded" src="clinician" />
+      <FactRow k="Blood group" v="Not specified" src="self" />
     </div>
   );
 }

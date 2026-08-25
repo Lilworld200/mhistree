@@ -1,13 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
-import { Avatar } from "@/components/ui/avatar";
-import { FactRow, MiniRow } from "@/components/ui/fact-row";
+import { FactRow } from "@/components/ui/fact-row";
 import { Label } from "@/components/ui/label";
 import { Reveal } from "@/components/ui/reveal";
-import { CARE_TEAM } from "@/lib/demo/people";
 import { ProfileHero } from "./profile-hero";
 
 const TABS = [
@@ -17,7 +16,6 @@ const TABS = [
   "Medications",
   "Conditions",
   "Emergency",
-  "Care Team",
 ];
 
 function Panel({ children }: { children: React.ReactNode }) {
@@ -27,18 +25,97 @@ function Panel({ children }: { children: React.ReactNode }) {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22 }}
     >
-      <div className="grid2" style={{ marginTop: 16 }}>{children}</div>
+      <div className="grid2" style={{ marginTop: 16 }}>
+        {children}
+      </div>
     </motion.div>
   );
 }
 
+interface UserProfileData {
+  user: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    phone_number?: string;
+    date_of_birth?: string;
+  } | null;
+  profile: {
+    blood_group?: string;
+    genotype?: string;
+    allergies?: string;
+    chronic_conditions?: string;
+    lifestyle?: string;
+  } | null;
+  memories: Array<{
+    id: string;
+    fact_category: string;
+    fact_summary: string;
+    contributor_role: string;
+    created_at: string;
+  }>;
+  medications: Array<{
+    id: string;
+    drug_name: string;
+    dosage: string;
+    frequency: string;
+  }>;
+}
+
 export function ProfileView() {
   const router = useRouter();
+  const [data, setData] = useState<UserProfileData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadProfile() {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch("/api/profile?user_id=default");
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          const errMsg = json.error || `HTTP ${res.status} ${res.statusText}`;
+          console.error("[Profile Fetch Error]:", errMsg);
+          setError(errMsg);
+          setData(null);
+        } else {
+          const json = await res.json();
+          setData(json);
+        }
+      } catch (err: unknown) {
+        const msg =
+          err instanceof Error ? err.message : "Failed to load profile";
+        console.error("[Profile Fetch Exception]:", err);
+        setError(msg);
+        setData(null);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
+
+  const fullName = data?.user
+    ? `${data.user.first_name || ""} ${data.user.last_name || ""}`.trim()
+    : "User Profile";
+
+  const allergies =
+    data?.memories.filter((m) => m.fact_category === "allergy") ?? [];
+  const conditions =
+    data?.memories.filter((m) => m.fact_category === "chronic_condition") ?? [];
 
   return (
     <div className="scroll">
       <Reveal>
-        <ProfileHero />
+        <ProfileHero
+          name={fullName}
+          bloodGroup={data?.profile?.blood_group || undefined}
+          genotype={data?.profile?.genotype || undefined}
+          eventsCount={data?.memories.length || 0}
+          error={error}
+        />
       </Reveal>
 
       <Tabs.Root defaultValue="Overview">
@@ -58,16 +135,49 @@ export function ProfileView() {
           <Panel>
             <div className="card">
               <Label>Medical baseline</Label>
-              <FactRow k="Blood group" v="O+" src="self" />
-              <FactRow k="Genotype" v="AS" src="self" />
-              <FactRow k="Allergy" v="Penicillin" src="clinician" />
-              <FactRow k="Condition" v="Asthma — provisional" src="ai" />
-              <FactRow k="Medication" v="Salbutamol inhaler" src="clinician" />
+              {loading ? (
+                <p className="small">Loading profile from Supabase...</p>
+              ) : (
+                <>
+                  <FactRow
+                    k="Blood group"
+                    v={data?.profile?.blood_group || "Not recorded"}
+                    src="self"
+                  />
+                  <FactRow
+                    k="Genotype"
+                    v={data?.profile?.genotype || "Not recorded"}
+                    src="self"
+                  />
+                  <FactRow
+                    k="Allergies"
+                    v={
+                      data?.profile?.allergies ||
+                      (allergies.length > 0
+                        ? allergies[0].fact_summary
+                        : "None listed")
+                    }
+                    src="clinician"
+                  />
+                  <FactRow
+                    k="Medications"
+                    v={
+                      data?.medications.length
+                        ? `${data.medications[0].drug_name} ${data.medications[0].dosage}`
+                        : "None listed"
+                    }
+                    src="clinician"
+                  />
+                </>
+              )}
             </div>
             <div className="card">
               <Label
                 right={
-                  <button className="link" onClick={() => router.push("/timeline")}>
+                  <button
+                    className="link"
+                    onClick={() => router.push("/timeline")}
+                  >
                     Timeline
                   </button>
                 }
@@ -75,13 +185,33 @@ export function ProfileView() {
                 Personal summary
               </Label>
               <p className="small">
-                Student, active with school practicals and football. Prefers concise
-                replies and being called Nati. Values privacy: personal diary stays
-                personal.
+                {data?.profile?.lifestyle ||
+                  "No personal lifestyle summary recorded in Supabase."}
               </p>
-              <Label>Recent health changes</Label>
-              <FactRow k="19 Aug" v="Breathing difficulty" src="self" />
-              <FactRow k="20 Aug" v="Inhaler started" src="clinician" />
+              <Label>Recent health facts</Label>
+              {data?.memories && data.memories.length > 0 ? (
+                data.memories
+                  .slice(0, 3)
+                  .map((m) => (
+                    <FactRow
+                      key={m.id}
+                      k={new Date(m.created_at).toLocaleDateString()}
+                      v={m.fact_summary}
+                      src={
+                        m.contributor_role === "clinician"
+                          ? "clinician"
+                          : "self"
+                      }
+                    />
+                  ))
+              ) : (
+                <p
+                  className="small"
+                  style={{ color: "var(--ink2)", marginTop: 6 }}
+                >
+                  No recent health facts found.
+                </p>
+              )}
             </div>
           </Panel>
         </Tabs.Content>
@@ -90,11 +220,16 @@ export function ProfileView() {
           <Panel>
             <div className="card">
               <Label>Medical baseline</Label>
-              <FactRow k="Blood group" v="O+" src="self" />
-              <FactRow k="Genotype" v="AS" src="self" />
-              <FactRow k="Allergy" v="Penicillin" src="clinician" />
-              <FactRow k="Condition" v="Asthma — provisional" src="ai" />
-              <FactRow k="Medication" v="Salbutamol inhaler" src="clinician" />
+              <FactRow
+                k="Blood group"
+                v={data?.profile?.blood_group || "Not recorded"}
+                src="self"
+              />
+              <FactRow
+                k="Genotype"
+                v={data?.profile?.genotype || "Not recorded"}
+                src="self"
+              />
             </div>
           </Panel>
         </Tabs.Content>
@@ -103,7 +238,20 @@ export function ProfileView() {
           <Panel>
             <div className="card">
               <Label>Allergies</Label>
-              <FactRow k="Penicillin" v="Reaction: rash (2024)" src="clinician" />
+              {allergies.length > 0 ? (
+                allergies.map((a) => (
+                  <FactRow
+                    key={a.id}
+                    k={a.fact_summary}
+                    v="Recorded fact"
+                    src="clinician"
+                  />
+                ))
+              ) : (
+                <p className="small" style={{ color: "var(--ink2)" }}>
+                  No allergy facts found in Supabase.
+                </p>
+              )}
             </div>
           </Panel>
         </Tabs.Content>
@@ -112,7 +260,20 @@ export function ProfileView() {
           <Panel>
             <div className="card">
               <Label>Current medications</Label>
-              <FactRow k="Salbutamol 100mcg" v="2 puffs PRN before exertion" src="clinician" />
+              {data?.medications && data.medications.length > 0 ? (
+                data.medications.map((m) => (
+                  <FactRow
+                    key={m.id}
+                    k={`${m.drug_name} ${m.dosage}`}
+                    v={m.frequency}
+                    src="clinician"
+                  />
+                ))
+              ) : (
+                <p className="small" style={{ color: "var(--ink2)" }}>
+                  No active medications recorded.
+                </p>
+              )}
             </div>
           </Panel>
         </Tabs.Content>
@@ -121,7 +282,20 @@ export function ProfileView() {
           <Panel>
             <div className="card">
               <Label>Conditions</Label>
-              <FactRow k="Exercise-induced asthma" v="Provisional — spirometry 28 Aug" src="ai" />
+              {conditions.length > 0 ? (
+                conditions.map((c) => (
+                  <FactRow
+                    key={c.id}
+                    k={c.fact_summary}
+                    v="Recorded memory"
+                    src="ai"
+                  />
+                ))
+              ) : (
+                <p className="small" style={{ color: "var(--ink2)" }}>
+                  No chronic conditions recorded.
+                </p>
+              )}
             </div>
           </Panel>
         </Tabs.Content>
@@ -129,27 +303,17 @@ export function ProfileView() {
         <Tabs.Content value="Emergency">
           <Panel>
             <div className="card">
-              <Label>Emergency</Label>
-              <FactRow k="Contact" v="Mrs. Adeyemi · +234 801 000 0000" src="self" />
-              <FactRow k="Blood group" v="O+" src="self" />
-              <FactRow k="Allergy alert" v="Penicillin" src="clinician" />
-            </div>
-          </Panel>
-        </Tabs.Content>
-
-        <Tabs.Content value="Care Team">
-          <Panel>
-            <div className="card">
-              <Label>Care team</Label>
-              {CARE_TEAM.map((c) => (
-                <MiniRow key={c.name}>
-                  <Avatar img={c.img} ring={c.ring} size={38} name={c.name} />
-                  <span>
-                    <b>{c.name}</b>
-                    <span className="small block">{c.role}</span>
-                  </span>
-                </MiniRow>
-              ))}
+              <Label>Emergency contact</Label>
+              <FactRow
+                k="Phone"
+                v={data?.user?.phone_number || "Not provided"}
+                src="self"
+              />
+              <FactRow
+                k="Blood group"
+                v={data?.profile?.blood_group || "Not recorded"}
+                src="self"
+              />
             </div>
           </Panel>
         </Tabs.Content>

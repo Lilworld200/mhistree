@@ -7,7 +7,6 @@ import { Icon } from "@/components/ui/icons";
 import { KvRow } from "@/components/ui/fact-row";
 import { MicroLabel } from "@/components/ui/label";
 import { OverlayShell } from "@/components/ui/overlay-shell";
-import { CLINICIAN } from "@/lib/demo/people";
 import { LEASE_PURPOSES, SCOPE_OPTIONS } from "../types";
 import { useSharingStore } from "../store";
 
@@ -49,11 +48,12 @@ export function ShareWizard() {
       onClose={close}
       title="Share health information"
     >
-      <div className="dhead" style={{ padding: 0, marginBottom: 14, borderBottom: "none" }}>
+      <div
+        className="dhead"
+        style={{ padding: 0, marginBottom: 14, borderBottom: "none" }}
+      >
         <b className="ptitle-sm">Share health information</b>
-        <MicroLabel>
-          STEP {step + 1} / 4
-        </MicroLabel>
+        <MicroLabel>STEP {step + 1} / 4</MicroLabel>
       </div>
 
       <div className="steps" aria-hidden="true">
@@ -95,7 +95,9 @@ export function ShareWizard() {
                     className={`opt ${on ? "on" : ""}`}
                     aria-pressed={on}
                     onClick={() =>
-                      setScope(on ? scope.filter((x) => x !== sc) : [...scope, sc])
+                      setScope(
+                        on ? scope.filter((x) => x !== sc) : [...scope, sc],
+                      )
                     }
                   >
                     <Icon n={on ? "check" : "plus"} s={15} />
@@ -127,9 +129,12 @@ export function ShareWizard() {
 
           {step === 3 && (
             <div>
-              <KvRow k="To" v={`${CLINICIAN.name} · ${CLINICIAN.org}`} />
+              <KvRow k="To" v="Attending Clinician · Medical Practice" />
               <KvRow k="Purpose" v={purpose} />
-              <KvRow k="Scope" v={`${scope.length} categories · Personal excluded`} />
+              <KvRow
+                k="Scope"
+                v={`${scope.length} categories · Personal excluded`}
+              />
               <KvRow k="Window" v={`${mins} minutes, then auto-expiry`} />
             </div>
           )}
@@ -142,12 +147,24 @@ export function ShareWizard() {
         </p>
       )}
 
-      <div className="actrow" style={{ marginTop: 18, justifyContent: "space-between" }}>
-        <Btn kind="soft" sm onClick={() => (step === 0 ? close() : setStep(step - 1))}>
+      <div
+        className="actrow"
+        style={{ marginTop: 18, justifyContent: "space-between" }}
+      >
+        <Btn
+          kind="soft"
+          sm
+          onClick={() => (step === 0 ? close() : setStep(step - 1))}
+        >
           {step === 0 ? "Cancel" : "Back"}
         </Btn>
         {step < 3 ? (
-          <Btn kind="dark" sm disabled={scopeInvalid} onClick={() => setStep(step + 1)}>
+          <Btn
+            kind="dark"
+            sm
+            disabled={scopeInvalid}
+            onClick={() => setStep(step + 1)}
+          >
             Continue
           </Btn>
         ) : (

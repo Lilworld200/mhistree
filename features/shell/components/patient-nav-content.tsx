@@ -6,7 +6,6 @@ import { usePathname, useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
-import { AVATARS, PATIENT } from "@/lib/demo/people";
 import { cn } from "@/lib/utils/cn";
 import { useChatStore } from "@/features/chat/store";
 import { PATIENT_NAV, SESSION_GROUPS } from "../config/navigation";
@@ -74,32 +73,41 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
           RECENT CONVERSATIONS
         </div>
         <div className="recents">
-          {SESSION_GROUPS.map((g) => {
-            const list = sessions.filter((s) => s.group === g);
-            if (!list.length) return null;
-            return (
-              <div key={g}>
-                <div className="glabel">{g}</div>
-                {list.map((s) => (
-                  <button
-                    key={s.id}
-                    className={cn(
-                      "nav-item",
-                      activeId === s.id && pathname === "/chat" && "on",
-                    )}
-                    onClick={() => {
-                      onClose?.();
-                      openSession(s.id);
-                      router.push("/chat");
-                    }}
-                  >
-                    <Icon n="chat" s={14} />
-                    <span className="ell">{s.title}</span>
-                  </button>
-                ))}
-              </div>
-            );
-          })}
+          {sessions.length === 0 ? (
+            <div
+              className="glabel"
+              style={{ fontStyle: "italic", opacity: 0.7 }}
+            >
+              No chat sessions
+            </div>
+          ) : (
+            SESSION_GROUPS.map((g) => {
+              const list = sessions.filter((s) => s.group === g);
+              if (!list.length) return null;
+              return (
+                <div key={g}>
+                  <div className="glabel">{g}</div>
+                  {list.map((s) => (
+                    <button
+                      key={s.id}
+                      className={cn(
+                        "nav-item",
+                        activeId === s.id && pathname === "/chat" && "on",
+                      )}
+                      onClick={() => {
+                        onClose?.();
+                        openSession(s.id);
+                        router.push("/chat");
+                      }}
+                    >
+                      <Icon n="chat" s={14} />
+                      <span className="ell">{s.title}</span>
+                    </button>
+                  ))}
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
       <div className="sidefoot">
@@ -119,10 +127,10 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
             onClick={() => go("/profile")}
             onKeyDown={(e) => e.key === "Enter" && go("/profile")}
           >
-            <Avatar img={AVATARS.nati} ring="#F4A8AC" size={36} name="Nati" />
+            <Avatar ring="#F4A8AC" size={36} name="P" />
             <div className="pmeta">
-              <b>{PATIENT.name}</b>
-              <span>Patient · O+</span>
+              <b>Patient Profile</b>
+              <span>Health Record</span>
             </div>
           </div>
           <button

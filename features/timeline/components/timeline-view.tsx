@@ -37,6 +37,8 @@ export function TimelineView() {
   const episodes = useTimelineStore((s) => s.episodes);
   const typeFilter = useTimelineStore((s) => s.typeFilter);
   const srcFilter = useTimelineStore((s) => s.srcFilter);
+  const loading = useTimelineStore((s) => s.loading);
+  const error = useTimelineStore((s) => s.error);
   const setTypeFilter = useTimelineStore((s) => s.setTypeFilter);
   const setSrcFilter = useTimelineStore((s) => s.setSrcFilter);
 
@@ -49,14 +51,18 @@ export function TimelineView() {
   }, [q]);
 
   const unfiltered = typeFilter === "All" && srcFilter === "All" && !appliedQ;
-  const list = events.filter((e) => matchesFilters(e, typeFilter, srcFilter, appliedQ));
+  const list = events.filter((e) =>
+    matchesFilters(e, typeFilter, srcFilter, appliedQ),
+  );
 
   return (
     <div className="scroll">
       <div className="phead">
         <div>
           <h1 className="ptitle">Health Timeline</h1>
-          <p className="psub">Your longitudinal record · every fact keeps its source</p>
+          <p className="psub">
+            Your longitudinal record · every fact keeps its source
+          </p>
         </div>
         <div className="searchpill">
           <Icon n="search" s={15} />
@@ -70,13 +76,38 @@ export function TimelineView() {
             <button
               aria-label="Clear search"
               onClick={() => setQ("")}
-              style={{ display: "grid", placeItems: "center", color: "var(--ink3)" }}
+              style={{
+                display: "grid",
+                placeItems: "center",
+                color: "var(--ink3)",
+              }}
             >
               <Icon n="x" s={13} />
             </button>
           )}
         </div>
       </div>
+
+      {error && (
+        <div
+          className="card card-inset"
+          style={{
+            padding: 16,
+            marginBottom: 16,
+            borderColor: "#E57373",
+            color: "#D32F2F",
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+          }}
+        >
+          <Icon n="alert" s={18} />
+          <span>
+            <b>Failed to fetch timeline:</b> {error}. Check terminal/browser
+            console for details.
+          </span>
+        </div>
+      )}
 
       <ToggleGroup.Root
         type="single"
@@ -100,7 +131,11 @@ export function TimelineView() {
         aria-label="Filter events by source"
       >
         {TL_SRC_FILTERS.map((f) => (
-          <ToggleGroup.Item key={f.label} value={f.label} className="pill pill-tiny">
+          <ToggleGroup.Item
+            key={f.label}
+            value={f.label}
+            className="pill pill-tiny"
+          >
             {f.label}
           </ToggleGroup.Item>
         ))}
@@ -115,7 +150,7 @@ export function TimelineView() {
       )}
 
       <div className="mlabel" style={{ margin: "6px 4px 12px" }}>
-        AUGUST 2026
+        TIMELINE RECORDS
       </div>
 
       <div className="tl">
@@ -124,12 +159,22 @@ export function TimelineView() {
             <EventCard ev={ev} />
           </Reveal>
         ))}
-        {list.length === 0 && (
+        {loading && (
           <div
             className={cn("card card-inset small")}
             style={{ padding: 22, textAlign: "center", color: "var(--ink2)" }}
           >
-            No events match these filters.
+            Fetching timeline events from Supabase...
+          </div>
+        )}
+        {!loading && list.length === 0 && (
+          <div
+            className={cn("card card-inset small")}
+            style={{ padding: 22, textAlign: "center", color: "var(--ink2)" }}
+          >
+            {error
+              ? "Unable to display events due to fetch error."
+              : "No health timeline events found."}
           </div>
         )}
       </div>

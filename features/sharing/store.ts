@@ -1,7 +1,5 @@
 import { toast } from "@/components/ui/toast-store";
-import { AVATARS, CLINICIAN, PATIENT } from "@/lib/demo/people";
 import { create } from "zustand";
-import { seedAccessLog, seedLeases } from "./data/seed";
 import type { AccessEntry, CreateLeaseInput, Lease } from "./types";
 
 interface SharingState {
@@ -21,8 +19,8 @@ interface SharingState {
 const nowLabel = () => "Now";
 
 export const useSharingStore = create<SharingState>((set, get) => ({
-  leases: seedLeases,
-  accessLog: seedAccessLog,
+  leases: [],
+  accessLog: [],
   wizardOpen: false,
   leaseViewId: null,
 
@@ -38,9 +36,8 @@ export const useSharingStore = create<SharingState>((set, get) => ({
     const lease: Lease = {
       id: "L-" + Math.floor(1000 + Math.random() * 8999),
       code,
-      actor: CLINICIAN.name,
-      org: CLINICIAN.org,
-      img: AVATARS.amara,
+      actor: "Attending Clinician",
+      org: "Medical Practice",
       purpose: cfg.purpose,
       scope: cfg.scope,
       issuedAt: nowLabel(),
@@ -53,7 +50,7 @@ export const useSharingStore = create<SharingState>((set, get) => ({
       leaseViewId: lease.id,
       accessLog: [
         {
-          actor: PATIENT.name,
+          actor: "Patient",
           action: `Created access lease ${lease.id}`,
           at: nowLabel(),
           purpose: cfg.purpose,
@@ -66,11 +63,13 @@ export const useSharingStore = create<SharingState>((set, get) => ({
 
   revokeLease(id) {
     set({
-      leases: get().leases.map((l) => (l.id === id ? { ...l, status: "revoked" } : l)),
+      leases: get().leases.map((l) =>
+        l.id === id ? { ...l, status: "revoked" } : l,
+      ),
       leaseViewId: null,
       accessLog: [
         {
-          actor: PATIENT.name,
+          actor: "Patient",
           action: `Revoked lease ${id}`,
           at: nowLabel(),
           purpose: "Patient action",
@@ -83,7 +82,10 @@ export const useSharingStore = create<SharingState>((set, get) => ({
 
   logAccess(actor, action, purpose = "Consultation") {
     set({
-      accessLog: [{ actor, action, at: nowLabel(), purpose }, ...get().accessLog],
+      accessLog: [
+        { actor, action, at: nowLabel(), purpose },
+        ...get().accessLog,
+      ],
     });
   },
 }));

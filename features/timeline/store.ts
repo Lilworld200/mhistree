@@ -1,7 +1,5 @@
 import { toast } from "@/components/ui/toast-store";
-import { CLINICIAN } from "@/lib/demo/people";
 import { create } from "zustand";
-import { seedEpisodes, seedEvents } from "./data/seed";
 import type {
   Episode,
   EventType,
@@ -23,6 +21,8 @@ interface TimelineState {
   srcFilter: string;
   evidenceId: string | null;
   correctionId: string | null;
+  loading: boolean;
+  error: string | null;
 
   setTypeFilter: (label: string) => void;
   setSrcFilter: (label: string) => void;
@@ -46,12 +46,14 @@ const today = () => "Today · now";
 const todayLabel = () => "Today";
 
 export const useTimelineStore = create<TimelineState>((set, get) => ({
-  events: seedEvents,
-  episodes: seedEpisodes,
+  events: [],
+  episodes: [],
   typeFilter: "All",
   srcFilter: "All",
   evidenceId: null,
   correctionId: null,
+  loading: false,
+  error: null,
 
   setTypeFilter: (typeFilter) => set({ typeFilter }),
   setSrcFilter: (srcFilter) => set({ srcFilter }),
@@ -74,7 +76,7 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     return id;
   },
 
-  verify: (id, by = CLINICIAN.name) => {
+  verify: (id, by = "Clinician") => {
     set({
       events: get().events.map((e) =>
         e.id === id
@@ -137,13 +139,20 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
 
   fetchLiveEvents: async (patientId: string) => {
     if (!patientId) return;
+    set({ loading: true, error: null });
     try {
       const res = await fetch(
         `/api/timeline?patient_id=${encodeURIComponent(patientId)}`,
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        const errMsg = errJson.error || `HTTP ${res.status} ${res.statusText}`;
+        console.error("[Mhistree Timeline API Error]:", errMsg);
+        set({ error: errMsg, events: [], loading: false });
+        return;
+      }
       const data = await res.json();
-      if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+      if (data.events && Array.isArray(data.events)) {
         const mappedEvents: TimelineEvent[] = data.events.map(
           (e: {
             id: string;
@@ -169,10 +178,15 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             status: e.verified ? "verified" : "reported",
           }),
         );
-        set({ events: mappedEvents });
+        set({ events: mappedEvents, error: null, loading: false });
+      } else {
+        set({ events: [], error: null, loading: false });
       }
-    } catch {
-      // Retain existing state if live fetch fails
+    } catch (err: unknown) {
+      const errMsg =
+        err instanceof Error ? err.message : "Timeline fetch error";
+      console.error("[Mhistree Timeline Fetch Exception]:", err);
+      set({ error: errMsg, events: [], loading: false });
     }
   },
 }));

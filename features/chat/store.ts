@@ -1,11 +1,8 @@
 import { create } from "zustand";
-import { GENERIC_REPLIES, REPLY_RULES, titleFromText } from "./data/reply-rules";
-import { seedMessages, seedSessions } from "./data/seed";
-import type { ChatMessage } from "./types";
-import { useTimelineStore } from "@/features/timeline/store";
+import type { ChatMessage, ChatSession } from "./types";
 
 interface ChatState {
-  sessions: typeof seedSessions;
+  sessions: ChatSession[];
   activeSessionId: string;
   messages: Record<string, ChatMessage[]>;
   typing: boolean;
@@ -13,16 +10,16 @@ interface ChatState {
 
   newChat: () => void;
   openSession: (id: string) => void;
-  send: (text: string) => void;
+  send: (text: string) => Promise<void>;
   setDraft: (sessionId: string, text: string) => void;
 }
 
 const UNTITLED = "New conversation";
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  sessions: seedSessions,
-  activeSessionId: "s1",
-  messages: seedMessages,
+  sessions: [],
+  activeSessionId: "",
+  messages: {},
   typing: false,
   drafts: {},
 
@@ -48,60 +45,114 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ activeSessionId: id });
   },
 
-  send(text) {
+  async send(text) {
     const trimmed = text.trim();
     if (!trimmed || get().typing) return;
 
-    const sid = get().activeSessionId;
-    const userMsg: ChatMessage = { id: "m" + Date.now(), role: "user", text: trimmed };
+    let sid = get().activeSessionId;
+    if (!sid) {
+      sid = "s" + Date.now();
+      set({
+        sessions: [{ id: sid, title: titleFromText(trimmed), group: "Today" }],
+        messages: { [sid]: [] },
+        activeSessionId: sid,
+      });
+    }
+
+    const userMsg: ChatMessage = {
+      id: "m" + Date.now(),
+      role: "user",
+      text: trimmed,
+    };
 
     set((s) => ({
       messages: { ...s.messages, [sid]: [...(s.messages[sid] ?? []), userMsg] },
       sessions: s.sessions.map((x) =>
-        x.id === sid && x.title === UNTITLED ? { ...x, title: titleFromText(trimmed) } : x,
+        x.id === sid && x.title === UNTITLED
+          ? { ...x, title: titleFromText(trimmed) }
+          : x,
       ),
       typing: true,
       drafts: { ...s.drafts, [sid]: "" },
     }));
 
-    // DEMO ADAPTER latency — production path streams from /api/ai/chat.
-    setTimeout(() => {
-      const timeline = useTimelineStore.getState();
-      const rule = REPLY_RULES.find((r) => r.re.test(trimmed));
+    const sessionMessages = get().messages[sid] ?? [];
+    const formattedMessages = sessionMessages.map((m) => ({
+      role: m.role === "user" ? ("user" as const) : ("assistant" as const),
+      content: m.text,
+    }));
 
-      if (rule) {
-        const evId = timeline.addReportedEvent({
-          type: rule.type,
-          title: rule.title,
-          desc: trimmed,
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: formattedMessages,
           sessionId: sid,
-        });
-        pushMsg(set, get, sid, {
-          id: "sy" + Date.now(),
-          role: "sys",
-          text: `Saved to your health timeline · ${rule.title} (reported)`,
-          evId,
-        });
-        const prior = useTimelineStore
-          .getState()
-          .events.find((e) => e.title === rule.title && e.id !== evId);
-        pushMsg(set, get, sid, {
-          id: "ai" + Date.now(),
-          role: "ai",
-          mem: !!prior,
-          fresh: true,
-          text: rule.reply(prior),
-        });
-      } else {
-        pushMsg(set, get, sid, {
-          id: "ai" + Date.now(),
-          role: "ai",
-          fresh: true,
-          text: GENERIC_REPLIES[Math.floor(Math.random() * GENERIC_REPLIES.length)],
-        });
+        }),
+      });
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(
+          errJson.error || `HTTP ${res.status} ${res.statusText}`,
+        );
       }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let aiText = "";
+      const aiMsgId = "ai" + Date.now();
+
+      // Placeholder message for streaming assistant response
+      pushMsg(set, get, sid, {
+        id: aiMsgId,
+        role: "ai",
+        fresh: true,
+        text: "",
+      });
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === "[DONE]") break;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.error) {
+                  throw new Error(parsed.error);
+                }
+                if (parsed.delta) {
+                  aiText += parsed.delta;
+                  updateLastAiMsg(set, get, sid, aiMsgId, aiText);
+                }
+              } catch (e: unknown) {
+                if (e instanceof Error && e.message !== dataStr) {
+                  console.error("[Chat Stream Parse Error]:", e);
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (err: unknown) {
+      const errMsg =
+        err instanceof Error ? err.message : "AI model request failed";
+      console.error("[Mhistree AI Chat Error]:", err);
+
+      pushMsg(set, get, sid, {
+        id: "err" + Date.now(),
+        role: "sys",
+        text: `⚠️ Error communicating with AI: ${errMsg}. Check terminal console logs.`,
+      });
+    } finally {
       set({ typing: false });
-    }, 1000);
+    }
   },
 
   setDraft(sessionId, text) {
@@ -109,12 +160,36 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 }));
 
+function titleFromText(t: string) {
+  const clean = t.replace(/[\n\r]+/g, " ").trim();
+  if (clean.length <= 32) return clean;
+  return clean.slice(0, 30) + "…";
+}
+
 function pushMsg(
-  set: (partial: Partial<ChatState> | ((s: ChatState) => Partial<ChatState>)) => void,
+  set: (
+    partial: Partial<ChatState> | ((s: ChatState) => Partial<ChatState>),
+  ) => void,
   get: () => ChatState,
   sid: string,
   m: ChatMessage,
 ) {
   const list = get().messages[sid] ?? [];
   set((s) => ({ messages: { ...s.messages, [sid]: [...list, m] } }));
+}
+
+function updateLastAiMsg(
+  set: (
+    partial: Partial<ChatState> | ((s: ChatState) => Partial<ChatState>),
+  ) => void,
+  get: () => ChatState,
+  sid: string,
+  msgId: string,
+  newText: string,
+) {
+  const list = get().messages[sid] ?? [];
+  const updated = list.map((m) =>
+    m.id === msgId ? { ...m, text: newText } : m,
+  );
+  set((s) => ({ messages: { ...s.messages, [sid]: updated } }));
 }

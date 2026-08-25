@@ -1,5 +1,4 @@
 import { toast } from "@/components/ui/toast-store";
-import { CLINICIAN } from "@/lib/demo/people";
 import { create } from "zustand";
 
 export interface ClinicianNote {

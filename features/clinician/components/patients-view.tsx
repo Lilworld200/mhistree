@@ -1,63 +1,105 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { Icon } from "@/components/ui/icons";
 import { Reveal } from "@/components/ui/reveal";
 import { toast } from "@/components/ui/toast-store";
-import { AVATARS } from "@/lib/demo/people";
+
+interface PatientLease {
+  id: string;
+  patient_id: string;
+  patient_name: string;
+  active: boolean;
+  alerts_count: number;
+}
 
 export function PatientsView() {
   const router = useRouter();
+  const [patients, setPatients] = useState<PatientLease[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // In production, fetch live active patient access leases for the authenticated clinician
+    setLoading(false);
+  }, []);
+
   return (
     <div className="scroll">
       <div className="phead">
         <div>
           <h1 className="ptitle">My patients</h1>
-          <p className="psub">No global search — access requires a patient-created lease</p>
+          <p className="psub">
+            No global search — access requires a patient-created lease
+          </p>
         </div>
       </div>
 
-      <Reveal>
-        <button className="card evcard" onClick={() => router.push("/clinician/patients/p1")}>
-          <Avatar img={AVATARS.nati} ring="#F4A8AC" size={44} name="N" />
-          <span className="evmain">
-            <b>Nati Adeyemi</b>
-            <span className="evwhen">24 · O+ · AS · last interaction today 7:05 PM</span>
-            <span className="evbadges">
-              <span className="badge" style={{ color: "var(--green)" }}>
-                <i className="badge-dot" style={{ background: "var(--green)" }} />
-                Lease active
-              </span>
-              <span className="badge" style={{ color: "var(--amber)" }}>
-                <i className="badge-dot" style={{ background: "var(--amber)" }} />
-                2 alerts
-              </span>
-            </span>
-          </span>
-          <Icon n="chev" s={16} />
-        </button>
-      </Reveal>
-
-      <Reveal d={0.06}>
-        <button
-          className="card evcard"
-          onClick={() => toast("No active lease — ask the patient to share access", "lock")}
+      {loading && (
+        <div
+          className="card card-inset small"
+          style={{ padding: 20, textAlign: "center" }}
         >
-          <Avatar ring="#B7E4C7" size={44} name="Musa Ibrahim" />
-          <span className="evmain">
-            <b>Musa Ibrahim</b>
-            <span className="evwhen">41 · last visit 12 Aug</span>
-            <span className="evbadges">
-              <span className="badge" style={{ color: "var(--red)" }}>
-                <i className="badge-dot" style={{ background: "var(--red)" }} />
-                No lease
+          Loading active patient leases...
+        </div>
+      )}
+
+      {!loading && patients.length === 0 && (
+        <Reveal>
+          <div
+            className="card card-inset small"
+            style={{ padding: 32, textAlign: "center", color: "var(--ink2)" }}
+          >
+            <Icon n="lock" s={24} />
+            <h3 style={{ margin: "12px 0 4px", fontSize: 16 }}>
+              No active patient access leases
+            </h3>
+            <p className="small">
+              Ask your patient to generate a QR access lease from their Mhistree
+              app to view their record.
+            </p>
+          </div>
+        </Reveal>
+      )}
+
+      {patients.map((p, i) => (
+        <Reveal key={p.id} d={i * 0.05}>
+          <button
+            className="card evcard"
+            onClick={() => {
+              if (p.active) {
+                router.push(`/clinician/patients/${p.patient_id}`);
+              } else {
+                toast(
+                  "No active lease — ask the patient to share access",
+                  "lock",
+                );
+              }
+            }}
+          >
+            <Avatar ring="#F4A8AC" size={44} name={p.patient_name.charAt(0)} />
+            <span className="evmain">
+              <b>{p.patient_name}</b>
+              <span className="evbadges">
+                <span
+                  className="badge"
+                  style={{ color: p.active ? "var(--green)" : "var(--red)" }}
+                >
+                  <i
+                    className="badge-dot"
+                    style={{
+                      background: p.active ? "var(--green)" : "var(--red)",
+                    }}
+                  />
+                  {p.active ? "Lease active" : "No lease"}
+                </span>
               </span>
             </span>
-          </span>
-          <Icon n="lock" s={16} />
-        </button>
-      </Reveal>
+            <Icon n={p.active ? "chev" : "lock"} s={16} />
+          </button>
+        </Reveal>
+      ))}
     </div>
   );
 }
