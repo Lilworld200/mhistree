@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
+import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
 import { buildPatientSystemPrompt } from "@/lib/ai/prompts/patient";
 import { searchMedicalChunks } from "@/lib/ai/rag";
 import { logAuditEvent } from "@/lib/security/audit";
@@ -183,15 +184,46 @@ export async function POST(request: Request) {
     },
   });
 
-  // 6. Asynchronous Audit Logging & Memory Extraction (Non-blocking background)
+  // 6. Asynchronous Audit Logging & Continuous Health Memory Extraction (Non-blocking background)
   if (body.patient_id && lastUserMessage) {
-    logAuditEvent({
-      actorId: body.patient_id,
-      actorRole: "patient",
-      action: "chat_message",
-      patientId: body.patient_id,
-      metadata: { messageLength: lastUserMessage.content.length },
-    }).catch(() => {});
+    const pId = body.patient_id;
+    const userMsg = lastUserMessage.content;
+
+    Promise.allSettled([
+      logAuditEvent({
+        actorId: pId,
+        actorRole: "patient",
+        action: "chat_message",
+        patientId: pId,
+        metadata: { messageLength: userMsg.length },
+      }),
+      (async () => {
+        try {
+          const extraction = await ai.structured("extraction", {
+            prompt: `Extract any new health facts, symptoms, vitals, or medications mentioned by the patient in this message:\n\n"${userMsg}"`,
+            schema: MedicalExtractionSchema,
+            validate: (data: unknown) => MedicalExtractionSchema.parse(data),
+          });
+
+          if (extraction.memories && extraction.memories.length > 0) {
+            const supabase = createAdminSupabaseClient();
+            const memoryRows = extraction.memories.map((mem) => ({
+              patient_id: pId,
+              contributor_role: "ai_extractor",
+              fact_category: mem.fact_category,
+              fact_summary: mem.fact_summary,
+              snomed_code: mem.snomed_code || null,
+              icd10_code: mem.icd10_code || null,
+              confidence_score: mem.confidence_score,
+              is_verified: false,
+            }));
+            await supabase.from("health_memories").insert(memoryRows);
+          }
+        } catch {
+          // Non-blocking error handling for background task
+        }
+      })(),
+    ]).catch(() => {});
   }
 
   return new Response(stream, {

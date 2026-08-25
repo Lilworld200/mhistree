@@ -50,7 +50,7 @@ export async function POST(req: Request) {
           error: "Memory record not found or update failed",
           details: error?.message,
         },
-        { status: 444 },
+        { status: 404 },
       );
     }
 
