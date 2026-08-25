@@ -14,41 +14,20 @@ export interface ConsultEntry {
   a: string;
 }
 
-/* DEMO ADAPTER — canned patient-file reasoning over authorised evidence.
-   Production path: POST /api/ai/chat scoped to active patient + lease,
-   answered through the LLM Gateway (lib/ai/gateway.ts). */
-const CANNED_ANSWERS: Record<string, string> = {
-  "Summarize the last 30 days":
-    "Aug: 8 events — 2 symptom reports (exertional breathlessness/wheeze), 1 device HR spike, inhaler started (verified), FBC within range (lab), GP visit 07 Aug. Trend: exertional pattern, improving since inhaler.",
-  "What changed?":
-    "Inhaler started 20 Aug (clinician-verified). Symptom reports clustered 17–19 Aug. No new labs since 15 Aug.",
-  "What remains unverified?":
-    "Symptom reports and the AI-inferred condition await your verification in the queue below.",
-  "What information is missing?":
-    "Spirometry result (scheduled 28 Aug), symptom severity scores, trigger confirmation, medication adherence.",
-};
-
 interface ClinicianState {
   notes: ClinicianNote[];
   consultFeed: ConsultEntry[];
   addNote: (text: string) => void;
-  askPatient: (q: string) => void;
+  askPatient: (q: string) => Promise<void>;
   resetConsultFeed: () => void;
 }
 
 export const useClinicianStore = create<ClinicianState>((set, get) => ({
-  notes: [
-    {
-      id: "n1",
-      text: "Patient reports exertional symptoms; spirometry scheduled.",
-      by: CLINICIAN.name,
-      at: "07 Aug",
-    },
-  ],
+  notes: [],
   consultFeed: [
     {
       q: null,
-      a: "AI console scoped to Nati Adeyemi · Health Context · active lease. I can summarise evidence, surface gaps and rank hypotheses — verification stays with you.",
+      a: "Mhistree Clinical AI Engine active · Connected to Longitudinal EHR. Ask any clinical question, summarize timeline events, or analyze symptoms.",
     },
   ],
 
@@ -57,20 +36,78 @@ export const useClinicianStore = create<ClinicianState>((set, get) => ({
     if (!trimmed) return;
     set({
       notes: [
-        { id: "n" + Date.now(), text: trimmed, by: CLINICIAN.name, at: "Today" },
+        { id: "n" + Date.now(), text: trimmed, by: "Clinician", at: "Today" },
         ...get().notes,
       ],
     });
     toast("Note committed as clinician-authored fact", "check");
   },
 
-  askPatient(q) {
+  async askPatient(q) {
     const question = q.trim();
     if (!question) return;
-    const a =
-      CANNED_ANSWERS[question] ??
-      `Based on the authorised record: ${CANNED_ANSWERS["What changed?"]}`;
-    set({ consultFeed: [...get().consultFeed, { q: question, a }] });
+
+    set({
+      consultFeed: [
+        ...get().consultFeed,
+        {
+          q: question,
+          a: "Consulting Mhistree AI clinical reasoning engine...",
+        },
+      ],
+    });
+
+    try {
+      const res = await fetch("/api/ai/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: question }],
+        }),
+      });
+
+      if (!res.ok) throw new Error("AI request failed");
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let answer = "";
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split("\n\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const dataStr = line.slice(6).trim();
+              if (dataStr === "[DONE]") break;
+              try {
+                const parsed = JSON.parse(dataStr);
+                if (parsed.delta) {
+                  answer += parsed.delta;
+                  const currentFeed = [...get().consultFeed];
+                  currentFeed[currentFeed.length - 1] = {
+                    q: question,
+                    a: answer,
+                  };
+                  set({ consultFeed: currentFeed });
+                }
+              } catch {
+                // Ignore non-JSON SSE lines
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      const currentFeed = [...get().consultFeed];
+      currentFeed[currentFeed.length - 1] = {
+        q: question,
+        a: "Unable to connect to AI gateway. Please verify your environment key settings.",
+      };
+      set({ consultFeed: currentFeed });
+    }
   },
 
   resetConsultFeed: () => set({ consultFeed: [] }),

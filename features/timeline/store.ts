@@ -38,6 +38,7 @@ interface TimelineState {
   closeEvidence: () => void;
   openCorrection: (id: string) => void;
   closeCorrection: () => void;
+  fetchLiveEvents: (patientId: string) => Promise<void>;
 }
 
 const now = () => Date.now();
@@ -77,7 +78,12 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
     set({
       events: get().events.map((e) =>
         e.id === id
-          ? { ...e, status: "verified", verifiedBy: by, verifiedAt: todayLabel() }
+          ? {
+              ...e,
+              status: "verified",
+              verifiedBy: by,
+              verifiedAt: todayLabel(),
+            }
           : e,
       ),
     });
@@ -86,13 +92,19 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   },
 
   reject: (id) => {
-    set({ events: get().events.map((e) => (e.id === id ? { ...e, status: "rejected" } : e)) });
+    set({
+      events: get().events.map((e) =>
+        e.id === id ? { ...e, status: "rejected" } : e,
+      ),
+    });
     toast("Event rejected · original preserved", "x");
   },
 
   dispute: (id) => {
     set({
-      events: get().events.map((e) => (e.id === id ? { ...e, status: "disputed" } : e)),
+      events: get().events.map((e) =>
+        e.id === id ? { ...e, status: "disputed" } : e,
+      ),
       evidenceId: null,
     });
     toast("Marked as disputed · review requested", "alert");
@@ -105,7 +117,10 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
           ? {
               ...e,
               status: "corrected",
-              corrections: [...(e.corrections ?? []), { note, at: todayLabel() }],
+              corrections: [
+                ...(e.corrections ?? []),
+                { note, at: todayLabel() },
+              ],
             }
           : e,
       ),
@@ -119,6 +134,47 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
   closeEvidence: () => set({ evidenceId: null }),
   openCorrection: (correctionId) => set({ correctionId }),
   closeCorrection: () => set({ correctionId: null }),
+
+  fetchLiveEvents: async (patientId: string) => {
+    if (!patientId) return;
+    try {
+      const res = await fetch(
+        `/api/timeline?patient_id=${encodeURIComponent(patientId)}`,
+      );
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.events && Array.isArray(data.events) && data.events.length > 0) {
+        const mappedEvents: TimelineEvent[] = data.events.map(
+          (e: {
+            id: string;
+            category: string;
+            title: string;
+            summary: string;
+            timestamp: string;
+            source: string;
+            verified: boolean;
+          }) => ({
+            id: e.id,
+            type: (e.category as EventType) || "symptom",
+            title: e.title,
+            when: new Date(e.timestamp).toLocaleDateString(),
+            ts: new Date(e.timestamp).getTime(),
+            desc: e.summary,
+            src:
+              e.source === "clinician_entry"
+                ? "gp"
+                : e.source === "ai_extracted"
+                  ? "ai_note"
+                  : "self",
+            status: e.verified ? "verified" : "reported",
+          }),
+        );
+        set({ events: mappedEvents });
+      }
+    } catch {
+      // Retain existing state if live fetch fails
+    }
+  },
 }));
 
 /** Convenience selector: find an event by id. */
