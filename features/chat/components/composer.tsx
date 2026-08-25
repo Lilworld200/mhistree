@@ -24,16 +24,26 @@ export function Composer({ sessionId }: { sessionId: string }) {
       }}
     >
       <IconBtn
+        type="button"
         icon="clip"
         size={44}
         title="Attach document"
-        onClick={() => router.push("/documents")}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          router.push("/documents");
+        }}
       />
       <IconBtn
+        type="button"
         icon="mic"
         size={44}
         title="Voice (after MVP)"
-        onClick={() => toast("Voice input arrives after MVP", "mic")}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          toast("Voice input arrives after MVP", "mic");
+        }}
       />
       <input
         className="cinput"

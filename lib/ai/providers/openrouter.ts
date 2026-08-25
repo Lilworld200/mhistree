@@ -40,10 +40,22 @@ const DEFAULT_MODEL =
 const EMBEDDING_MODEL =
   process.env.AI_EMBEDDING_MODEL || "text-embedding-3-small";
 
-type CoreMsg = { role: "system" | "user" | "assistant"; content: string };
+type CoreMsg = { role: "user" | "assistant"; content: string };
 
-function toCoreMessages(msgs: ChatRequest["messages"]): CoreMsg[] {
-  return msgs.map((m) => ({ role: m.role, content: m.content }));
+function extractPromptParts(msgs: ChatRequest["messages"]) {
+  const systemMsgs = msgs
+    .filter((m) => m.role === "system")
+    .map((m) => m.content);
+  const system = systemMsgs.length ? systemMsgs.join("\n\n") : undefined;
+
+  const coreMessages: CoreMsg[] = msgs
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
+
+  return { system, coreMessages };
 }
 
 export class OpenRouterProvider implements LLMProvider {
@@ -57,9 +69,12 @@ export class OpenRouterProvider implements LLMProvider {
   // ── Non-streaming Chat ─────────────────────────────────────────────────────
   async chat(input: ChatRequest): Promise<ChatResponse> {
     const modelId = input.model || this.defaultModel;
+    const { system, coreMessages } = extractPromptParts(input.messages);
+
     const result = await generateText({
       model: openrouter(modelId),
-      messages: toCoreMessages(input.messages),
+      system,
+      messages: coreMessages,
       temperature: input.temperature ?? 0.7,
       maxOutputTokens: input.maxTokens,
     });
@@ -78,9 +93,12 @@ export class OpenRouterProvider implements LLMProvider {
   // ── Streaming Chat (yields ChatChunk deltas) ──────────────────────────────
   async *stream(input: ChatRequest): AsyncIterable<ChatChunk> {
     const modelId = input.model || this.defaultModel;
+    const { system, coreMessages } = extractPromptParts(input.messages);
+
     const result = streamText({
       model: openrouter(modelId),
-      messages: toCoreMessages(input.messages),
+      system,
+      messages: coreMessages,
       temperature: input.temperature ?? 0.7,
       maxOutputTokens: input.maxTokens,
     });

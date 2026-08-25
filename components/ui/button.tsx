@@ -49,10 +49,12 @@ export function IconBtn({
   title,
   className,
   style,
+  type = "button",
   ...rest
 }: IconBtnProps) {
   const btn = (
     <button
+      type={type}
       aria-label={title}
       className={cn("btn btn-icon", ghost && "btn-ghost", className)}
       style={{ width: size, height: size, ...style }}
