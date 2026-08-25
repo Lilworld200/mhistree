@@ -177,7 +177,7 @@ CREATE TABLE IF NOT EXISTS public.medical_document_chunks (
   file_url      TEXT        NOT NULL,
   chunk_index   INT         NOT NULL,
   chunk_text    TEXT        NOT NULL,
-  embedding     vector(1536),
+  embedding     vector(768),
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -204,7 +204,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_actor ON public.audit_logs (actor_id, times
 
 -- Hybrid vector similarity search used by the RAG pipeline
 CREATE OR REPLACE FUNCTION match_medical_chunks(
-  query_embedding  vector(1536),
+  query_embedding  vector(768),
   match_patient_id UUID,
   match_count      INT DEFAULT 5
 )

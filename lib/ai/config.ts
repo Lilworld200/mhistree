@@ -46,33 +46,37 @@ export const aiConfig: Record<
 // ── Embedding configuration — single source of truth ─────────────────────────
 // Swap embedding models by changing AI_EMBEDDING_MODEL / AI_EMBEDDING_DIMENSIONS
 // in .env. If the new model outputs a different vector size, also re-provision
-// pgvector columns: supabase/migrations/003_embedding_dimensions.sql.
+// pgvector columns: supabase/migrations/004_embedding_dimensions_768.sql.
 // NOTE: pgvector HNSW indexes cap at 2000 dims — keep dimensions ≤ 2000
-// (Matryoshka models like Nemotron Embed accept truncation via `dimensions`).
-const DEFAULT_EMBEDDING_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free";
-const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
+// (Matryoshka models like gemini-embedding-001 accept truncation via
+// outputDimensionality).
+const DEFAULT_EMBEDDING_MODEL = "gemini-embedding-001";
+const DEFAULT_EMBEDDING_DIMENSIONS = 768;
 
 /**
  * getEmbeddingInfo()
- * Reports which embedding model is in use, which API serves it, and the
- * vector dimensionality the database must be provisioned for.
+ * Reports which embedding provider/model is in use, which API serves it,
+ * and the vector dimensionality the database must be provisioned for.
  *
  * @example
  *   const info = getEmbeddingInfo();
- *   // → { provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1",
- *   //     model: "nvidia/llama-nemotron-embed-vl-1b-v2:free",
- *   //     dimensions: 2048, apiKeyEnv: "OPENROUTER_API_KEY" }
+ *   // → { provider: "gemini", api: "google-generative-language embedContent",
+ *   //     baseUrl: null, model: "gemini-embedding-001",
+ *   //     dimensions: 768, apiKeyEnv: "GEMINI_API_KEY" }
  */
 export function getEmbeddingInfo() {
+  const provider = aiConfig.embeddings.provider;
+  const isGemini = provider === "gemini";
   return {
-    provider: aiConfig.embeddings.provider,
-    api: "openai-compatible POST {baseUrl}/embeddings",
-    baseUrl:
-      process.env.AI_EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
+    provider,
+    api: isGemini
+      ? "google-generative-language embedContent"
+      : "openai-compatible POST {baseUrl}/embeddings",
+    baseUrl: isGemini ? null : "https://openrouter.ai/api/v1",
     model: aiConfig.embeddings.model || DEFAULT_EMBEDDING_MODEL,
     dimensions: Number(
       process.env.AI_EMBEDDING_DIMENSIONS ?? DEFAULT_EMBEDDING_DIMENSIONS,
     ),
-    apiKeyEnv: aiConfig.embeddings.apiKeyEnv,
+    apiKeyEnv: isGemini ? "GEMINI_API_KEY" : "OPENROUTER_API_KEY",
   };
 }

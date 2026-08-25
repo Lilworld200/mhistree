@@ -5,8 +5,8 @@
  * Swap models by changing an env var — zero code changes required in features.
  *
  * Supported providers (configure keys in .env):
- *   • OpenRouter (default) — routes to any model via OpenAI-compatible API
- *   • OpenAI     — direct gpt-4o / gpt-4o-mini / text-embedding-3-small
+ *   • Gemini     — direct gemini-* models + gemini-embedding-001 (default)
+ *   • OpenRouter — routes to any model via OpenAI-compatible API
  *   • Anthropic  — claude-3-5-sonnet (optional fallback)
  *   • Ollama     — local offline medical models (meditron, biomistral)
  *

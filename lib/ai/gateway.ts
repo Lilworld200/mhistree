@@ -5,8 +5,9 @@
  * Provider configuration is controlled via environment variables (aiConfig).
  * Switching providers requires ZERO code changes in feature code.
  */
-import { aiConfig, type AiPurpose } from "./config";
+import { aiConfig, getEmbeddingInfo, type AiPurpose } from "./config";
 import { createOpenRouterProvider } from "./providers/openrouter";
+import { createGeminiProvider } from "./providers/gemini";
 import type {
   ChatRequest,
   ChatResponse,
@@ -19,6 +20,7 @@ import type {
 // ── Provider Registry ────────────────────────────────────────────────────────
 const providerFactories: Record<string, () => LLMProvider> = {
   openrouter: () => createOpenRouterProvider(),
+  gemini: () => createGeminiProvider(),
 };
 
 // Singleton cache for active provider instances
@@ -68,7 +70,7 @@ export const ai = {
     });
   },
 
-  /** Vector embedding generation */
+  /** Vector embedding generation (dimension-guarded for pgvector) */
   async embed(input: EmbeddingRequest): Promise<EmbeddingResponse> {
     const provider = resolveProvider("embeddings");
     if (!provider.embed) {
@@ -76,7 +78,22 @@ export const ai = {
         `Configured provider "${provider.id}" does not support embeddings — check aiConfig.embeddings.provider and the matching API key in .env`,
       );
     }
-    return provider.embed(input);
+    const result = await provider.embed(input);
+
+    // Provider-agnostic guard: vectors must match the dimensionality the
+    // database is provisioned for, or every insert/RPC would fail later
+    // with a cryptic pgvector error.
+    const expected = getEmbeddingInfo().dimensions;
+    const actual = result.vectors[0]?.length ?? 0;
+    if (actual !== expected) {
+      throw new Error(
+        `Embedding model "${result.model}" returned ${actual}-dim vectors but the database expects ${expected}. ` +
+          `Update AI_EMBEDDING_DIMENSIONS in .env and re-provision pgvector columns ` +
+          `(supabase/migrations/004_embedding_dimensions_768.sql), then re-embed stored documents.`,
+      );
+    }
+
+    return result;
   },
 
   /** Gateway health check */

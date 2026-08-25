@@ -128,15 +128,14 @@ export class OpenRouterProvider implements LLMProvider {
 
   // ── Vector Embedding Generation ───────────────────────────────────────────
   // Routes through OpenRouter's OpenAI-compatible POST /embeddings endpoint,
-  // so the SAME OPENROUTER_API_KEY serves chat + extraction + embeddings.
-  // Model & expected vector dimensions come from getEmbeddingInfo() — swap
-  // models via AI_EMBEDDING_MODEL / AI_EMBEDDING_DIMENSIONS in .env only.
+  // so the SAME OPENROUTER_API_KEY can serve chat + extraction + embeddings.
+  // Model comes from getEmbeddingInfo() — swap via AI_EMBEDDING_MODEL in .env.
   async embed(input: EmbeddingRequest): Promise<EmbeddingResponse> {
     const info = getEmbeddingInfo();
     const texts = Array.isArray(input.input) ? input.input : [input.input];
     const modelId = input.model || info.model;
 
-    const res = await fetch(`${info.baseUrl}/embeddings`, {
+    const res = await fetch("https://openrouter.ai/api/v1/embeddings", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}`,
@@ -155,7 +154,7 @@ export class OpenRouterProvider implements LLMProvider {
     if (!res.ok) {
       const detail = await res.text().catch(() => "");
       throw new Error(
-        `Embedding request failed (HTTP ${res.status} from ${info.baseUrl}, model ${modelId}): ${detail.slice(0, 300)}`,
+        `Embedding request failed (HTTP ${res.status} from openrouter, model ${modelId}): ${detail.slice(0, 300)}`,
       );
     }
 
@@ -172,18 +171,7 @@ export class OpenRouterProvider implements LLMProvider {
       );
     }
 
-    // Guard the pgvector contract early with an actionable message instead of
-    // failing later at insert time with a cryptic dimension mismatch.
-    const dims = vectors[0]?.length ?? 0;
-    if (dims !== info.dimensions) {
-      throw new Error(
-        `Embedding model "${modelId}" returned ${dims}-dim vectors but the database expects ${info.dimensions}. ` +
-          `Set AI_EMBEDDING_DIMENSIONS=${dims} in .env and re-provision pgvector columns ` +
-          `(see supabase/migrations/003_embedding_dimensions.sql), then re-embed stored documents.`,
-      );
-    }
-
-    return { vectors, model: modelId, dimensions: dims };
+    return { vectors, model: modelId, dimensions: vectors[0]?.length ?? 0 };
   }
 
   // ── Provider Health Check ──────────────────────────────────────────────────
