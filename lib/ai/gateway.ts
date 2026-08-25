@@ -73,7 +73,7 @@ export const ai = {
     const provider = resolveProvider("embeddings");
     if (!provider.embed) {
       throw new Error(
-        `Configured provider "${provider.id}" does not support embeddings`,
+        `Configured provider "${provider.id}" does not support embeddings — check aiConfig.embeddings.provider and the matching API key in .env`,
       );
     }
     return provider.embed(input);

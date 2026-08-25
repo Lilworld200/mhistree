@@ -16,8 +16,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
-import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
+import {
+  MedicalExtractionSchema,
+  type MedicalExtraction,
+} from "@/lib/ai/schemas/extraction";
 import { buildPatientSystemPrompt } from "@/lib/ai/prompts/patient";
+import {
+  buildExtractionPrompt,
+  type ExtractionTurn,
+} from "@/lib/ai/prompts/extraction";
 import { searchMedicalChunks } from "@/lib/ai/rag";
 import { logAuditEvent } from "@/lib/security/audit";
 import { sanitizeInput } from "@/lib/security/sanitize";
@@ -43,6 +50,11 @@ const ChatRequestSchema = z.object({
     .min(1),
   sessionId: z.string().optional(),
 });
+
+// Extracted facts must be at least this specified (clarity_score 0–1) before
+// they are persisted. Below the threshold the extractor reports what is
+// missing and the chat companion keeps asking — see prompts/extraction.ts.
+const EXTRACT_STORE_THRESHOLD = 0.5;
 
 export async function POST(request: Request) {
   let body: z.infer<typeof ChatRequestSchema>;
@@ -130,29 +142,35 @@ export async function POST(request: Request) {
       recentVitals = (vitalsRes.data as DBVital[]) || [];
       activeMedications = (medsRes.data as DBMedication[]) || [];
 
-      // 4. Perform RAG vector search if query text exists
+      // 4. Perform RAG vector search if query text exists.
+      //    Non-fatal by design: a retrieval/embedding failure must never
+      //    break the conversation — it only means no document context.
       if (lastUserMessage) {
-        const ragResults = await searchMedicalChunks(
-          pid,
-          lastUserMessage.content,
-          4,
-        );
-        if (ragResults.length > 0) {
-          ragChunksText =
-            `\nRELEVANT MEDICAL DOCUMENTS (RAG RETRIEVAL):\n` +
-            ragResults
-              .map(
-                (r, i) =>
-                  `[Doc ${i + 1}: ${r.document_name}] (Relevance: ${(r.similarity * 100).toFixed(0)}%)\n${r.chunk_text}`,
-              )
-              .join("\n\n");
+        try {
+          const ragResults = await searchMedicalChunks(
+            pid,
+            lastUserMessage.content,
+            4,
+          );
+          if (ragResults.length > 0) {
+            ragChunksText =
+              `\nRELEVANT MEDICAL DOCUMENTS (RAG RETRIEVAL):\n` +
+              ragResults
+                .map(
+                  (r, i) =>
+                    `[Doc ${i + 1}: ${r.document_name}] (Relevance: ${(r.similarity * 100).toFixed(0)}%)\n${r.chunk_text}`,
+                )
+                .join("\n\n");
+          }
+        } catch (ragErr) {
+          console.error("[Chat] RAG search skipped:", ragErr);
         }
       }
     } else {
       console.error(
         "[Chat] Authenticated user has no public.users row (auth id:",
         user.id,
-        ") — run supabase/migrations/002_auth_user_provisioning.sql",
+        ") — run supabase/migrations/002_resilient_signup_trigger.sql",
       );
     }
   }
@@ -282,32 +300,162 @@ export async function POST(request: Request) {
       }),
       (async () => {
         try {
-          const extraction = await ai.structured("extraction", {
-            prompt: `Extract any new health facts, symptoms, vitals, or medications mentioned by the patient in this message:\n\n"${userMsg}"`,
-            schema: MedicalExtractionSchema,
-            validate: (data: unknown) => MedicalExtractionSchema.parse(data),
-          });
+          // Extract over a short conversation window so multi-turn arcs
+          // ("vague mention" → probe → "it's Coartem") reach full clarity.
+          const recentWindow: ExtractionTurn[] = sanitizedMessages
+            .slice(-6)
+            .map((m) => ({ role: m.role, content: m.content }));
+          const prompt = buildExtractionPrompt(recentWindow);
 
-          if (extraction.memories && extraction.memories.length > 0) {
-            const memoryRows = extraction.memories.map((mem) => ({
-              patient_id: pId,
-              contributor_role: "ai_extractor" as const,
-              fact_category: mem.fact_category,
-              fact_summary: mem.fact_summary,
-              clinical_payload: {
-                ...(mem.clinical_payload ?? {}),
-                original_message: userMsg,
-                extracted_at: new Date().toISOString(),
-              },
-              snomed_code: mem.snomed_code || null,
-              icd10_code: mem.icd10_code || null,
-              confidence_score: mem.confidence_score,
-              is_verified: false,
-            }));
-            await db.from("health_memories").insert(memoryRows);
+          const runExtraction = () =>
+            ai.structured("extraction", {
+              prompt,
+              schema: MedicalExtractionSchema,
+              validate: (data: unknown) => MedicalExtractionSchema.parse(data),
+            });
+
+          let extraction: MedicalExtraction;
+          try {
+            extraction = await runExtraction();
+          } catch (firstErr) {
+            console.error(
+              "[Extraction] attempt 1 failed — retrying once:",
+              firstErr,
+            );
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            extraction = await runExtraction();
           }
-        } catch {
-          // Non-blocking error handling for background task
+
+          const isStorable = (score?: number) =>
+            (score ?? 0) >= EXTRACT_STORE_THRESHOLD;
+
+          // ── Health memories (clarity-gated, deduped by summary) ──
+          const storableMemories = extraction.memories.filter((m) =>
+            isStorable(m.clarity_score),
+          );
+          const belowThreshold = extraction.memories.filter(
+            (m) => !isStorable(m.clarity_score),
+          );
+          if (belowThreshold.length > 0) {
+            console.info(
+              "[Extraction] holding %d fact(s) below %s clarity:",
+              belowThreshold.length,
+              EXTRACT_STORE_THRESHOLD,
+              JSON.stringify(
+                belowThreshold.map((m) => ({
+                  summary: m.fact_summary,
+                  score: m.clarity_score,
+                  missing: m.missing_details,
+                })),
+              ),
+            );
+          }
+
+          if (storableMemories.length > 0) {
+            const { data: existing } = await db
+              .from("health_memories")
+              .select("fact_summary")
+              .eq("patient_id", pId)
+              .order("created_at", { ascending: false })
+              .limit(200);
+            const seen = new Set(
+              (existing ?? []).map((r) =>
+                r.fact_summary.trim().toLowerCase(),
+              ),
+            );
+            const newMemories = storableMemories.filter(
+              (m) => !seen.has(m.fact_summary.trim().toLowerCase()),
+            );
+
+            if (newMemories.length > 0) {
+              const memoryRows = newMemories.map((mem) => ({
+                patient_id: pId,
+                contributor_role: "ai_extractor" as const,
+                fact_category: mem.fact_category,
+                fact_summary: mem.fact_summary,
+                clinical_payload: {
+                  ...(mem.clinical_payload ?? {}),
+                  severity: mem.severity,
+                  clarity_score: mem.clarity_score,
+                  missing_details: mem.missing_details,
+                  source_messages: recentWindow
+                    .filter((t) => t.role === "user")
+                    .map((t) => t.content),
+                  extracted_at: new Date().toISOString(),
+                },
+                snomed_code: mem.snomed_code || null,
+                icd10_code: mem.icd10_code || null,
+                confidence_score: mem.confidence_score,
+                is_verified: false,
+              }));
+              const { error } = await db
+                .from("health_memories")
+                .insert(memoryRows);
+              if (error) {
+                console.error("[Extraction] memory insert failed:", error);
+              }
+            }
+          }
+
+          // ── Medications (clarity-gated, deduped against active rows) ──
+          const storableMeds = extraction.medications.filter((m) =>
+            isStorable(m.clarity_score),
+          );
+          if (storableMeds.length > 0) {
+            const { data: activeMeds } = await db
+              .from("medications")
+              .select("drug_name")
+              .eq("patient_id", pId)
+              .eq("status", "active");
+            const known = new Set(
+              (activeMeds ?? []).map((r) =>
+                r.drug_name.trim().toLowerCase(),
+              ),
+            );
+            const medRows = storableMeds
+              .filter(
+                (m) =>
+                  m.drug_name.trim() !== "" &&
+                  !/^unidentified\b/i.test(m.drug_name.trim()) &&
+                  !known.has(m.drug_name.trim().toLowerCase()),
+              )
+              .map((m) => ({
+                patient_id: pId,
+                drug_name: m.drug_name,
+                dosage: m.dosage,
+                frequency: m.frequency,
+                rxnorm_code: m.rxnorm_code || null,
+                status: m.status,
+              }));
+            if (medRows.length > 0) {
+              const { error } = await db.from("medications").insert(medRows);
+              if (error) {
+                console.error("[Extraction] medication insert failed:", error);
+              }
+            }
+          }
+
+          // ── Vitals (numeric facts are self-contained; no gate needed) ──
+          const reportedVitals = extraction.vitals.filter(
+            (v) => v.numeric_value != null || (v.text_value ?? "") !== "",
+          );
+          if (reportedVitals.length > 0) {
+            const vitalRows = reportedVitals.map((v) => ({
+              patient_id: pId,
+              vital_type: v.vital_type,
+              numeric_value: v.numeric_value ?? null,
+              text_value: v.text_value ?? null,
+              unit: v.unit || null,
+              source: "patient_reported",
+              recorded_at: new Date().toISOString(),
+            }));
+            const { error } = await db.from("health_vitals").insert(vitalRows);
+            if (error) {
+              console.error("[Extraction] vitals insert failed:", error);
+            }
+          }
+        } catch (err) {
+          console.error("[Extraction] pipeline failed:", err);
         }
       })(),
     ]).catch(() => {});

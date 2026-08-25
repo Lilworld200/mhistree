@@ -39,6 +39,40 @@ export const aiConfig: Record<
   embeddings: {
     provider: process.env.AI_EMBEDDING_PROVIDER ?? process.env.AI_PROVIDER ?? "openrouter",
     model: process.env.AI_EMBEDDING_MODEL ?? "",
-    apiKeyEnv: "AI_EMBEDDING_API_KEY",
+    apiKeyEnv: "OPENROUTER_API_KEY",
   },
 };
+
+// ── Embedding configuration — single source of truth ─────────────────────────
+// Swap embedding models by changing AI_EMBEDDING_MODEL / AI_EMBEDDING_DIMENSIONS
+// in .env. If the new model outputs a different vector size, also re-provision
+// pgvector columns: supabase/migrations/003_embedding_dimensions.sql.
+// NOTE: pgvector HNSW indexes cap at 2000 dims — keep dimensions ≤ 2000
+// (Matryoshka models like Nemotron Embed accept truncation via `dimensions`).
+const DEFAULT_EMBEDDING_MODEL = "nvidia/llama-nemotron-embed-vl-1b-v2:free";
+const DEFAULT_EMBEDDING_DIMENSIONS = 1536;
+
+/**
+ * getEmbeddingInfo()
+ * Reports which embedding model is in use, which API serves it, and the
+ * vector dimensionality the database must be provisioned for.
+ *
+ * @example
+ *   const info = getEmbeddingInfo();
+ *   // → { provider: "openrouter", baseUrl: "https://openrouter.ai/api/v1",
+ *   //     model: "nvidia/llama-nemotron-embed-vl-1b-v2:free",
+ *   //     dimensions: 2048, apiKeyEnv: "OPENROUTER_API_KEY" }
+ */
+export function getEmbeddingInfo() {
+  return {
+    provider: aiConfig.embeddings.provider,
+    api: "openai-compatible POST {baseUrl}/embeddings",
+    baseUrl:
+      process.env.AI_EMBEDDING_BASE_URL ?? "https://openrouter.ai/api/v1",
+    model: aiConfig.embeddings.model || DEFAULT_EMBEDDING_MODEL,
+    dimensions: Number(
+      process.env.AI_EMBEDDING_DIMENSIONS ?? DEFAULT_EMBEDDING_DIMENSIONS,
+    ),
+    apiKeyEnv: aiConfig.embeddings.apiKeyEnv,
+  };
+}

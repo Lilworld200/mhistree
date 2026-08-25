@@ -7,8 +7,9 @@
  * Supports streaming, non-streaming, structured output, and embeddings.
  */
 import { createOpenAI } from "@ai-sdk/openai";
-import { generateText, streamText, generateObject, embed } from "ai";
+import { generateText, streamText, generateObject } from "ai";
 import { z } from "zod";
+import { getEmbeddingInfo } from "../config";
 import type {
   LLMProvider,
   ChatRequest,
@@ -29,16 +30,9 @@ const openrouter = createOpenAI({
   },
 });
 
-// ── Direct OpenAI Client for Vector Embeddings ──────────────────────────────
-const openaiDirect = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || "",
-});
-
 const DEFAULT_MODEL =
   process.env.AI_PATIENT_MODEL ||
   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free";
-const EMBEDDING_MODEL =
-  process.env.AI_EMBEDDING_MODEL || "text-embedding-3-small";
 
 type CoreMsg = { role: "user" | "assistant"; content: string };
 
@@ -117,32 +111,79 @@ export class OpenRouterProvider implements LLMProvider {
       schema:
         (input.schema as z.ZodType<unknown>) ||
         z.record(z.string(), z.unknown()),
+      schemaName: "structured_output",
+      // Some OpenRouter models (e.g. free MiniMax tiers) ignore
+      // response_format and wrap their JSON in prose or ```json fences.
+      // Repair by slicing to the outermost JSON object before parsing.
+      repairText: async ({ text }) => {
+        const start = text.indexOf("{");
+        const end = text.lastIndexOf("}");
+        if (start === -1 || end === -1 || end <= start) return null;
+        const sliced = text.slice(start, end + 1);
+        return sliced === text ? null : sliced;
+      },
     });
     return input.validate(result.object);
   }
 
   // ── Vector Embedding Generation ───────────────────────────────────────────
+  // Routes through OpenRouter's OpenAI-compatible POST /embeddings endpoint,
+  // so the SAME OPENROUTER_API_KEY serves chat + extraction + embeddings.
+  // Model & expected vector dimensions come from getEmbeddingInfo() — swap
+  // models via AI_EMBEDDING_MODEL / AI_EMBEDDING_DIMENSIONS in .env only.
   async embed(input: EmbeddingRequest): Promise<EmbeddingResponse> {
+    const info = getEmbeddingInfo();
     const texts = Array.isArray(input.input) ? input.input : [input.input];
-    const vectors: number[][] = [];
+    const modelId = input.model || info.model;
 
-    for (const text of texts) {
-      const result = await embed({
-        model: openaiDirect.textEmbeddingModel(
-          (input.model || EMBEDDING_MODEL) as Parameters<
-            typeof openaiDirect.textEmbeddingModel
-          >[0],
-        ),
-        value: text,
-      });
-      vectors.push(result.embedding);
+    const res = await fetch(`${info.baseUrl}/embeddings`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${process.env.OPENROUTER_API_KEY ?? ""}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://mhistree.app",
+        "X-Title": "Mhistree Health AI",
+      },
+      body: JSON.stringify({
+        model: modelId,
+        input: texts,
+        dimensions: info.dimensions,
+        encoding_format: "float",
+      }),
+    });
+
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      throw new Error(
+        `Embedding request failed (HTTP ${res.status} from ${info.baseUrl}, model ${modelId}): ${detail.slice(0, 300)}`,
+      );
     }
 
-    return {
-      vectors,
-      model: input.model || EMBEDDING_MODEL,
-      dimensions: vectors[0]?.length ?? 1536,
+    const json = (await res.json()) as {
+      data?: { index?: number; embedding: number[] }[];
     };
+    const vectors = [...(json.data ?? [])]
+      .sort((a, b) => (a.index ?? 0) - (b.index ?? 0))
+      .map((row) => row.embedding);
+
+    if (vectors.length === 0) {
+      throw new Error(
+        `Embedding response contained no vectors (model ${modelId})`,
+      );
+    }
+
+    // Guard the pgvector contract early with an actionable message instead of
+    // failing later at insert time with a cryptic dimension mismatch.
+    const dims = vectors[0]?.length ?? 0;
+    if (dims !== info.dimensions) {
+      throw new Error(
+        `Embedding model "${modelId}" returned ${dims}-dim vectors but the database expects ${info.dimensions}. ` +
+          `Set AI_EMBEDDING_DIMENSIONS=${dims} in .env and re-provision pgvector columns ` +
+          `(see supabase/migrations/003_embedding_dimensions.sql), then re-embed stored documents.`,
+      );
+    }
+
+    return { vectors, model: modelId, dimensions: dims };
   }
 
   // ── Provider Health Check ──────────────────────────────────────────────────

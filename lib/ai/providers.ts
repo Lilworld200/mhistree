@@ -14,7 +14,7 @@
  *   chat              → OpenRouter (configurable model)
  *   extraction        → Fast/cheap model for medical NLP entity extraction
  *   clinical_reasoning→ High-reasoning model for differential diagnosis
- *   embedding         → OpenAI text-embedding-3-small (1536 dims)
+ *   embedding         → OpenRouter embeddings endpoint (see getEmbeddingInfo())
  *   vision            → Multimodal model for lab scans / document OCR
  */
 
@@ -31,18 +31,13 @@ const openrouter = createOpenAI({
   },
 });
 
-// ── Optional: Direct OpenAI (for embeddings — OpenRouter doesn't support them) ──
-const openai = createOpenAI({
-  apiKey: process.env.OPENAI_API_KEY || "",
-});
-
 // ── Model name constants ──────────────────────────────────────────────────────
 // Change these env vars in .env to swap models without touching code:
 //   OPENROUTER_CHAT_MODEL=openai/gpt-4o
 //   OPENROUTER_EXTRACTION_MODEL=openai/gpt-4o-mini
 //   OPENROUTER_REASONING_MODEL=anthropic/claude-3-5-sonnet
 //   OPENROUTER_VISION_MODEL=openai/gpt-4o
-//   EMBEDDING_MODEL=text-embedding-3-small
+// Embeddings are configured separately — see getEmbeddingInfo() in config.ts.
 
 const MODELS = {
   chat: process.env.OPENROUTER_CHAT_MODEL || "openai/gpt-4o",
@@ -51,7 +46,6 @@ const MODELS = {
     process.env.OPENROUTER_REASONING_MODEL ||
     "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
   vision: process.env.OPENROUTER_VISION_MODEL || "openai/gpt-4o",
-  embedding: process.env.EMBEDDING_MODEL || "text-embedding-3-small",
 } as const;
 
 // ── Task types ────────────────────────────────────────────────────────────────
@@ -91,17 +85,4 @@ export function getModel(task: ModelTask, override?: string) {
 
   // All cloud models route through OpenRouter
   return openrouter(modelId);
-}
-
-/**
- * getEmbeddingModel()
- * Returns the embedding model instance for generating vector embeddings.
- * Always uses OpenAI directly (OpenRouter does not proxy embedding endpoints).
- *
- * @example
- *   const embedder = getEmbeddingModel();
- *   const { embedding } = await embed({ model: embedder, value: text });
- */
-export function getEmbeddingModel() {
-  return openai.textEmbeddingModel(MODELS.embedding);
 }
