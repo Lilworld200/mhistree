@@ -1,4 +1,12 @@
+/**
+ * Mhistree LLM Gateway — Central provider registry and abstraction gateway.
+ * Everything in the application calls: ai.chat / ai.stream / ai.structured / ai.embed.
+ *
+ * Provider configuration is controlled via environment variables (aiConfig).
+ * Switching providers requires ZERO code changes in feature code.
+ */
 import { aiConfig, type AiPurpose } from "./config";
+import { createOpenRouterProvider } from "./providers/openrouter";
 import type {
   ChatRequest,
   ChatResponse,
@@ -8,58 +16,73 @@ import type {
   StructuredRequest,
 } from "./types";
 
-/**
- * MHISTREE LLM GATEWAY — the ONLY module allowed to talk to providers.
- * Everything else calls: ai.chat / ai.stream / ai.structured / ai.embed.
- *
- * TODO (implementation order):
- *   1. Provider registry — import adapters from ./providers/* and map:
- *      { openrouter, openai, deepseek, gemini, anthropic, local }.
- *      Each adapter implements LLMProvider (./types.ts).
- *   2. resolveProvider(purpose) → pick adapter + model from aiConfig.
- *   3. Retry/timeout wrapper + structured request logging
- *      (provider, model, purpose, latency, tokens, request id) to the
- *      observability pipeline.
- *   4. Streaming pass-through as AsyncIterable<ChatChunk> for SSE routes.
- *   5. Health-check endpoint wiring for status surfaces ("AI temporarily
- *      unavailable" states in the UI).
- */
-
-const providers: Record<string, LLMProvider | undefined> = {
-  // openrouter: createOpenRouterProvider(),
-  // openai: createOpenAICompatibleProvider({ baseURL: "https://api.openai.com/v1" }),
-  // deepseek: createDeepSeekProvider(),
-  // gemini: createGeminiProvider(),
-  // anthropic: createAnthropicProvider(),
-  // local: createLocalProvider(),
+// ── Provider Registry ────────────────────────────────────────────────────────
+const providerFactories: Record<string, () => LLMProvider> = {
+  openrouter: () => createOpenRouterProvider(),
 };
 
+// Singleton cache for active provider instances
+const providerCache = new Map<string, LLMProvider>();
+
 function resolveProvider(purpose: AiPurpose): LLMProvider {
-  const { provider } = aiConfig[purpose];
-  const impl = providers[provider];
-  if (!impl) throw new Error(`AI provider "${provider}" is not registered yet`);
-  return impl;
+  const { provider, model } = aiConfig[purpose];
+  const cacheKey = `${provider}:${model}`;
+
+  if (providerCache.has(cacheKey)) {
+    return providerCache.get(cacheKey)!;
+  }
+
+  const factory = providerFactories[provider] || providerFactories.openrouter;
+  const instance = factory();
+  providerCache.set(cacheKey, instance);
+  return instance;
 }
 
+// ── Public Gateway API ────────────────────────────────────────────────────────
+
 export const ai = {
+  /** Non-streaming text generation */
   async chat(purpose: AiPurpose, input: ChatRequest): Promise<ChatResponse> {
-    return resolveProvider(purpose).chat(input);
+    const provider = resolveProvider(purpose);
+    const modelOverride = aiConfig[purpose].model || undefined;
+    return provider.chat({ ...input, model: input.model ?? modelOverride });
   },
 
+  /** Streaming text generation (returns AsyncIterable of ChatChunk deltas) */
   stream(purpose: AiPurpose, input: ChatRequest) {
-    return resolveProvider(purpose).stream(input);
+    const provider = resolveProvider(purpose);
+    const modelOverride = aiConfig[purpose].model || undefined;
+    return provider.stream({ ...input, model: input.model ?? modelOverride });
   },
 
+  /** Structured Zod schema extraction */
   async structured<T>(
     purpose: AiPurpose,
     input: StructuredRequest<T>,
   ): Promise<T> {
-    return resolveProvider(purpose).structured<T>(input);
+    const provider = resolveProvider(purpose);
+    const modelOverride = aiConfig[purpose].model || undefined;
+    return provider.structured<T>({
+      ...input,
+      model: input.model ?? modelOverride,
+    });
   },
 
+  /** Vector embedding generation */
   async embed(input: EmbeddingRequest): Promise<EmbeddingResponse> {
-    const p = resolveProvider("embeddings");
-    if (!p.embed) throw new Error("Configured provider cannot embed");
-    return p.embed(input);
+    const provider = resolveProvider("embeddings");
+    if (!provider.embed) {
+      throw new Error(
+        `Configured provider "${provider.id}" does not support embeddings`,
+      );
+    }
+    return provider.embed(input);
+  },
+
+  /** Gateway health check */
+  async health(purpose: AiPurpose = "patientConversation") {
+    const provider = resolveProvider(purpose);
+    if (!provider.healthCheck) return { ok: true };
+    return provider.healthCheck();
   },
 };

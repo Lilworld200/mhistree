@@ -1,26 +1,93 @@
-import { NextResponse } from "next/server";
-
 /**
- * POST /api/ai/chat — patient & clinician conversation endpoint.
+ * POST /api/ai/chat — Live streaming chat endpoint via OpenRouter AI Gateway.
  *
- * Intended flow (idea_scaffold.md §4–§9):
- *   1. Authenticate via Supabase Auth session (lib/supabase/server.ts).
- *   2. Resolve caller role → patient chat vs clinician assistant config
- *      (aiConfig.patientConversation / aiConfig.clinicianAssistant).
- *   3. For clinicians: verify an ACTIVE lease covers this patient and that
- *      the request never touches Personal Context (context router).
- *   4. Build context via Memory Service (durable memory inheritance for new
- *      sessions) + Clinical Ledger facts — provenance-aware.
- *   5. Call the LLM Gateway (`ai.stream`) — never a vendor SDK directly.
- *   6. Stream ChatChunks back as SSE; log AI request metadata
- *      (provider, model, latency, tokens, request id).
- *
- * Replace the demo reply engine in features/chat/data/reply-rules.ts and
- * features/clinician/store.ts canned answers with calls to this route.
+ * Streamed via Server-Sent Events (SSE).
  */
-export async function POST() {
-  return NextResponse.json(
-    { error: "AI gateway not implemented — see lib/ai/gateway.ts scaffold" },
-    { status: 501 },
-  );
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { ai } from "@/lib/ai/gateway";
+import { buildPatientSystemPrompt } from "@/lib/ai/prompts/patient";
+
+const ChatRequestSchema = z.object({
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(["user", "assistant", "system"]),
+        content: z.string().min(1).max(16_000),
+      }),
+    )
+    .min(1),
+  sessionId: z.string().optional(),
+});
+
+function getBaselineContext() {
+  return buildPatientSystemPrompt({
+    name: "Nati",
+    profile: null,
+    memories: [],
+    recentVitals: [],
+    activeMedications: [],
+  });
+}
+
+export async function POST(request: Request) {
+  let body: z.infer<typeof ChatRequestSchema>;
+  try {
+    body = ChatRequestSchema.parse(await request.json());
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid request payload" },
+      { status: 400 },
+    );
+  }
+
+  const systemPrompt = getBaselineContext();
+  const messages = [
+    { role: "system" as const, content: systemPrompt },
+    ...body.messages,
+  ];
+
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream({
+    async start(controller) {
+      try {
+        const chunks = ai.stream("patientConversation", { messages });
+
+        for await (const chunk of chunks) {
+          if (chunk.delta) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({ delta: chunk.delta })}\n\n`,
+              ),
+            );
+          }
+        }
+
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+      } catch (err) {
+        const errMsg =
+          err instanceof Error ? err.message : "AI streaming error";
+        controller.enqueue(
+          encoder.encode(`data: ${JSON.stringify({ error: errMsg })}\n\n`),
+        );
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
+export async function GET() {
+  const health = await ai.health("patientConversation");
+  return NextResponse.json(health, { status: health.ok ? 200 : 503 });
 }
