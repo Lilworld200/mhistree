@@ -27,6 +27,7 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   const newChat = useChatStore((s) => s.newChat);
   const openSession = useChatStore((s) => s.openSession);
   const fetchHistory = useChatStore((s) => s.fetchHistory);
+  const resetChat = useChatStore((s) => s.reset);
   const loaded = useChatStore((s) => s.loaded);
 
   const [user, setUser] = useState<{
@@ -66,16 +67,19 @@ export function PatientNavContent({ onClose }: { onClose?: () => void }) {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Drop the previous member's local transcript so the next user
+    // in this tab starts clean.
+    resetChat();
     setUser(null);
     onClose?.();
     router.push("/chat");
   };
 
   useEffect(() => {
-    if (!loaded) {
+    if (!loaded && user) {
       fetchHistory();
     }
-  }, [loaded, fetchHistory]);
+  }, [loaded, user, fetchHistory]);
 
   const go = (href: string) => {
     onClose?.();

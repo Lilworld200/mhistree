@@ -7,7 +7,8 @@
  * to extract SNOMED CT, ICD-10, and RxNorm-aligned medical facts, vitals,
  * and medications.
  *
- * Optionally persists extracted records directly to Supabase when patient_id is provided.
+ * Requires an authenticated Supabase session — extracted records are persisted
+ * for the signed-in patient (guests receive 401 and never touch the database).
  */
 import { NextResponse } from "next/server";
 import DOMPurify from "isomorphic-dompurify";
@@ -15,11 +16,13 @@ import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
 import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
 import { logAuditEvent } from "@/lib/security/audit";
-import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import {
+  createAdminSupabaseClient,
+  createServerSupabaseClient,
+} from "@/lib/supabase/server";
 
 const RequestBodySchema = z.object({
   text: z.string().min(3).max(10_000),
-  patient_id: z.string().uuid().optional(),
   contributor_role: z
     .enum(["patient", "clinician", "ai_extractor"])
     .default("ai_extractor"),
@@ -34,11 +37,26 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Invalid payload format. Expected { text, patient_id?, contributor_role? }",
+          "Invalid payload format. Expected { text, contributor_role? }",
       },
       { status: 400 },
     );
   }
+
+  // Identity is derived from the auth session cookie — guests never persist.
+  const authClient = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await authClient.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json(
+      { error: "Authentication required" },
+      { status: 401 },
+    );
+  }
+
+  const patientId = user.id;
 
   // Sanitize input text using DOMPurify
   const cleanText = DOMPurify.sanitize(body.text);
@@ -56,77 +74,77 @@ Map diseases and findings to SNOMED CT / ICD-10-CM codes where possible, and med
       validate: (data: unknown) => MedicalExtractionSchema.parse(data),
     });
 
-    // Optional persistence to Supabase if patient_id is present
-    if (body.patient_id) {
-      const supabase = createAdminSupabaseClient();
+    // Persist extracted records to Supabase
+    const supabase = createAdminSupabaseClient();
 
-      // Persist health memories
-      if (extraction.memories.length > 0) {
-        await supabase.from("health_memories").insert(
-          extraction.memories.map((m) => ({
-            patient_id: body.patient_id!,
-            contributor_role: body.contributor_role,
-            fact_category: m.fact_category,
-            fact_summary: m.fact_summary,
-            snomed_code: m.snomed_code,
-            icd10_code: m.icd10_code,
-            confidence_score: m.confidence_score,
-            is_verified: body.contributor_role === "clinician",
-          })),
-        );
-      }
-
-      // Persist vitals
-      if (extraction.vitals.length > 0) {
-        await supabase.from("health_vitals").insert(
-          extraction.vitals.map((v) => ({
-            patient_id: body.patient_id!,
-            vital_type: v.vital_type,
-            numeric_value: v.numeric_value ?? null,
-            text_value: v.text_value ?? null,
-            unit: v.unit ?? null,
-            source:
-              body.contributor_role === "clinician"
-                ? "clinician_entry"
-                : "patient_reported",
-          })),
-        );
-      }
-
-      // Persist medications
-      if (extraction.medications.length > 0) {
-        await supabase.from("medications").insert(
-          extraction.medications.map((med) => ({
-            patient_id: body.patient_id!,
-            drug_name: med.drug_name,
-            dosage: med.dosage,
-            frequency: med.frequency,
-            rxnorm_code: med.rxnorm_code ?? null,
-            status: med.status,
-          })),
-        );
-      }
+    // Persist health memories
+    if (extraction.memories.length > 0) {
+      await supabase.from("health_memories").insert(
+        extraction.memories.map((m) => ({
+          patient_id: patientId,
+          contributor_role: body.contributor_role,
+          fact_category: m.fact_category,
+          fact_summary: m.fact_summary,
+          clinical_payload: {
+            ...(m.clinical_payload ?? {}),
+            source_text: cleanText,
+          },
+          snomed_code: m.snomed_code,
+          icd10_code: m.icd10_code,
+          confidence_score: m.confidence_score,
+          is_verified: body.contributor_role === "clinician",
+        })),
+      );
     }
 
-    if (body.patient_id) {
-      await logAuditEvent({
-        actorId: body.patient_id,
-        actorRole:
-          body.contributor_role === "clinician" ? "clinician" : "patient",
-        action: "extract_memory",
-        patientId: body.patient_id,
-        metadata: {
-          memoriesExtracted: extraction.memories.length,
-          vitalsExtracted: extraction.vitals.length,
-          medicationsExtracted: extraction.medications.length,
-        },
-      });
+    // Persist vitals
+    if (extraction.vitals.length > 0) {
+      await supabase.from("health_vitals").insert(
+        extraction.vitals.map((v) => ({
+          patient_id: patientId,
+          vital_type: v.vital_type,
+          numeric_value: v.numeric_value ?? null,
+          text_value: v.text_value ?? null,
+          unit: v.unit ?? null,
+          source:
+            body.contributor_role === "clinician"
+              ? "clinician_entry"
+              : "patient_reported",
+        })),
+      );
     }
+
+    // Persist medications
+    if (extraction.medications.length > 0) {
+      await supabase.from("medications").insert(
+        extraction.medications.map((med) => ({
+          patient_id: patientId,
+          drug_name: med.drug_name,
+          dosage: med.dosage,
+          frequency: med.frequency,
+          rxnorm_code: med.rxnorm_code ?? null,
+          status: med.status,
+        })),
+      );
+    }
+
+    await logAuditEvent({
+      actorId: patientId,
+      actorRole:
+        body.contributor_role === "clinician" ? "clinician" : "patient",
+      action: "extract_memory",
+      patientId,
+      metadata: {
+        memoriesExtracted: extraction.memories.length,
+        vitalsExtracted: extraction.vitals.length,
+        medicationsExtracted: extraction.medications.length,
+      },
+    });
 
     return NextResponse.json({
       success: true,
       extraction,
-      persisted: !!body.patient_id,
+      persisted: true,
     });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : "Extraction failed";

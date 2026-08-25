@@ -59,11 +59,22 @@ export async function GET(request: NextRequest) {
 
     // Map health memories
     (memoriesRes.data || []).forEach((mem) => {
+      const payload =
+        mem.clinical_payload &&
+        typeof mem.clinical_payload === "object" &&
+        !Array.isArray(mem.clinical_payload)
+          ? (mem.clinical_payload as Record<string, unknown>)
+          : null;
+      const occurredAt =
+        typeof payload?.occurred_at === "string"
+          ? payload.occurred_at
+          : undefined;
+
       events.push({
         id: `mem_${mem.id}`,
         category: mem.fact_category === "allergy" ? "symptom" : "clinical_note",
         title: mem.fact_summary,
-        summary: `Category: ${mem.fact_category.replaceAll("_", " ")}${mem.snomed_code ? ` (SNOMED: ${mem.snomed_code})` : ""}`,
+        summary: `Category: ${mem.fact_category.replaceAll("_", " ")}${occurredAt ? ` — When: ${occurredAt}` : ""}${mem.snomed_code ? ` (SNOMED: ${mem.snomed_code})` : ""}`,
         timestamp: mem.created_at,
         source:
           mem.contributor_role === "clinician"
@@ -147,6 +158,13 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = createAdminSupabaseClient();
+    const clinicalPayload =
+      body.clinical_payload &&
+      typeof body.clinical_payload === "object" &&
+      !Array.isArray(body.clinical_payload)
+        ? (body.clinical_payload as Record<string, unknown>)
+        : null;
+
     const { data: memory, error } = await supabase
       .from("health_memories")
       .insert({
@@ -154,6 +172,7 @@ export async function POST(request: NextRequest) {
         contributor_role: role,
         fact_category: factCategory,
         fact_summary: factSummary,
+        clinical_payload: clinicalPayload,
         confidence_score: 1.0,
         is_verified: role === "clinician",
       })

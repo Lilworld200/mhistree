@@ -8,13 +8,15 @@ interface ChatState {
   messages: Record<string, ChatMessage[]>;
   typing: boolean;
   drafts: Record<string, string>;
+  /** Flips true once a history sync attempt has been made this tab session. */
   loaded: boolean;
 
-  fetchHistory: (patientId?: string) => Promise<void>;
+  fetchHistory: () => Promise<void>;
   newChat: () => void;
   openSession: (id: string) => void;
   send: (text: string) => Promise<void>;
   setDraft: (sessionId: string, text: string) => void;
+  reset: () => void;
 }
 
 const UNTITLED = "New conversation";
@@ -27,15 +29,13 @@ export const useChatStore = create<ChatState>()(
       messages: {},
       typing: false,
       drafts: {},
-      loaded: true,
+      loaded: false,
 
-      async fetchHistory(patientId?: string) {
-        // If authenticated patientId provided, option to sync with Supabase history
-        if (!patientId) return;
+      async fetchHistory() {
+        // Syncs the signed-in member's Supabase history. The API derives
+        // identity from the auth cookie; guests receive 401 and are skipped.
         try {
-          const res = await fetch(
-            `/api/ai/chat/history?patient_id=${encodeURIComponent(patientId)}`,
-          );
+          const res = await fetch("/api/ai/chat/history");
           if (!res.ok) return;
 
           const data = await res.json();
@@ -51,11 +51,12 @@ export const useChatStore = create<ChatState>()(
               sessions: fetchedSessions,
               messages: fetchedMessages,
               activeSessionId: get().activeSessionId || activeId,
-              loaded: true,
             });
           }
         } catch (e) {
           console.error("[Chat History Fetch Error]:", e);
+        } finally {
+          set({ loaded: true });
         }
       },
 
@@ -198,6 +199,17 @@ export const useChatStore = create<ChatState>()(
 
       setDraft(sessionId, text) {
         set((s) => ({ drafts: { ...s.drafts, [sessionId]: text } }));
+      },
+
+      reset() {
+        set({
+          sessions: [],
+          activeSessionId: "",
+          messages: {},
+          drafts: {},
+          typing: false,
+          loaded: false,
+        });
       },
     }),
     {

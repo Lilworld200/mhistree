@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { ChatHeader } from "./chat-header";
 import { ChatEmptyState, MessageList } from "./message-list";
 import { Composer } from "./composer";
@@ -18,10 +19,27 @@ export function ChatView() {
   const fetchHistory = useChatStore((s) => s.fetchHistory);
   const loaded = useChatStore((s) => s.loaded);
 
+  // Sync the signed-in member's persisted history once per tab session.
   useEffect(() => {
-    if (!loaded) {
-      fetchHistory();
-    }
+    if (loaded) return;
+
+    const supabase = createClient();
+
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) fetchHistory();
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if ((event === "SIGNED_IN" || event === "INITIAL_SESSION") && session) {
+        fetchHistory();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, [loaded, fetchHistory]);
 
   useEffect(() => {

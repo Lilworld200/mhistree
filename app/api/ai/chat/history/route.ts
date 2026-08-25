@@ -1,25 +1,29 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/server";
-import { getOrCreateDefaultPatientId } from "@/lib/supabase/patient-helper";
+import { NextResponse } from "next/server";
+import {
+  createAdminSupabaseClient,
+  createServerSupabaseClient,
+} from "@/lib/supabase/server";
 
-export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  let patientId = searchParams.get("patient_id");
-
+/**
+ * GET /api/ai/chat/history — Authenticated chat transcript sync.
+ * Identity is derived from the Supabase auth session cookie; guests get 401.
+ */
+export async function GET() {
   try {
+    const authClient = await createServerSupabaseClient();
+    const {
+      data: { user },
+    } = await authClient.auth.getUser();
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Authentication required" },
+        { status: 401 },
+      );
+    }
+
     const supabase = createAdminSupabaseClient();
-
-    if (!patientId) {
-      patientId = await getOrCreateDefaultPatientId(supabase);
-    }
-
-    if (!patientId) {
-      return NextResponse.json({
-        success: true,
-        sessions: [],
-        messages: {},
-      });
-    }
+    const patientId = user.id;
 
     // 1. Fetch chat sessions ordered by updated_at descending
     const { data: dbSessions, error: sessError } = await supabase

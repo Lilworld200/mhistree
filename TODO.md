@@ -204,6 +204,7 @@ the model can handle text, images, audio, video.
      contributor_id UUID,
      fact_category VARCHAR(50) NOT NULL, -- 'allergy', 'chronic_condition', 'family_history', 'lifestyle', 'symptom_trend'
      fact_summary TEXT NOT NULL,
+     clinical_payload JSONB,-- contains metadata like vitals readings, original message(if nessecary) or document or vitals reading as well as any other information like when it occured etcs
      snomed_code VARCHAR(30),
      icd10_code VARCHAR(30),
      confidence_score NUMERIC(3,2) DEFAULT 1.00,

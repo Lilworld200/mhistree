@@ -114,6 +114,7 @@ export interface DBHealthMemory {
   contributor_id: string | null;
   fact_category: MemoryCategory;
   fact_summary: string;
+  clinical_payload: Record<string, unknown> | null;
   snomed_code: string | null;
   icd10_code: string | null;
   confidence_score: number;

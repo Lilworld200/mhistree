@@ -48,6 +48,13 @@ export const MedicalExtractionSchema = z.object({
         .max(1)
         .default(0.9)
         .describe("Confidence rating between 0.0 and 1.0"),
+      clinical_payload: z
+        .record(z.string(), z.unknown())
+        .nullable()
+        .optional()
+        .describe(
+          "Optional metadata object with ONLY details the text supports, e.g. { occurred_at: 'this morning', severity: 'mild', body_part: 'left toe', trigger: 'cold weather', related_readings: { blood_pressure: '135/85' } }",
+        ),
     }),
   ),
   vitals: z.array(
