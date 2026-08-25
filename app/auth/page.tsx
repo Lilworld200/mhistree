@@ -3,6 +3,7 @@
 import { useState, FormEvent } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { motion } from "motion/react";
 import { createClient } from "@/lib/supabase/client";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
@@ -92,19 +93,27 @@ export default function AuthPage() {
         alignItems: "center",
         justifyContent: "center",
         padding: "2rem 1rem",
+        position: "relative",
         background: "var(--color-bg, #0b0f17)",
         color: "var(--color-fg, #f1f5f9)",
       }}
     >
+      <button
+        type="button"
+        className="authback"
+        onClick={() => router.push("/chat")}
+      >
+        <Icon n="left" s={17} />
+        Back
+      </button>
       <div
-        className="card"
+        className="card auth-card"
         style={{
           width: "100%",
           maxWidth: "440px",
           padding: "2.5rem 2rem",
-          background: "var(--color-bg-elevated, #171c26)",
-          border: "1px solid var(--color-border, rgba(255,255,255,0.12))",
-          borderRadius: "20px",
+          border: "1px solid var(--bl)",
+          borderRadius: "32px",
           boxShadow: "0 24px 48px rgba(0, 0, 0, 0.4)",
         }}
       >
@@ -144,29 +153,21 @@ export default function AuthPage() {
 
         {/* Tab Switcher */}
         <div
-          style={{
-            display: "flex",
-            background: "rgba(255, 255, 255, 0.05)",
-            padding: "4px",
-            borderRadius: "12px",
-            marginBottom: "1.75rem",
-            border: "1px solid rgba(255, 255, 255, 0.08)",
-          }}
+          className="authseg"
+          role="tablist"
+          aria-label="Authentication mode"
+          style={{ marginBottom: "1.75rem" }}
         >
+          <motion.span
+            className="authseg-thumb"
+            animate={{ x: mode === "signin" ? "0%" : "100%" }}
+            transition={{ type: "spring", damping: 28, stiffness: 300 }}
+          />
           <button
             type="button"
-            style={{
-              flex: 1,
-              padding: "10px",
-              borderRadius: "8px",
-              border: "none",
-              background: mode === "signin" ? "#F4A8AC" : "transparent",
-              color: mode === "signin" ? "#0b0f17" : "rgba(255, 255, 255, 0.7)",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
+            role="tab"
+            aria-selected={mode === "signin"}
+            className={mode === "signin" ? "on" : ""}
             onClick={() => {
               setMode("signin");
               setErrorMsg(null);
@@ -177,18 +178,9 @@ export default function AuthPage() {
           </button>
           <button
             type="button"
-            style={{
-              flex: 1,
-              padding: "10px",
-              borderRadius: "8px",
-              border: "none",
-              background: mode === "signup" ? "#F4A8AC" : "transparent",
-              color: mode === "signup" ? "#0b0f17" : "rgba(255, 255, 255, 0.7)",
-              fontWeight: 600,
-              fontSize: "0.9rem",
-              cursor: "pointer",
-              transition: "all 0.2s ease",
-            }}
+            role="tab"
+            aria-selected={mode === "signup"}
+            className={mode === "signup" ? "on" : ""}
             onClick={() => {
               setMode("signup");
               setErrorMsg(null);
@@ -266,15 +258,8 @@ export default function AuthPage() {
                   value={firstName}
                   onChange={(e) => setFirstName(e.target.value)}
                   placeholder="Jane"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    background: "rgba(0, 0, 0, 0.3)",
-                    color: "#fff",
-                    fontSize: "0.9rem",
-                  }}
+                  className="cinput"
+                  style={{ width: "100%" }}
                 />
               </div>
               <div style={{ flex: 1 }}>
@@ -295,15 +280,8 @@ export default function AuthPage() {
                   value={lastName}
                   onChange={(e) => setLastName(e.target.value)}
                   placeholder="Doe"
-                  style={{
-                    width: "100%",
-                    padding: "10px 12px",
-                    borderRadius: "8px",
-                    border: "1px solid rgba(255, 255, 255, 0.12)",
-                    background: "rgba(0, 0, 0, 0.3)",
-                    color: "#fff",
-                    fontSize: "0.9rem",
-                  }}
+                  className="cinput"
+                  style={{ width: "100%" }}
                 />
               </div>
             </div>
@@ -327,15 +305,8 @@ export default function AuthPage() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="patient@example.com"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                background: "rgba(0, 0, 0, 0.3)",
-                color: "#fff",
-                fontSize: "0.9rem",
-              }}
+              className="cinput"
+              style={{ width: "100%" }}
             />
           </div>
 
@@ -358,15 +329,8 @@ export default function AuthPage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              style={{
-                width: "100%",
-                padding: "10px 12px",
-                borderRadius: "8px",
-                border: "1px solid rgba(255, 255, 255, 0.12)",
-                background: "rgba(0, 0, 0, 0.3)",
-                color: "#fff",
-                fontSize: "0.9rem",
-              }}
+              className="cinput"
+              style={{ width: "100%" }}
             />
           </div>
 
@@ -398,7 +362,7 @@ export default function AuthPage() {
             style={{
               background: "none",
               border: "none",
-              color: "rgba(255, 255, 255, 0.6)",
+              color: "var(--ink2)",
               fontSize: "0.85rem",
               cursor: "pointer",
               textDecoration: "underline",
