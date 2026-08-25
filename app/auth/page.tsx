@@ -24,6 +24,7 @@ export default function AuthPage() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showPw, setShowPw] = useState(false);
 
   const supabase = createClient();
 
@@ -33,10 +34,16 @@ export default function AuthPage() {
     setSuccessMsg(null);
     setLoading(true);
 
+    // Normalize input before it reaches the auth service: trim stray
+    // whitespace and compare emails case-insensitively.
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanFirstName = firstName.trim();
+    const cleanLastName = lastName.trim();
+
     try {
       if (mode === "signin") {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
+          email: cleanEmail,
           password,
         });
 
@@ -52,12 +59,12 @@ export default function AuthPage() {
         }
       } else {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: cleanEmail,
           password,
           options: {
             data: {
-              first_name: firstName,
-              last_name: lastName,
+              first_name: cleanFirstName,
+              last_name: cleanLastName,
             },
           },
         });
@@ -94,8 +101,8 @@ export default function AuthPage() {
         justifyContent: "center",
         padding: "2rem 1rem",
         position: "relative",
-        background: "var(--color-bg, #0b0f17)",
-        color: "var(--color-fg, #f1f5f9)",
+        background: "var(--shell, #ececeb)",
+        color: "var(--ink, #1a1a1a)",
       }}
     >
       <button
@@ -322,16 +329,44 @@ export default function AuthPage() {
             >
               Password
             </label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="cinput"
-              style={{ width: "100%" }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showPw ? "text" : "password"}
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="cinput"
+                autoComplete={
+                  mode === "signin" ? "current-password" : "new-password"
+                }
+                style={{ width: "100%", paddingRight: "48px" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw((v) => !v)}
+                aria-label={showPw ? "Hide password" : "Show password"}
+                aria-pressed={showPw}
+                style={{
+                  position: "absolute",
+                  right: "4px",
+                  top: "50%",
+                  transform: "translateY(-50%)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "10px",
+                  background: "none",
+                  border: "none",
+                  borderRadius: "10px",
+                  color: "var(--ink2)",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon n={showPw ? "eyeoff" : "eye"} s={17} />
+              </button>
+            </div>
           </div>
 
           <Btn

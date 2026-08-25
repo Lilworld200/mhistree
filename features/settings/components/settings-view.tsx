@@ -4,6 +4,8 @@ import * as Tabs from "@radix-ui/react-tabs";
 import * as ToggleGroup from "@radix-ui/react-toggle-group";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import { Btn } from "@/components/ui/button";
 import { KvRow, MiniRow } from "@/components/ui/fact-row";
 import { Icon } from "@/components/ui/icons";
@@ -14,6 +16,7 @@ import { downloadJson } from "@/lib/utils/download";
 import { useDocumentsStore } from "@/features/documents/store";
 import { useTimelineStore } from "@/features/timeline/store";
 import { useShellStore } from "@/features/shell/store";
+import { useChatStore } from "@/features/chat/store";
 import { useSettingsStore } from "../store";
 
 const TABS = [
@@ -63,6 +66,25 @@ function Panel({ tab }: { tab: string }) {
   const setPref = useSettingsStore((s) => s.setPref);
   const theme = useShellStore((s) => s.theme);
   const setTheme = useShellStore((s) => s.setTheme);
+  const resetChat = useChatStore((s) => s.reset);
+
+  const [signingOut, setSigningOut] = useState(false);
+
+  const handleSignOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      const supabase = createClient();
+      await supabase.auth.signOut();
+      // Drop this member's local transcript for the next user in the tab.
+      resetChat();
+      toast("Signed out", "out");
+      router.push("/chat");
+    } catch {
+      toast("Sign out failed — please try again", "alert");
+      setSigningOut(false);
+    }
+  };
 
   switch (tab) {
     case "Account":
@@ -70,16 +92,28 @@ function Panel({ tab }: { tab: string }) {
         <Card
           label="Account"
           footer={
-            <Btn
-              kind="soft"
-              sm
-              icon="edit"
-              onClick={() =>
-                toast("Profile editing arrives with account service", "edit")
-              }
-            >
-              Edit identity
-            </Btn>
+            <div className="actrow">
+              <Btn
+                kind="soft"
+                sm
+                icon="edit"
+                onClick={() =>
+                  toast("Profile editing arrives with account service", "edit")
+                }
+              >
+                Edit identity
+              </Btn>
+              <Btn
+                kind="soft"
+                sm
+                icon={signingOut ? undefined : "out"}
+                disabled={signingOut}
+                onClick={handleSignOut}
+              >
+                {signingOut && <span className="spin" aria-hidden />}
+                Log out
+              </Btn>
+            </div>
           }
         >
           <KvRow k="Name" v="Nati Adeyemi" />
@@ -229,7 +263,8 @@ function Panel({ tab }: { tab: string }) {
             v={
               <button
                 className="link"
-                onClick={() => toast("Session signed out", "out")}
+                disabled={signingOut}
+                onClick={handleSignOut}
               >
                 Sign out
               </button>

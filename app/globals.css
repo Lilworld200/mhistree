@@ -1514,6 +1514,28 @@
     background: linear-gradient(180deg, #ffffff, #fafafa);
   }
 
+  /* ── Inline button spinner ──────────────────────────────────── */
+  .spin {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    flex: none;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: rot 0.7s linear infinite;
+  }
+  @keyframes rot {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation-duration: 1.6s;
+    }
+  }
+
   /* ── Toasts ─────────────────────────────────────────────────── */
   .toasts {
     position: fixed;
