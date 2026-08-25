@@ -544,3 +544,112 @@ Follow this sequence step-by-step:
 5. Execute **Step 5** (Dual-contributor chat & continuous health memory sync).
 6. Execute **Step 6** (Clinician workspace verification).
 7. Execute **Step 7** (Security & audit logging).
+
+---
+
+## 🧪 Section 3: Manual Execution & Testing Guide
+
+This section provides clear, step-by-step instructions to run, test, and verify the entire Mhistree application locally.
+
+### Step 1: Environment Setup
+
+1. Create a `.env.local` file in `mhistree/` with your credentials:
+
+   ```env
+   # Supabase Configuration
+   NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+   NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+
+   # AI Provider Configuration (Default: openrouter)
+   AI_PROVIDER=openrouter
+   OPENROUTER_API_KEY=your-openrouter-api-key
+   AI_PATIENT_MODEL=anthropic/claude-3.5-sonnet
+   AI_CLINICIAN_MODEL=anthropic/claude-3.5-sonnet
+   AI_EXTRACTION_MODEL=openai/gpt-4o-mini
+   AI_EMBEDDING_MODEL=text-embedding-3-small
+   ```
+
+### Step 2: Database Schema & Migration Setup
+
+1. Open your **Supabase Dashboard** -> **SQL Editor**.
+2. Run the master migration SQL defined in **Section 2, Step 1** of this blueprint to create the database tables (`users`, `health_profiles`, `health_vitals`, `health_practitioners`, `medications`, `health_memories`, `chat_sessions`, `chat_messages`, `user_summaries`, `medical_document_chunks`, and `audit_logs`).
+3. Run the vector similarity RPC function `match_medical_chunks` defined in **Step 4**.
+
+### Step 3: Launch Local Development Server
+
+1. Install dependencies:
+   ```bash
+   pnpm install
+   ```
+2. Start the Next.js development server:
+   ```bash
+   pnpm dev
+   ```
+3. Open your browser and navigate to `http://localhost:3000`.
+
+### Step 4: Testing API Endpoints & Core Workflows
+
+#### 1. Medical Entity Extraction (`POST /api/ai/extract-medical`)
+
+Test clinical NLP extraction of health memories, vitals, and medications:
+
+```bash
+curl -X POST http://localhost:3000/api/ai/extract-medical \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Patient is a 45yo male reporting persistent fatigue, blood pressure 135/85 mmHg, and penicillin allergy.",
+    "contributor_role": "patient"
+  }'
+```
+
+#### 2. Multimodal Document RAG Ingestion (`POST /api/documents`)
+
+Test uploading and embedding a medical PDF or text report:
+
+```bash
+curl -X POST http://localhost:3000/api/documents \
+  -F "patient_id=00000000-0000-0000-0000-000000000001" \
+  -F "document_name=Blood_Test_Report.txt" \
+  -F "text=Lab Result: Hemoglobin 14.2 g/dL, Fasting Glucose 95 mg/dL. Patient tolerating Metformin well."
+```
+
+#### 3. Streaming Chat with EHR Context & RAG (`POST /api/ai/chat`)
+
+Test the streaming assistant endpoint with longitudinal memory injection:
+
+```bash
+curl -X POST http://localhost:3000/api/ai/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "patient_id": "00000000-0000-0000-0000-000000000001",
+    "messages": [
+      { "role": "user", "content": "What were my latest blood pressure and glucose readings?" }
+    ]
+  }'
+```
+
+#### 4. Clinician Memory Verification (`POST /api/clinician/verify-memory`)
+
+Test clinician verification of candidate health memories:
+
+```bash
+curl -X POST http://localhost:3000/api/clinician/verify-memory \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memory_id": "YOUR_MEMORY_UUID",
+    "clinician_id": "YOUR_CLINICIAN_UUID",
+    "is_verified": true
+  }'
+```
+
+### Step 5: Verification Check
+
+Run the TypeScript compiler and Next.js build verification:
+
+```bash
+npx tsc --noEmit
+pnpm build
+```
+
+Confirm that both commands complete with **0 errors**.

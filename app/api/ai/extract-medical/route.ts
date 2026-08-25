@@ -14,6 +14,7 @@ import DOMPurify from "isomorphic-dompurify";
 import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
 import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
+import { logAuditEvent } from "@/lib/security/audit";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 
 const RequestBodySchema = z.object({
@@ -105,6 +106,21 @@ Map diseases and findings to SNOMED CT / ICD-10-CM codes where possible, and med
           })),
         );
       }
+    }
+
+    if (body.patient_id) {
+      await logAuditEvent({
+        actorId: body.patient_id,
+        actorRole:
+          body.contributor_role === "clinician" ? "clinician" : "patient",
+        action: "extract_memory",
+        patientId: body.patient_id,
+        metadata: {
+          memoriesExtracted: extraction.memories.length,
+          vitalsExtracted: extraction.vitals.length,
+          medicationsExtracted: extraction.medications.length,
+        },
+      });
     }
 
     return NextResponse.json({

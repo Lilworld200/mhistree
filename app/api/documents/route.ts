@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import DOMPurify from "isomorphic-dompurify";
 import { parseDocumentContent } from "@/lib/documents/parser";
 import { ingestDocumentChunks } from "@/lib/ai/rag";
+import { logAuditEvent } from "@/lib/security/audit";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 
 /**
@@ -116,6 +117,19 @@ export async function POST(request: NextRequest) {
       documentName,
       cleanText,
     );
+
+    // Record security audit event
+    await logAuditEvent({
+      actorId: patientId,
+      actorRole: "patient",
+      action: "document_ingest",
+      patientId: patientId,
+      metadata: {
+        documentId,
+        documentName,
+        chunksCount: ingestResult.chunkCount,
+      },
+    });
 
     return NextResponse.json({
       success: true,
