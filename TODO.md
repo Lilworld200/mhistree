@@ -48,11 +48,11 @@ The project currently has a production-ready frontend shell:
 #### 🖐️ Manual Human Steps:
 
 1. **Create Supabase Account & Project**:
-   - Go to [Supabase Dashboard](https://supabase.com) and create a project named `mhistree-production`.
+   - Go to [Supabase Dashboard](https://supabase.com) and create a project named `mhistree`.
    - Copy your `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` from Project Settings -> API.
    - Copy your `SUPABASE_SERVICE_ROLE_KEY` (for secure server-side routes).
 2. **Configure Environment Variables**:
-   - Create `.env.local` in the project root:
+   - Create `.env` in the project root:
 
      ```env
      NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
@@ -64,14 +64,56 @@ The project currently has a production-ready frontend shell:
      ANTHROPIC_API_KEY=sk-ant-...
      GOOGLE_GENERATIVE_AI_API_KEY=AIzaSy...
      OLLAMA_BASE_URL=http://localhost:11434
+     or openrouter api key
+     OPENROUTER_API_KEY=sk-or-v1-...
+     this is a code snippit for open router and the model to be used :
+     import { OpenRouter } from "@openrouter/sdk";
      ```
 
-#### 💻 Developer Code Steps:
+const openrouter = new OpenRouter({
+apiKey: "<OPENROUTER_API_KEY>"
+});
 
-1. **Install Supabase Dependencies**:
+// Stream the response to get reasoning tokens in usage
+const stream = await openrouter.chat.send({
+chatRequest: {
+model: "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+messages: [
+{
+role: "user",
+content: "How many r's are in the word 'strawberry'?"
+}
+],
+stream: true
+}
+});
+
+let response = "";
+for await (const chunk of stream) {
+const content = chunk.choices[0]?.delta?.content;
+if (content) {
+response += content;
+process.stdout.write(content);
+}
+
+// Usage information comes in the final chunk
+if (chunk.usage) {
+console.log("\nReasoning tokens:", chunk.usage.completionTokensDetails?.reasoningTokens);
+}
+}
+
+the model can handle text, images, audio, video.
+
+````
+
+####Code Steps:
+
+1. **Install Supabase Dependencies and other dependencies**:
    ```bash
    npm install @supabase/supabase-js @supabase/ssr
-   ```
+   (install other dependencies as needed)
+````
+
 2. **Execute Database Migration SQL (Supabase SQL Editor)**:
 
    ```sql
@@ -80,18 +122,39 @@ The project currently has a production-ready frontend shell:
    -- Enable pg_trgm for fast fuzzy medical search
    CREATE EXTENSION IF NOT EXISTS pg_trgm;
 
-   -- 1. Patients Table
-   CREATE TABLE public.patients (
+   -- 1. Users Table (this is the table for both patients and clinicians holds fundamental info)
+   CREATE TABLE public.users (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      created_at TIMESTAMPTZ DEFAULT now(),
-     full_name TEXT NOT NULL,
+     first_name TEXT NOT NULL,
+     last_name TEXT NOT NULL,
+     other_names TEXT,
+     email TEXT NOT NULL,
+     phone_number TEXT,
      date_of_birth DATE,
-     blood_type VARCHAR(5),
-     primary_physician_id UUID,
      emergency_contact JSONB
    );
 
-   -- 2. Structured Health Vitals Table
+   -- 2 Structured Health profile for user(both clicians and patients):
+   CREATE TABLE public.health_profiles (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+     blood_group VARCHAR(5),
+     genotype VARCHAR(5),
+     height VARCHAR(10),
+     weight VARCHAR(10),
+     allergies TEXT,
+     chronic_conditions TEXT,
+     family_history TEXT,
+     lifestyle TEXT,
+     gender VARCHAR(10),
+     primary_physician_id UUID,
+     created_at TIMESTAMPTZ DEFAULT now(),
+     updated_at TIMESTAMPTZ DEFAULT now(),
+
+   );
+
+   -- 3. Structured Health Vitals Table
    CREATE TABLE public.health_vitals (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
@@ -103,7 +166,24 @@ The project currently has a production-ready frontend shell:
      source VARCHAR(30) DEFAULT 'patient_reported' -- 'patient_reported', 'device_sync', 'clinician_entry'
    );
 
-   -- 3. Structured Medications Table (RxNorm aligned)
+   --4. Structured schema for the clinicians named health_practitioners
+   CREATE TABLE public.health_practitioners (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+     professional_id VARCHAR(50) NOT NULL,
+     professional_type VARCHAR(50) NOT NULL, -- 'doctor', 'nurse', 'pharmacist', 'therapist'
+     specialization VARCHAR(50),
+     license_number VARCHAR(50),
+     practice_name VARCHAR(100),
+     practice_address TEXT,
+     practice_phone VARCHAR(20),
+     practice_email VARCHAR(50),
+     is_verified BOOLEAN DEFAULT false,
+     created_at TIMESTAMPTZ DEFAULT now(),
+     updated_at TIMESTAMPTZ DEFAULT now(),
+   );
+
+   -- 4. Structured Medications Table (RxNorm aligned)
    CREATE TABLE public.medications (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
@@ -117,7 +197,7 @@ The project currently has a production-ready frontend shell:
      ended_at DATE
    );
 
-   -- 4. Longitudinal Health Memories Table (Dual-Contributor: Patient & Clinician)
+   -- 5. Longitudinal Health Memories Table (Dual-Contributor: Patient & Clinician)
    CREATE TABLE public.health_memories (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
@@ -133,7 +213,7 @@ The project currently has a production-ready frontend shell:
      created_at TIMESTAMPTZ DEFAULT now()
    );
 
-   -- 5. Sessions & Chat Messages Tables
+   -- 6. Sessions & Chat Messages Tables
    CREATE TABLE public.chat_sessions (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
@@ -152,6 +232,16 @@ The project currently has a production-ready frontend shell:
      attachments JSONB DEFAULT '[]'::jsonb,
      created_at TIMESTAMPTZ DEFAULT now()
    );
+
+   -- 8.table for user summaries
+   CREATE TABLE public.user_summaries (
+     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+     summary TEXT NOT NULL,
+     key_metadata JSONB,
+     version VARCHAR(20) NOT NULL,
+     created_at TIMESTAMPTZ DEFAULT now()
+   );
    ```
 
 ---
@@ -164,7 +254,7 @@ The project currently has a production-ready frontend shell:
 
 1. **Install Vercel AI SDK & Providers**:
    ```bash
-   npm install ai @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/google ai-sdk-ollama
+   npm install ai @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/google ai-sdk-ollama and if using openrouter or any routers that uses different models find a way to integrate them into the vercel ai sdk
    ```
 2. **Create Provider Registry Layer (`lib/ai/providers.ts`)**:
 
@@ -174,7 +264,7 @@ The project currently has a production-ready frontend shell:
    import { createGoogleGenerativeAI } from "@ai-sdk/google";
    import { createOllama } from "ai-sdk-ollama";
 
-   // Initialize model providers
+   // Initialize model providers if using them
    const openai = createOpenAI({ apiKey: process.env.OPENAI_API_KEY || "" });
    const anthropic = createAnthropic({
      apiKey: process.env.ANTHROPIC_API_KEY || "",
