@@ -22,7 +22,10 @@ function SysChip({ m }: { m: ChatMessage }) {
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
     >
-      <button className="syschip" onClick={() => m.evId && openEvidence(m.evId)}>
+      <button
+        className="syschip"
+        onClick={() => m.evId && openEvidence(m.evId)}
+      >
         <Icon n="plus" s={13} c="#2F8F5B" />
         {m.text}
         <Icon n="chev" s={13} />
@@ -69,9 +72,7 @@ function AiBubble({ m, last }: { m: ChatMessage; last: boolean }) {
             Using your health history
           </span>
         )}
-        <p style={{ margin: 0 }}>
-          <Typewriter text={m.text} on={!!m.fresh && last} />
-        </p>
+        <Typewriter text={m.text} on={!!m.fresh && last} />
         <div className="macts">
           <button onClick={copy}>Copy</button>
           <button onClick={() => toast("Reading aloud… (demo)", "mic")}>

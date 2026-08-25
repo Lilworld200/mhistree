@@ -871,6 +871,59 @@
     border: 1px solid var(--cta-border);
     box-shadow: var(--cta-shadow);
   }
+  /* ── Markdown Content inside Chat Bubbles ────────────────────── */
+  .md-content {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .md-p {
+    margin: 0;
+    line-height: 1.6;
+  }
+  .md-ul,
+  .md-ol {
+    margin: 6px 0;
+    padding-left: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .md-ul {
+    list-style-type: disc;
+  }
+  .md-ol {
+    list-style-type: decimal;
+  }
+  .md-li {
+    line-height: 1.5;
+  }
+  .md-strong {
+    font-weight: 800;
+    color: var(--ink);
+  }
+  .md-em {
+    font-style: italic;
+  }
+  .md-blockquote {
+    border-left: 3px solid var(--hero1);
+    padding-left: 10px;
+    margin: 4px 0;
+    color: var(--ink2);
+    font-style: italic;
+  }
+  .md-code {
+    font-family: monospace;
+    background: var(--shell);
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+  }
+  .md-a {
+    color: var(--hero2);
+    text-decoration: underline;
+    font-weight: 700;
+  }
   .memchip {
     display: inline-flex;
     align-items: center;
