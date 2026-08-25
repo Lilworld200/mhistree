@@ -30,8 +30,12 @@ export interface ChatResponse {
   usage?: { inputTokens: number; outputTokens: number };
 }
 
+import { z } from "zod";
+
 export interface StructuredRequest<T> {
   prompt: string;
+  /** Zod schema for structured output generation */
+  schema?: z.ZodType<T>;
   /** Runtime validator (e.g. a zod .parse wrapper) enforced by the provider adapter. */
   validate: (value: unknown) => T;
   model?: string;

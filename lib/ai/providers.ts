@@ -74,13 +74,19 @@ export function getModel(task: ModelTask, override?: string) {
 
   // Local Ollama models — requires Ollama running at OLLAMA_BASE_URL
   if (modelId.startsWith("ollama/")) {
-    // Lazy import to avoid loading ollama SDK for non-local deployments
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { createOllama } = require("ollama-ai-provider");
-    const ollamaClient = createOllama({
-      baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/api",
-    });
-    return ollamaClient(modelId.replace("ollama/", ""));
+    try {
+      // Lazy import to avoid loading ollama SDK for non-local deployments
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { createOllama } = require("ollama-ai-provider");
+      const ollamaClient = createOllama({
+        baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/api",
+      });
+      return ollamaClient(modelId.replace("ollama/", ""));
+    } catch {
+      throw new Error(
+        "Local Ollama provider requested but 'ollama-ai-provider' package is not installed. Please run 'npm install ollama-ai-provider' to enable local models.",
+      );
+    }
   }
 
   // All cloud models route through OpenRouter

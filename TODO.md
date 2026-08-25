@@ -135,7 +135,7 @@ the model can handle text, images, audio, video.
      emergency_contact JSONB
    );
 
-   -- 2 Structured Health profile for user(both clicians and patients):
+   -- 2. Structured Health profile for user(both clinicians and patients):
    CREATE TABLE public.health_profiles (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
@@ -150,14 +150,13 @@ the model can handle text, images, audio, video.
      gender VARCHAR(10),
      primary_physician_id UUID,
      created_at TIMESTAMPTZ DEFAULT now(),
-     updated_at TIMESTAMPTZ DEFAULT now(),
-
+     updated_at TIMESTAMPTZ DEFAULT now()
    );
 
    -- 3. Structured Health Vitals Table
    CREATE TABLE public.health_vitals (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+     patient_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
      recorded_at TIMESTAMPTZ DEFAULT now(),
      vital_type VARCHAR(50) NOT NULL, -- 'blood_pressure', 'heart_rate', 'glucose', 'weight', 'temperature'
      numeric_value NUMERIC,
@@ -166,7 +165,7 @@ the model can handle text, images, audio, video.
      source VARCHAR(30) DEFAULT 'patient_reported' -- 'patient_reported', 'device_sync', 'clinician_entry'
    );
 
-   --4. Structured schema for the clinicians named health_practitioners
+   -- 4. Structured schema for the clinicians named health_practitioners
    CREATE TABLE public.health_practitioners (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
@@ -180,13 +179,13 @@ the model can handle text, images, audio, video.
      practice_email VARCHAR(50),
      is_verified BOOLEAN DEFAULT false,
      created_at TIMESTAMPTZ DEFAULT now(),
-     updated_at TIMESTAMPTZ DEFAULT now(),
+     updated_at TIMESTAMPTZ DEFAULT now()
    );
 
-   -- 4. Structured Medications Table (RxNorm aligned)
+   -- 5. Structured Medications Table (RxNorm aligned)
    CREATE TABLE public.medications (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+     patient_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
      rxnorm_code VARCHAR(20),
      drug_name TEXT NOT NULL,
      dosage TEXT NOT NULL,
@@ -197,10 +196,10 @@ the model can handle text, images, audio, video.
      ended_at DATE
    );
 
-   -- 5. Longitudinal Health Memories Table (Dual-Contributor: Patient & Clinician)
+   -- 6. Longitudinal Health Memories Table (Dual-Contributor: Patient & Clinician)
    CREATE TABLE public.health_memories (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+     patient_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
      contributor_role VARCHAR(20) NOT NULL, -- 'patient', 'clinician', 'ai_extractor'
      contributor_id UUID,
      fact_category VARCHAR(50) NOT NULL, -- 'allergy', 'chronic_condition', 'family_history', 'lifestyle', 'symptom_trend'
@@ -208,15 +207,15 @@ the model can handle text, images, audio, video.
      snomed_code VARCHAR(30),
      icd10_code VARCHAR(30),
      confidence_score NUMERIC(3,2) DEFAULT 1.00,
-     is_verified BYPASSRLS BOOLEAN DEFAULT false,
+     is_verified BOOLEAN DEFAULT false,
      verified_by_clinician_id UUID,
      created_at TIMESTAMPTZ DEFAULT now()
    );
 
-   -- 6. Sessions & Chat Messages Tables
+   -- 7. Sessions & Chat Messages Tables
    CREATE TABLE public.chat_sessions (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-     patient_id UUID REFERENCES public.patients(id) ON DELETE CASCADE,
+     patient_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
      title TEXT NOT NULL,
      session_group VARCHAR(30) DEFAULT 'Today',
      created_at TIMESTAMPTZ DEFAULT now(),
@@ -233,7 +232,7 @@ the model can handle text, images, audio, video.
      created_at TIMESTAMPTZ DEFAULT now()
    );
 
-   -- 8.table for user summaries
+   -- 8. Table for user summaries
    CREATE TABLE public.user_summaries (
      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
      user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,

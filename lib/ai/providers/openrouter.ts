@@ -96,7 +96,9 @@ export class OpenRouterProvider implements LLMProvider {
     const result = await generateObject({
       model: openrouter(modelId),
       prompt: input.prompt,
-      schema: z.record(z.string(), z.unknown()),
+      schema:
+        (input.schema as z.ZodType<unknown>) ||
+        z.record(z.string(), z.unknown()),
     });
     return input.validate(result.object);
   }

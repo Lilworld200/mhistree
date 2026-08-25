@@ -10,10 +10,9 @@
  * Optionally persists extracted records directly to Supabase when patient_id is provided.
  */
 import { NextResponse } from "next/server";
-import { generateObject } from "ai";
 import DOMPurify from "isomorphic-dompurify";
 import { z } from "zod";
-import { getModel } from "@/lib/ai/providers";
+import { ai } from "@/lib/ai/gateway";
 import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
 import { createAdminSupabaseClient } from "@/lib/supabase/server";
 
@@ -44,19 +43,17 @@ export async function POST(req: Request) {
   const cleanText = DOMPurify.sanitize(body.text);
 
   try {
-    // Generate structured extraction using Vercel AI SDK + OpenRouter model
-    const extractionResult = await generateObject({
-      model: getModel("extraction"),
-      schema: MedicalExtractionSchema,
+    // Generate structured extraction via Mhistree LLM Gateway
+    const extraction = await ai.structured("extraction", {
       prompt: `You are a clinical NLP entity extraction engine for an Electronic Health Record (EHR) system.
 Analyze the following patient or clinician text and extract all structured health facts, symptoms, vitals, and medications:
 
 "${cleanText}"
 
 Map diseases and findings to SNOMED CT / ICD-10-CM codes where possible, and medications to RxNorm codes. Be accurate and conservative with confidence scores.`,
+      schema: MedicalExtractionSchema,
+      validate: (data: unknown) => MedicalExtractionSchema.parse(data),
     });
-
-    const extraction = extractionResult.object;
 
     // Optional persistence to Supabase if patient_id is present
     if (body.patient_id) {

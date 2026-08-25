@@ -46,7 +46,7 @@ export function buildPatientSystemPrompt(ctx: PatientContext): string {
     const value =
       v.numeric_value != null
         ? `${v.numeric_value} ${v.unit || ""}`.trim()
-        : v.text_value;
+        : (v.text_value ?? "N/A");
     return `  - ${v.vital_type.replaceAll("_", " ")}: ${value} (${date}, ${v.source})`;
   });
 
