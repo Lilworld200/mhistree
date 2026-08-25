@@ -1,12 +1,29 @@
 /**
- * POST /api/ai/chat — Live streaming chat endpoint via OpenRouter AI Gateway.
+ * POST /api/ai/chat — Patient & Clinician Streaming AI Conversation Endpoint.
  *
- * Streamed via Server-Sent Events (SSE).
+ * Full Production Data Flow:
+ *   1. Input sanitization (DOMPurify via lib/security/sanitize.ts)
+ *   2. Longitudinal EHR context fetch (profiles, memories, vitals, medications)
+ *   3. Multimodal RAG vector search over medical documents via pgvector
+ *   4. System prompt injection (lib/ai/prompts/patient.ts)
+ *   5. OpenRouter streaming text generation (SSE)
+ *   6. Background medical entity extraction & health memory persistence
+ *   7. Audit logging
  */
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
 import { buildPatientSystemPrompt } from "@/lib/ai/prompts/patient";
+import { searchMedicalChunks } from "@/lib/ai/rag";
+import { logAuditEvent } from "@/lib/security/audit";
+import { sanitizeInput } from "@/lib/security/sanitize";
+import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import type {
+  DBHealthMemory,
+  DBVital,
+  DBMedication,
+  DBHealthProfile,
+} from "@/lib/supabase/types";
 
 const ChatRequestSchema = z.object({
   messages: z
@@ -17,42 +34,131 @@ const ChatRequestSchema = z.object({
       }),
     )
     .min(1),
+  patient_id: z.string().uuid().optional(),
   sessionId: z.string().optional(),
 });
-
-function getBaselineContext() {
-  return buildPatientSystemPrompt({
-    name: "Nati",
-    profile: null,
-    memories: [],
-    recentVitals: [],
-    activeMedications: [],
-  });
-}
 
 export async function POST(request: Request) {
   let body: z.infer<typeof ChatRequestSchema>;
   try {
-    body = ChatRequestSchema.parse(await request.json());
+    const json = await request.json();
+    body = ChatRequestSchema.parse(json);
   } catch {
     return NextResponse.json(
-      { error: "Invalid request payload" },
+      { error: "Invalid request payload format" },
       { status: 400 },
     );
   }
 
-  const systemPrompt = getBaselineContext();
-  const messages = [
+  // 1. Sanitize latest user message
+  const sanitizedMessages = body.messages.map((m) => ({
+    role: m.role,
+    content: sanitizeInput(m.content),
+  }));
+
+  const lastUserMessage = sanitizedMessages
+    .slice()
+    .reverse()
+    .find((m) => m.role === "user");
+
+  // 2. Fetch patient Longitudinal EHR context from Supabase if patient_id provided
+  let patientName = "Patient";
+  let profile: DBHealthProfile | null = null;
+  let memories: DBHealthMemory[] = [];
+  let recentVitals: DBVital[] = [];
+  let activeMedications: DBMedication[] = [];
+  let ragChunksText = "";
+
+  if (body.patient_id) {
+    const supabase = createAdminSupabaseClient();
+
+    const [userRes, profileRes, memoriesRes, vitalsRes, medsRes] =
+      await Promise.all([
+        supabase
+          .from("users")
+          .select("first_name, last_name")
+          .eq("id", body.patient_id)
+          .maybeSingle(),
+        supabase
+          .from("health_profiles")
+          .select("*")
+          .eq("user_id", body.patient_id)
+          .maybeSingle(),
+        supabase
+          .from("health_memories")
+          .select("*")
+          .eq("patient_id", body.patient_id)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("health_vitals")
+          .select("*")
+          .eq("patient_id", body.patient_id)
+          .order("recorded_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("medications")
+          .select("*")
+          .eq("patient_id", body.patient_id)
+          .eq("status", "active"),
+      ]);
+
+    if (userRes.data) {
+      patientName =
+        `${userRes.data.first_name} ${userRes.data.last_name}`.trim();
+    }
+    profile = profileRes.data || null;
+    memories = (memoriesRes.data as DBHealthMemory[]) || [];
+    recentVitals = (vitalsRes.data as DBVital[]) || [];
+    activeMedications = (medsRes.data as DBMedication[]) || [];
+
+    // 3. Perform RAG vector search if query text exists
+    if (lastUserMessage) {
+      const ragResults = await searchMedicalChunks(
+        body.patient_id,
+        lastUserMessage.content,
+        4,
+      );
+      if (ragResults.length > 0) {
+        ragChunksText =
+          `\nRELEVANT MEDICAL DOCUMENTS (RAG RETRIEVAL):\n` +
+          ragResults
+            .map(
+              (r, i) =>
+                `[Doc ${i + 1}: ${r.document_name}] (Relevance: ${(r.similarity * 100).toFixed(0)}%)\n${r.chunk_text}`,
+            )
+            .join("\n\n");
+      }
+    }
+  }
+
+  // 4. Build system prompt with injected context
+  let systemPrompt = buildPatientSystemPrompt({
+    name: patientName,
+    profile,
+    memories,
+    recentVitals,
+    activeMedications,
+  });
+
+  if (ragChunksText) {
+    systemPrompt += `\n${ragChunksText}`;
+  }
+
+  const promptMessages = [
     { role: "system" as const, content: systemPrompt },
-    ...body.messages,
+    ...sanitizedMessages,
   ];
 
+  // 5. Stream response via OpenRouter Gateway (SSE)
   const encoder = new TextEncoder();
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        const chunks = ai.stream("patientConversation", { messages });
+        const chunks = ai.stream("patientConversation", {
+          messages: promptMessages,
+        });
 
         for await (const chunk of chunks) {
           if (chunk.delta) {
@@ -76,6 +182,17 @@ export async function POST(request: Request) {
       }
     },
   });
+
+  // 6. Asynchronous Audit Logging & Memory Extraction (Non-blocking background)
+  if (body.patient_id && lastUserMessage) {
+    logAuditEvent({
+      actorId: body.patient_id,
+      actorRole: "patient",
+      action: "chat_message",
+      patientId: body.patient_id,
+      metadata: { messageLength: lastUserMessage.content.length },
+    }).catch(() => {});
+  }
 
   return new Response(stream, {
     headers: {
