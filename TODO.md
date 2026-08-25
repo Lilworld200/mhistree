@@ -248,7 +248,7 @@ the model can handle text, images, audio, video.
 
 ### Step 2: Model-Agnostic AI Provider Abstraction Layer
 
-**Goal**: Allow switching AI models (OpenAI, Anthropic, Gemini, or Local Ollama) dynamically without refactoring feature code.
+**Goal**: Allow switching AI models (OpenAI, Anthropic, Gemini, or Local Ollama) dynamically without refactoring feature code, this is very crucial but not the priority currently the project uses openrouter so build it using the current openrouter setup while keeping in mind the goal of model agnosticism.
 
 #### 💻 Developer Code Steps:
 
@@ -256,7 +256,7 @@ the model can handle text, images, audio, video.
    ```bash
    npm install ai @ai-sdk/openai @ai-sdk/anthropic @ai-sdk/google ai-sdk-ollama and if using openrouter or any routers that uses different models find a way to integrate them into the vercel ai sdk
    ```
-2. **Create Provider Registry Layer (`lib/ai/providers.ts`)**:
+2. **Create Provider Registry Layer (`lib/ai/providers.ts`) the below is a snippit that you can use as a guide since i am using openrouter build it using the current openrouter setup while keeping in mind the goal of model agnosticism**:
 
    ```typescript
    import { createOpenAI } from "@ai-sdk/openai";
