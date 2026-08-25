@@ -1,13 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createAdminSupabaseClient } from "@/lib/supabase/server";
+import {
+  createAdminSupabaseClient,
+  createServerSupabaseClient,
+} from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const userId = searchParams.get("user_id");
+  let userId = searchParams.get("user_id");
 
-  if (!userId) {
+  if (!userId || userId === "default") {
+    try {
+      const authClient = await createServerSupabaseClient();
+      const {
+        data: { user },
+      } = await authClient.auth.getUser();
+      if (user) {
+        userId = user.id;
+      }
+    } catch (authErr) {
+      console.error("[Profile API auth user fallback error]:", authErr);
+    }
+  }
+
+  if (!userId || userId === "default") {
     return NextResponse.json(
-      { error: "user_id parameter is required" },
+      {
+        error:
+          "user_id parameter is required and user is not session-authenticated",
+      },
       { status: 400 },
     );
   }

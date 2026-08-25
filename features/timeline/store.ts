@@ -164,17 +164,28 @@ export const useTimelineStore = create<TimelineState>((set, get) => ({
             verified: boolean;
           }) => ({
             id: e.id,
-            type: (e.category as EventType) || "symptom",
+            type: (e.category === "symptom"
+              ? "Symptom"
+              : e.category === "vitals"
+                ? "Vital"
+                : e.category === "medication"
+                  ? "Medication"
+                  : e.category === "lab"
+                    ? "Lab"
+                    : e.category === "clinical_note"
+                      ? "Condition"
+                      : "Symptom") as EventType,
             title: e.title,
             when: new Date(e.timestamp).toLocaleDateString(),
             ts: new Date(e.timestamp).getTime(),
             desc: e.summary,
-            src:
-              e.source === "clinician_entry"
-                ? "gp"
-                : e.source === "ai_extracted"
-                  ? "ai_note"
-                  : "self",
+            src: (e.source === "clinician_entry"
+              ? "clinician"
+              : e.source === "ai_extracted"
+                ? "ai"
+                : e.source === "device_sync"
+                  ? "device"
+                  : "self") as ProvenanceSource,
             status: e.verified ? "verified" : "reported",
           }),
         );

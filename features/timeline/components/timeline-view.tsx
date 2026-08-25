@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Icon } from "@/components/ui/icons";
 import { Reveal } from "@/components/ui/reveal";
 import { cn } from "@/lib/utils/cn";
+import { createClient } from "@/lib/supabase/client";
 import { EpisodeCard } from "./episode-card";
 import { EventCard } from "./event-card";
 import {
@@ -41,9 +42,19 @@ export function TimelineView() {
   const error = useTimelineStore((s) => s.error);
   const setTypeFilter = useTimelineStore((s) => s.setTypeFilter);
   const setSrcFilter = useTimelineStore((s) => s.setSrcFilter);
+  const fetchLiveEvents = useTimelineStore((s) => s.fetchLiveEvents);
 
   const [q, setQ] = useState("");
   const [appliedQ, setAppliedQ] = useState("");
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        fetchLiveEvents(user.id);
+      }
+    });
+  }, [fetchLiveEvents]);
 
   useEffect(() => {
     const t = setTimeout(() => setAppliedQ(q.trim()), 250);
