@@ -86,16 +86,35 @@ ESCALATION RULES:
 - Pregnancy + fever/bleeding/severe headache → at least severe.
 - Infant/elderly patient context with fever/dehydration → escalate one level.`;
 
+const TRUST_SCORE_RUBRIC = `TRUST_SCORE & INFERRED_BY for MEDICATIONS (output both fields for every medication):
+
+trust_score (0–100): How confident are we that this specific drug and regimen is what the patient SHOULD be taking?
++ 100: Doctor explicitly named the drug AND it is the correct prescription (e.g. "the doctor prescribed Amoxicillin 500mg twice daily")
++ 85: Doctor prescribed it but drug name not yet confirmed (we know it's a prescription from a doctor)
++ 70: Drug class strongly implied by description + prescriber context (e.g. "anti-inflammatory NSAID for 5 days twice daily with food")
++ 50: Drug mentioned without clear prescriber or full details
++ 30: Generic OTC purchase, no confirmation of appropriateness
++ 10: Vague mention with no source
+
+inferred_by: Who determined this medication?
+- "doctor"        → patient explicitly says a doctor/clinic/hospital prescribed/gave it
+- "pharmacist"    → patient says the pharmacist recommended it without a doctor
+- "self_reported" → patient bought it OTC on their own without professional advice
+- "ai_inferred"   → we are inferring the drug class from symptoms/description; no clear human source stated`;
+
 const OUTPUT_CONTRACT = `OUTPUT CONTRACT:
 - Respond with ONE raw JSON object matching the requested schema. No markdown fences, no code blocks, no commentary before or after.
 - memories: NEW health facts introduced by the patient (use prior turns ONLY as context for pronouns like "it"/"the medicine").
-- medications: concrete medication regimens mentioned (even vague ones — report them with their true low clarity_score and missing_details).
+- medications: concrete medication regimens mentioned (even vague ones — report them with their true low clarity_score and missing_details). Always include trust_score and inferred_by.
 - vitals: any numeric or descriptive vital reading stated.
 - If the message contains no health information, return empty arrays for all three.`;
 
 export function buildExtractionPrompt(turns: ExtractionTurn[]): string {
   const transcript = turns
-    .map((t) => `${t.role === "user" ? "PATIENT" : t.role.toUpperCase()}: ${t.content}`)
+    .map(
+      (t) =>
+        `${t.role === "user" ? "PATIENT" : t.role.toUpperCase()}: ${t.content}`,
+    )
     .join("\n");
 
   return `You are the clinical entity extractor for Mhistree, a personal health-record system. You read a slice of conversation between a patient and their AI health companion and output structured health facts.
@@ -107,6 +126,8 @@ ${CATEGORY_DEFINITIONS}
 ${CLARITY_RUBRIC}
 
 ${SEVERITY_RUBRIC}
+
+${TRUST_SCORE_RUBRIC}
 
 ${OUTPUT_CONTRACT}
 

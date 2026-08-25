@@ -120,6 +120,20 @@ export const MedicalExtractionSchema = z.object({
         .optional()
         .describe("Matching RxNorm code if identifiable"),
       status: z.enum(["active", "discontinued", "completed"]).default("active"),
+      trust_score: z
+        .number()
+        .min(0)
+        .max(100)
+        .default(50)
+        .describe(
+          "0–100: confidence % that this specific drug and regimen is actually what the patient SHOULD be taking (not just that they mentioned it). 100 = explicitly prescribed by a named doctor with drug name/dose confirmed. 50 = plausible inference from context. 10 = highly uncertain guess.",
+        ),
+      inferred_by: z
+        .enum(["doctor", "ai_inferred", "self_reported", "pharmacist"])
+        .default("ai_inferred")
+        .describe(
+          "Who determined this medication: 'doctor' if the patient says a doctor/clinic prescribed it; 'self_reported' if the patient bought it themselves OTC; 'pharmacist' if dispensed by a pharmacist without doctor; 'ai_inferred' if we are inferring the drug class from symptoms/description without a clear human source.",
+        ),
     }),
   ),
 });

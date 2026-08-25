@@ -111,31 +111,30 @@ export async function POST(request: Request) {
         `${userRow.first_name} ${userRow.last_name}`.trim() || "Patient";
 
       // 3. Fetch patient Longitudinal EHR context from Supabase
-      const [profileRes, memoriesRes, vitalsRes, medsRes] =
-        await Promise.all([
-          supabase
-            .from("health_profiles")
-            .select("*")
-            .eq("user_id", pid)
-            .maybeSingle(),
-          supabase
-            .from("health_memories")
-            .select("*")
-            .eq("patient_id", pid)
-            .order("created_at", { ascending: false })
-            .limit(20),
-          supabase
-            .from("health_vitals")
-            .select("*")
-            .eq("patient_id", pid)
-            .order("recorded_at", { ascending: false })
-            .limit(10),
-          supabase
-            .from("medications")
-            .select("*")
-            .eq("patient_id", pid)
-            .eq("status", "active"),
-        ]);
+      const [profileRes, memoriesRes, vitalsRes, medsRes] = await Promise.all([
+        supabase
+          .from("health_profiles")
+          .select("*")
+          .eq("user_id", pid)
+          .maybeSingle(),
+        supabase
+          .from("health_memories")
+          .select("*")
+          .eq("patient_id", pid)
+          .order("created_at", { ascending: false })
+          .limit(20),
+        supabase
+          .from("health_vitals")
+          .select("*")
+          .eq("patient_id", pid)
+          .order("recorded_at", { ascending: false })
+          .limit(10),
+        supabase
+          .from("medications")
+          .select("*")
+          .eq("patient_id", pid)
+          .eq("status", "active"),
+      ]);
 
       profile = profileRes.data || null;
       memories = (memoriesRes.data as DBHealthMemory[]) || [];
@@ -359,9 +358,7 @@ export async function POST(request: Request) {
               .order("created_at", { ascending: false })
               .limit(200);
             const seen = new Set(
-              (existing ?? []).map((r) =>
-                r.fact_summary.trim().toLowerCase(),
-              ),
+              (existing ?? []).map((r) => r.fact_summary.trim().toLowerCase()),
             );
             const newMemories = storableMemories.filter(
               (m) => !seen.has(m.fact_summary.trim().toLowerCase()),
@@ -397,40 +394,156 @@ export async function POST(request: Request) {
             }
           }
 
-          // ── Medications (clarity-gated, deduped against active rows) ──
+          // ── Medications (clarity-gated, smart upsert + dual health_memories write) ──
           const storableMeds = extraction.medications.filter((m) =>
             isStorable(m.clarity_score),
           );
           if (storableMeds.length > 0) {
-            const { data: activeMeds } = await db
+            // Fetch ALL existing medications (any status) keyed by drug_name
+            const { data: existingMeds } = await db
               .from("medications")
-              .select("drug_name")
-              .eq("patient_id", pId)
-              .eq("status", "active");
-            const known = new Set(
-              (activeMeds ?? []).map((r) =>
+              .select("id, drug_name, trust_score, inferred_by")
+              .eq("patient_id", pId);
+
+            const existingByName = new Map(
+              (existingMeds ?? []).map((r) => [
                 r.drug_name.trim().toLowerCase(),
-              ),
+                r,
+              ]),
             );
-            const medRows = storableMeds
-              .filter(
-                (m) =>
-                  m.drug_name.trim() !== "" &&
-                  !/^unidentified\b/i.test(m.drug_name.trim()) &&
-                  !known.has(m.drug_name.trim().toLowerCase()),
-              )
-              .map((m) => ({
-                patient_id: pId,
-                drug_name: m.drug_name,
-                dosage: m.dosage,
-                frequency: m.frequency,
-                rxnorm_code: m.rxnorm_code || null,
-                status: m.status,
-              }));
-            if (medRows.length > 0) {
-              const { error } = await db.from("medications").insert(medRows);
-              if (error) {
-                console.error("[Extraction] medication insert failed:", error);
+
+            for (const m of storableMeds) {
+              const trimmedName = m.drug_name.trim();
+              if (!trimmedName) continue;
+              const isUnidentified = /^unidentified\b/i.test(trimmedName);
+              const existing = existingByName.get(trimmedName.toLowerCase());
+
+              if (existing) {
+                // Override row only if new extraction provides more info
+                const existingTrust =
+                  (existing.trust_score as number | null) ?? 0;
+                const newTrust = m.trust_score ?? 0;
+                const wasUnidentified = /^unidentified\b/i.test(
+                  existing.drug_name as string,
+                );
+                if (
+                  newTrust > existingTrust ||
+                  (wasUnidentified && !isUnidentified)
+                ) {
+                  const { error: updErr } = await db
+                    .from("medications")
+                    .update({
+                      drug_name: trimmedName,
+                      dosage: m.dosage,
+                      frequency: m.frequency,
+                      rxnorm_code: m.rxnorm_code || null,
+                      status: m.status,
+                      trust_score: m.trust_score ?? null,
+                      inferred_by: m.inferred_by ?? null,
+                    })
+                    .eq("id", existing.id);
+                  if (updErr) {
+                    console.error(
+                      "[Extraction] medication update failed:",
+                      updErr,
+                    );
+                  }
+                }
+              } else if (!isUnidentified) {
+                // Insert new medication row
+                const { error: insErr } = await db.from("medications").insert({
+                  patient_id: pId,
+                  drug_name: trimmedName,
+                  dosage: m.dosage,
+                  frequency: m.frequency,
+                  rxnorm_code: m.rxnorm_code || null,
+                  status: m.status,
+                  trust_score: m.trust_score ?? null,
+                  inferred_by: m.inferred_by ?? null,
+                });
+                if (insErr) {
+                  console.error(
+                    "[Extraction] medication insert failed:",
+                    insErr,
+                  );
+                }
+              }
+
+              // Dual-write: also store as a health_memories entry (fact_category = "medication")
+              // so the /timeline memories path surfaces it alongside other health facts
+              if (!isUnidentified) {
+                const dosagePart =
+                  m.dosage && m.dosage !== "unknown" ? ` ${m.dosage}` : "";
+                const freqPart =
+                  m.frequency && m.frequency !== "unknown"
+                    ? `, ${m.frequency}`
+                    : "";
+                const memSummary = `Patient is taking ${trimmedName}${dosagePart}${freqPart}`;
+
+                const { data: existingMemRows } = await db
+                  .from("health_memories")
+                  .select("id, clinical_payload")
+                  .eq("patient_id", pId)
+                  .eq("fact_category", "medication")
+                  .ilike("fact_summary", `%${trimmedName}%`)
+                  .limit(1);
+
+                const existingMem = existingMemRows?.[0] ?? null;
+                const memClinicalPayload = {
+                  drug_name: trimmedName,
+                  dosage: m.dosage,
+                  frequency: m.frequency,
+                  trust_score: m.trust_score ?? null,
+                  inferred_by: m.inferred_by ?? null,
+                  rxnorm_code: m.rxnorm_code || null,
+                  source_messages: recentWindow
+                    .filter((t) => t.role === "user")
+                    .map((t) => t.content),
+                  extracted_at: new Date().toISOString(),
+                };
+                const memConfidence = Math.min(1, (m.trust_score ?? 50) / 100);
+
+                if (existingMem) {
+                  const prevPayload =
+                    existingMem.clinical_payload &&
+                    typeof existingMem.clinical_payload === "object" &&
+                    !Array.isArray(existingMem.clinical_payload)
+                      ? (existingMem.clinical_payload as Record<
+                          string,
+                          unknown
+                        >)
+                      : {};
+                  const prevTrust =
+                    (prevPayload.trust_score as number | null) ?? 0;
+                  if ((m.trust_score ?? 0) > prevTrust) {
+                    await db
+                      .from("health_memories")
+                      .update({
+                        fact_summary: memSummary,
+                        clinical_payload: memClinicalPayload,
+                        confidence_score: memConfidence,
+                      })
+                      .eq("id", existingMem.id);
+                  }
+                } else {
+                  const { error: memInsErr } = await db
+                    .from("health_memories")
+                    .insert({
+                      patient_id: pId,
+                      contributor_role: "ai_extractor" as const,
+                      fact_category: "medication",
+                      fact_summary: memSummary,
+                      clinical_payload: memClinicalPayload,
+                      confidence_score: memConfidence,
+                      is_verified: false,
+                    });
+                  if (memInsErr) {
+                    console.error(
+                      "[Extraction] medication memory insert failed:",
+                      memInsErr,
+                    );
+                  }
+                }
               }
             }
           }

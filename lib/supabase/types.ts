@@ -31,7 +31,10 @@ export type MemoryCategory =
   | "lifestyle"
   | "symptom_trend"
   | "surgery"
-  | "vaccination";
+  | "vaccination"
+  | "medication"
+  | "diagnosis"
+  | "treatment";
 export type MessageRole = "user" | "assistant" | "system" | "clinician_note";
 
 /* ────────────────────────────────────────────────────────────────
@@ -105,6 +108,11 @@ export interface DBMedication {
   prescribed_by: string | null;
   started_at: string | null;
   ended_at: string | null;
+  /** 0.00–100.00: AI confidence % that this is the correct drug/regimen */
+  trust_score: number | null;
+  /** Who/what determined this medication: 'doctor' | 'ai_inferred' | 'self_reported' | 'pharmacist' */
+  inferred_by: string | null;
+  created_at: string;
 }
 
 export interface DBHealthMemory {

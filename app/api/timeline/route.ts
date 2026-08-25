@@ -50,7 +50,9 @@ export async function GET(request: NextRequest) {
         .order("recorded_at", { ascending: false }),
       supabase
         .from("medications")
-        .select("*")
+        .select(
+          "id, patient_id, drug_name, dosage, frequency, status, rxnorm_code, inferred_by, trust_score, created_at",
+        )
         .eq("patient_id", patientId)
         .order("created_at", { ascending: false }),
     ]);
@@ -108,14 +110,34 @@ export async function GET(request: NextRequest) {
 
     // Map medications
     (medsRes.data || []).forEach((m) => {
+      const inferredBy = m.inferred_by as string | null;
+      const trustScore = m.trust_score as number | null;
+
+      // Determine source from inferred_by field
+      const medSource: TimelineEventResponse["source"] =
+        inferredBy === "doctor"
+          ? "clinician_entry"
+          : inferredBy === "self_reported" || inferredBy === "pharmacist"
+            ? "patient_reported"
+            : "ai_extracted";
+
+      // Verified only when prescribed by a doctor
+      const medVerified = inferredBy === "doctor";
+
+      const trustStr =
+        trustScore != null ? ` — Trust: ${trustScore.toFixed(0)}%` : "";
+      const inferredStr = inferredBy
+        ? ` (${inferredBy.replace("_", " ")})`
+        : "";
+
       events.push({
         id: `med_${m.id}`,
         category: "medication",
         title: `Medication: ${m.drug_name} (${m.dosage})`,
-        summary: `Frequency: ${m.frequency} — Status: ${m.status}`,
+        summary: `Frequency: ${m.frequency} — Status: ${m.status}${trustStr}${inferredStr}`,
         timestamp: m.created_at,
-        source: "clinician_entry",
-        verified: true,
+        source: medSource,
+        verified: medVerified,
         code: m.rxnorm_code || undefined,
       });
     });

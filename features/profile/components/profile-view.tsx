@@ -59,6 +59,8 @@ interface UserProfileData {
     drug_name: string;
     dosage: string;
     frequency: string;
+    trust_score?: number | null;
+    inferred_by?: string | null;
   }>;
 }
 
@@ -262,12 +264,40 @@ export function ProfileView() {
               <Label>Current medications</Label>
               {data?.medications && data.medications.length > 0 ? (
                 data.medications.map((m) => (
-                  <FactRow
-                    key={m.id}
-                    k={`${m.drug_name} ${m.dosage}`}
-                    v={m.frequency}
-                    src="clinician"
-                  />
+                  <div key={m.id} style={{ marginBottom: 8 }}>
+                    <FactRow
+                      k={`${m.drug_name} ${m.dosage}`}
+                      v={m.frequency}
+                      src="clinician"
+                    />
+                    {(m.trust_score != null || m.inferred_by) && (
+                      <p
+                        className="small"
+                        style={{
+                          color: "var(--ink2)",
+                          marginTop: 2,
+                          marginLeft: 4,
+                          fontSize: "0.75rem",
+                        }}
+                      >
+                        {m.trust_score != null
+                          ? `Trust: ${m.trust_score.toFixed(0)}%`
+                          : ""}
+                        {m.trust_score != null && m.inferred_by ? " · " : ""}
+                        {m.inferred_by
+                          ? `Inferred by: ${
+                              m.inferred_by === "doctor"
+                                ? "Doctor"
+                                : m.inferred_by === "self_reported"
+                                  ? "Self (OTC)"
+                                  : m.inferred_by === "pharmacist"
+                                    ? "Pharmacist"
+                                    : "AI"
+                            }`
+                          : ""}
+                      </p>
+                    )}
+                  </div>
                 ))
               ) : (
                 <p className="small" style={{ color: "var(--ink2)" }}>
