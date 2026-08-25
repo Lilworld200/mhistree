@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "motion/react";
 import { usePathname } from "next/navigation";
-import React, { useEffect } from "react";
+import React from "react";
 import { EASE } from "@/components/ui/overlay-shell";
 import { NavDrawer } from "./nav-drawer";
 import { useGlobalShortcuts } from "../hooks/use-global-shortcuts";
@@ -24,15 +24,6 @@ export function AppShell({
   const theme = useShellStore((s) => s.theme);
   const pathname = usePathname();
   useGlobalShortcuts();
-
-  // Theme tokens must live on <html> so Radix portals (body-level)
-  // resolve the same custom properties as in-app content.
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    return () => {
-      delete document.documentElement.dataset.theme;
-    };
-  }, [theme]);
 
   return (
     <div className="app" data-theme={theme}>
