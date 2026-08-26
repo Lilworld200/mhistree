@@ -26,6 +26,7 @@ import {
   type ExtractionTurn,
 } from "@/lib/ai/prompts/extraction";
 import { searchMedicalChunks } from "@/lib/ai/rag";
+import { persistExtractedMedications } from "@/lib/server/medication-persistence";
 import { logAuditEvent } from "@/lib/security/audit";
 import { sanitizeInput } from "@/lib/security/sanitize";
 import {
@@ -394,159 +395,13 @@ export async function POST(request: Request) {
             }
           }
 
-          // ── Medications (clarity-gated, smart upsert + dual health_memories write) ──
+          // ── Medications (clarity-gated shared persistence: dynamic trust
+          //    scoring, ±10 correction-tolerant upsert, dual health_memories
+          //    write) — see lib/server/medication-persistence.ts ──
           const storableMeds = extraction.medications.filter((m) =>
             isStorable(m.clarity_score),
           );
-          if (storableMeds.length > 0) {
-            // Fetch ALL existing medications (any status) keyed by drug_name
-            const { data: existingMeds } = await db
-              .from("medications")
-              .select("id, drug_name, trust_score, inferred_by")
-              .eq("patient_id", pId);
-
-            const existingByName = new Map(
-              (existingMeds ?? []).map((r) => [
-                r.drug_name.trim().toLowerCase(),
-                r,
-              ]),
-            );
-
-            for (const m of storableMeds) {
-              const trimmedName = m.drug_name.trim();
-              if (!trimmedName) continue;
-              const isUnidentified = /^unidentified\b/i.test(trimmedName);
-              const existing = existingByName.get(trimmedName.toLowerCase());
-
-              if (existing) {
-                // Override row only if new extraction provides more info
-                const existingTrust =
-                  (existing.trust_score as number | null) ?? 0;
-                const newTrust = m.trust_score ?? 0;
-                const wasUnidentified = /^unidentified\b/i.test(
-                  existing.drug_name as string,
-                );
-                if (
-                  newTrust > existingTrust ||
-                  (wasUnidentified && !isUnidentified)
-                ) {
-                  const { error: updErr } = await db
-                    .from("medications")
-                    .update({
-                      drug_name: trimmedName,
-                      dosage: m.dosage,
-                      frequency: m.frequency,
-                      rxnorm_code: m.rxnorm_code || null,
-                      status: m.status,
-                      trust_score: m.trust_score ?? null,
-                      inferred_by: m.inferred_by ?? null,
-                    })
-                    .eq("id", existing.id);
-                  if (updErr) {
-                    console.error(
-                      "[Extraction] medication update failed:",
-                      updErr,
-                    );
-                  }
-                }
-              } else if (!isUnidentified) {
-                // Insert new medication row
-                const { error: insErr } = await db.from("medications").insert({
-                  patient_id: pId,
-                  drug_name: trimmedName,
-                  dosage: m.dosage,
-                  frequency: m.frequency,
-                  rxnorm_code: m.rxnorm_code || null,
-                  status: m.status,
-                  trust_score: m.trust_score ?? null,
-                  inferred_by: m.inferred_by ?? null,
-                });
-                if (insErr) {
-                  console.error(
-                    "[Extraction] medication insert failed:",
-                    insErr,
-                  );
-                }
-              }
-
-              // Dual-write: also store as a health_memories entry (fact_category = "medication")
-              // so the /timeline memories path surfaces it alongside other health facts
-              if (!isUnidentified) {
-                const dosagePart =
-                  m.dosage && m.dosage !== "unknown" ? ` ${m.dosage}` : "";
-                const freqPart =
-                  m.frequency && m.frequency !== "unknown"
-                    ? `, ${m.frequency}`
-                    : "";
-                const memSummary = `Patient is taking ${trimmedName}${dosagePart}${freqPart}`;
-
-                const { data: existingMemRows } = await db
-                  .from("health_memories")
-                  .select("id, clinical_payload")
-                  .eq("patient_id", pId)
-                  .eq("fact_category", "medication")
-                  .ilike("fact_summary", `%${trimmedName}%`)
-                  .limit(1);
-
-                const existingMem = existingMemRows?.[0] ?? null;
-                const memClinicalPayload = {
-                  drug_name: trimmedName,
-                  dosage: m.dosage,
-                  frequency: m.frequency,
-                  trust_score: m.trust_score ?? null,
-                  inferred_by: m.inferred_by ?? null,
-                  rxnorm_code: m.rxnorm_code || null,
-                  source_messages: recentWindow
-                    .filter((t) => t.role === "user")
-                    .map((t) => t.content),
-                  extracted_at: new Date().toISOString(),
-                };
-                const memConfidence = Math.min(1, (m.trust_score ?? 50) / 100);
-
-                if (existingMem) {
-                  const prevPayload =
-                    existingMem.clinical_payload &&
-                    typeof existingMem.clinical_payload === "object" &&
-                    !Array.isArray(existingMem.clinical_payload)
-                      ? (existingMem.clinical_payload as Record<
-                          string,
-                          unknown
-                        >)
-                      : {};
-                  const prevTrust =
-                    (prevPayload.trust_score as number | null) ?? 0;
-                  if ((m.trust_score ?? 0) > prevTrust) {
-                    await db
-                      .from("health_memories")
-                      .update({
-                        fact_summary: memSummary,
-                        clinical_payload: memClinicalPayload,
-                        confidence_score: memConfidence,
-                      })
-                      .eq("id", existingMem.id);
-                  }
-                } else {
-                  const { error: memInsErr } = await db
-                    .from("health_memories")
-                    .insert({
-                      patient_id: pId,
-                      contributor_role: "ai_extractor" as const,
-                      fact_category: "medication",
-                      fact_summary: memSummary,
-                      clinical_payload: memClinicalPayload,
-                      confidence_score: memConfidence,
-                      is_verified: false,
-                    });
-                  if (memInsErr) {
-                    console.error(
-                      "[Extraction] medication memory insert failed:",
-                      memInsErr,
-                    );
-                  }
-                }
-              }
-            }
-          }
+          await persistExtractedMedications(db, pId, storableMeds, recentWindow);
 
           // ── Vitals (numeric facts are self-contained; no gate needed) ──
           const reportedVitals = extraction.vitals.filter(

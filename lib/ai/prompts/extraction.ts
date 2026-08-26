@@ -61,6 +61,13 @@ HARD RULES:
 - NEVER invent drug names, strengths, dates, or test values that the patient did not say.
 - A fact mentioned earlier in the transcript but only now clarified should be extracted NOW with its new, higher score.`;
 
+const DRUG_NAME_RESOLUTION = `DRUG NAME RESOLUTION (applies to every medication):
+- Resolve brand names and common misspellings to the GENERIC (INN) drug name, keeping the original brand wording in clinical_payload.brand_name:
+  Coartem → artemether-lumefantrine · Panadol/Tylenol → paracetamol · Advil/Nurofen/Brufen → ibuprofen · Voltaren → diclofenac · Naprosyn → naproxen · Amoxil → amoxicillin · Flagyl → metronidazole · Zinnat → cefuroxime · Augmentin → amoxicillin-clavulanate · Aspirin stays aspirin.
+- Tolerate spelling errors ("panadole", "ibuprofin") and resolve them to the generic name.
+- If the patient describes a class only ("an NSAID", "antimalarial tablets"), do NOT invent a specific drug: use "Unidentified <class>" as drug_name and keep clarity below 0.5.
+- When a doctor prescribed it but no name surfaced yet, still report inferred_by "doctor" — trust scoring handles the rest.`;
+
 const SEVERITY_RUBRIC = `SEVERITY RUBRIC — weigh each fact's clinical seriousness:
 
 severe (life-threatening / urgent):
@@ -124,6 +131,8 @@ Your extraction feeds a real medical record. Precision matters more than volume:
 ${CATEGORY_DEFINITIONS}
 
 ${CLARITY_RUBRIC}
+
+${DRUG_NAME_RESOLUTION}
 
 ${SEVERITY_RUBRIC}
 

@@ -96,11 +96,21 @@ export const MedicalExtractionSchema = z.object({
   ),
   medications: z.array(
     z.object({
-      drug_name: z.string().describe("Generic or brand name of medication"),
+      drug_name: z
+        .string()
+        .describe(
+          "Generic (INN) name resolved from brand names or misspellings, e.g. 'Coartem' → 'artemether-lumefantrine', 'panadol' → 'paracetamol'. Only use 'Unidentified …' when NO drug can be resolved.",
+        ),
       dosage: z.string().describe("e.g. 500mg, 10ml, 1 tablet"),
       frequency: z
         .string()
         .describe("e.g. twice daily, once at bedtime, as needed"),
+      duration: z
+        .string()
+        .default("unknown")
+        .describe(
+          "Total course length or quantity if stated, e.g. 'for 5 days', '10 tablets'. Use 'unknown' when not mentioned.",
+        ),
       clarity_score: z
         .number()
         .min(0)
@@ -120,6 +130,13 @@ export const MedicalExtractionSchema = z.object({
         .optional()
         .describe("Matching RxNorm code if identifiable"),
       status: z.enum(["active", "discontinued", "completed"]).default("active"),
+      clinical_payload: z
+        .record(z.string(), z.unknown())
+        .nullable()
+        .optional()
+        .describe(
+          "Optional metadata with ONLY details the text supports, e.g. { brand_name: 'Coartem', taken_with_food: true }",
+        ),
       trust_score: z
         .number()
         .min(0)

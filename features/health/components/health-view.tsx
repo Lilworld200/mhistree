@@ -6,7 +6,7 @@ import { Reveal } from "@/components/ui/reveal";
 import { useAiAssistantStore } from "@/features/ai-assistant/store";
 import { useChatStore } from "@/features/chat/store";
 import { useTimelineStore } from "@/features/timeline/store";
-import { BaselineCard } from "./baseline-card";
+import { BaselineCard, cleanMedLabel } from "./baseline-card";
 import { HealthHero } from "./health-hero";
 import { RecentActivityCard } from "./recent-activity-card";
 import { UpcomingCard } from "./upcoming-card";
@@ -17,6 +17,20 @@ export function HealthView() {
   const events = useTimelineStore((s) => s.events);
   const recent = events.slice(0, 3);
   const openAssistant = useAiAssistantStore((s) => s.open);
+
+  // Active medication labels for the baseline card (live from /api/timeline).
+  const activeMedEvents = events.filter(
+    (e) => e.type === "Medication" && /Status:\s*active/i.test(e.desc),
+  );
+  const medLabel =
+    activeMedEvents.length > 0
+      ? activeMedEvents.length === 1
+        ? cleanMedLabel(activeMedEvents[0].title)
+        : `${activeMedEvents.length} on record (${activeMedEvents
+            .slice(0, 2)
+            .map((e) => cleanMedLabel(e.title))
+            .join(", ")})`
+      : null;
 
   const startCheckIn = () => {
     useChatStore.getState().newChat();
@@ -51,7 +65,10 @@ export function HealthView() {
 
       <div className="grid2">
         <Reveal d={0.05}>
-          <BaselineCard onViewAll={() => router.push("/profile")} />
+          <BaselineCard
+            data={{ medications: medLabel }}
+            onViewAll={() => router.push("/profile")}
+          />
         </Reveal>
         <Reveal d={0.1}>
           <VitalsCard />

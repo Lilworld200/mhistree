@@ -15,6 +15,7 @@ import DOMPurify from "isomorphic-dompurify";
 import { z } from "zod";
 import { ai } from "@/lib/ai/gateway";
 import { MedicalExtractionSchema } from "@/lib/ai/schemas/extraction";
+import { persistExtractedMedications } from "@/lib/server/medication-persistence";
 import { logAuditEvent } from "@/lib/security/audit";
 import {
   createAdminSupabaseClient,
@@ -114,17 +115,14 @@ Map diseases and findings to SNOMED CT / ICD-10-CM codes where possible, and med
       );
     }
 
-    // Persist medications
+    // Persist medications (shared upsert + dual health_memories write with
+    // dynamic trust scoring — skips "Unidentified …" placeholders)
     if (extraction.medications.length > 0) {
-      await supabase.from("medications").insert(
-        extraction.medications.map((med) => ({
-          patient_id: patientId,
-          drug_name: med.drug_name,
-          dosage: med.dosage,
-          frequency: med.frequency,
-          rxnorm_code: med.rxnorm_code ?? null,
-          status: med.status,
-        })),
+      await persistExtractedMedications(
+        supabase,
+        patientId,
+        extraction.medications,
+        [{ role: "user", content: cleanText }],
       );
     }
 
