@@ -66,6 +66,8 @@ export interface DBHealthProfile {
   lifestyle: string | null;
   gender: string | null;
   primary_physician_id: string | null;
+  /** Two-tier AI-derived conditions (CONFIRMED/DETERMINED) — see lib/server/profile-sync.ts */
+  derived_health: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 }
@@ -156,6 +158,11 @@ export interface DBUserSummary {
   summary: string;
   key_metadata: Record<string, unknown> | null;
   version: string;
+  /** 'user' (longitudinal digest) | 'chat_session' (rolling session recap) */
+  scope: "user" | "chat_session";
+  session_id: string | null;
+  summarized_through_message_id: string | null;
+  source_cursor: Record<string, unknown>;
   created_at: string;
 }
 

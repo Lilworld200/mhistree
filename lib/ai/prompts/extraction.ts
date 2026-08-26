@@ -72,6 +72,13 @@ const DRUG_NAME_RESOLUTION = `DRUG NAME RESOLUTION (applies to every medication)
 - If the patient describes a class only ("an NSAID", "antimalarial tablets"), do NOT invent a specific drug: use "Unidentified <class>" as drug_name and keep clarity below 0.5.
 - When a doctor prescribed it but no name surfaced yet, still report inferred_by "doctor" — trust scoring handles the rest.`;
 
+const SOURCE_CREDIBILITY_RULES = `SOURCE CREDIBILITY (set for EVERY memory item):
+- "clinician": a doctor, nurse, pharmacist, or clinic/hospital established it ("my doctor said", "at the hospital they told me").
+- "test_result": confirmed by lab work, scan, or test ("blood test showed", "malaria test came out positive", "BP reading was 160/100 at the clinic").
+- "self_reported": only the patient's own experience or suspicion ("i think i have", "i feel like").
+- "unknown": genuinely not determinable from the transcript.
+This field decides whether a fact is promoted to the CONFIRMED/DETERMINED tiers of the health profile. Be accurate — never generous.`;
+
 const SEVERITY_RUBRIC = `SEVERITY RUBRIC — weigh each fact's clinical seriousness:
 
 severe (life-threatening / urgent):
@@ -140,6 +147,8 @@ ${CATEGORY_DEFINITIONS}
 ${CLARITY_RUBRIC}
 
 ${DRUG_NAME_RESOLUTION}
+
+${SOURCE_CREDIBILITY_RULES}
 
 ${SEVERITY_RUBRIC}
 

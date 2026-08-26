@@ -21,13 +21,18 @@ import {
   MedicalExtractionSchema,
   type MedicalExtraction,
 } from "@/lib/ai/schemas/extraction";
-import { buildPatientSystemPrompt } from "@/lib/ai/prompts/patient";
+import { buildPatientSystemPrompt, type SessionRecapContext } from "@/lib/ai/prompts/patient";
 import {
   buildExtractionPrompt,
   type ExtractionTurn,
 } from "@/lib/ai/prompts/extraction";
 import { searchMedicalChunks } from "@/lib/ai/rag";
 import { persistExtractedMedications } from "@/lib/server/medication-persistence";
+import { syncDerivedHealth } from "@/lib/server/profile-sync";
+import {
+  maybeSummarizeSession,
+  maybeRollUserSummary,
+} from "@/lib/server/summarization";
 import { logAuditEvent } from "@/lib/security/audit";
 import { sanitizeInput } from "@/lib/security/sanitize";
 import {
@@ -98,6 +103,8 @@ export async function POST(request: Request) {
   let recentVitals: DBVital[] = [];
   let activeMedications: DBMedication[] = [];
   let ragChunksText = "";
+  let userSummary: string | null = null;
+  let sessionSummaries: SessionRecapContext[] = [];
 
   if (user && supabase) {
     const { data: userRow } = await supabase
@@ -111,37 +118,78 @@ export async function POST(request: Request) {
       patientId = pid;
       patientName =
         `${userRow.first_name} ${userRow.last_name}`.trim() || "Patient";
+      const currentSessionId =
+        typeof body.sessionId === "string" && body.sessionId.length > 0
+          ? body.sessionId
+          : null;
 
       // 3. Fetch patient Longitudinal EHR context from Supabase
-      const [profileRes, memoriesRes, vitalsRes, medsRes] = await Promise.all([
-        supabase
-          .from("health_profiles")
-          .select("*")
-          .eq("user_id", pid)
-          .maybeSingle(),
-        supabase
-          .from("health_memories")
-          .select("*")
-          .eq("patient_id", pid)
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabase
-          .from("health_vitals")
-          .select("*")
-          .eq("patient_id", pid)
-          .order("recorded_at", { ascending: false })
-          .limit(10),
-        supabase
-          .from("medications")
-          .select("*")
-          .eq("patient_id", pid)
-          .eq("status", "active"),
-      ]);
+      const [profileRes, memoriesRes, vitalsRes, medsRes, userSummaryRes, recapRes] =
+        await Promise.all([
+          supabase
+            .from("health_profiles")
+            .select("*")
+            .eq("user_id", pid)
+            .maybeSingle(),
+          supabase
+            .from("health_memories")
+            .select("*")
+            .eq("patient_id", pid)
+            .order("created_at", { ascending: false })
+            .limit(20),
+          supabase
+            .from("health_vitals")
+            .select("*")
+            .eq("patient_id", pid)
+            .order("recorded_at", { ascending: false })
+            .limit(10),
+          supabase
+            .from("medications")
+            .select("*")
+            .eq("patient_id", pid)
+            .eq("status", "active"),
+          // Latest rolling longitudinal digest (replaces raw memory dump).
+          supabase
+            .from("user_summaries")
+            .select("summary")
+            .eq("user_id", pid)
+            .eq("scope", "user")
+            .order("created_at", { ascending: false })
+            .limit(1),
+          // Latest recaps of OTHER recent sessions (current one excluded —
+          // its full transcript is already present in the request).
+          supabase
+            .from("user_summaries")
+            .select("summary, session_id, created_at, chat_sessions(title)")
+            .eq("user_id", pid)
+            .eq("scope", "chat_session")
+            .neq("session_id", currentSessionId ?? "00000000-0000-0000-0000-000000000000")
+            .order("created_at", { ascending: false })
+            .limit(5),
+        ]);
 
       profile = profileRes.data || null;
       memories = (memoriesRes.data as DBHealthMemory[]) || [];
       recentVitals = (vitalsRes.data as DBVital[]) || [];
       activeMedications = (medsRes.data as DBMedication[]) || [];
+
+      const latestSummary = (userSummaryRes.data as { summary: string }[] | null)?.[0];
+      userSummary = latestSummary?.summary ?? null;
+      sessionSummaries = (
+        (recapRes.data ?? []) as {
+          summary: string;
+          created_at: string;
+          chat_sessions: { title: string } | { title: string }[] | null;
+        }[]
+      ).map((r) => {
+        const s = r.chat_sessions;
+        const title = Array.isArray(s) ? s[0]?.title : s?.title;
+        return {
+          title: title || "Session",
+          when: new Date(r.created_at).toLocaleDateString(),
+          summary: r.summary,
+        };
+      });
 
       // 4. Perform RAG vector search if query text exists.
       //    Non-fatal by design: a retrieval/embedding failure must never
@@ -183,6 +231,8 @@ export async function POST(request: Request) {
     memories,
     recentVitals,
     activeMedications,
+    userSummary,
+    sessionSummaries,
   });
 
   if (ragChunksText) {
@@ -493,6 +543,15 @@ export async function POST(request: Request) {
             }
 
             console.info("[Extraction] pipeline complete");
+
+            // ── Derived health-profile sync (CONFIRMED/DETERMINED tiers) ──
+            await syncDerivedHealth(db, pId);
+
+            // ── Two-tier rolling summaries (threshold-gated, append-only) ──
+            if (activeSessionId) {
+              await maybeSummarizeSession(db, pId, activeSessionId);
+            }
+            await maybeRollUserSummary(db, pId);
           } catch (err) {
             console.error("[Extraction] pipeline failed:", err);
           }

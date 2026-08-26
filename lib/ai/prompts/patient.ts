@@ -11,16 +11,34 @@ import type {
   DBHealthProfile,
 } from "@/lib/supabase/types";
 
+export interface SessionRecapContext {
+  title: string;
+  when: string;
+  summary: string;
+}
+
 export interface PatientContext {
   name: string;
   profile: DBHealthProfile | null;
   memories: DBHealthMemory[];
   recentVitals: DBVital[];
   activeMedications: DBMedication[];
+  /** Rolling longitudinal digest (scope 'user') — replaces raw memory dump. */
+  userSummary?: string | null;
+  /** Latest recaps of OTHER recent sessions (current session excluded). */
+  sessionSummaries?: SessionRecapContext[];
 }
 
 export function buildPatientSystemPrompt(ctx: PatientContext): string {
-  const { name, profile, memories, recentVitals, activeMedications } = ctx;
+  const {
+    name,
+    profile,
+    memories,
+    recentVitals,
+    activeMedications,
+    userSummary,
+    sessionSummaries,
+  } = ctx;
 
   const profileLines: string[] = [];
   if (profile) {
@@ -36,10 +54,63 @@ export function buildPatientSystemPrompt(ctx: PatientContext): string {
       profileLines.push(`Family History: ${profile.family_history}`);
   }
 
-  const verifiedMemories = memories.filter((m) => m.is_verified);
-  const unverifiedMemories = memories.filter((m) => !m.is_verified);
+  // Two-tier AI-derived conditions from health_profiles.derived_health.
+  const derived = profile?.derived_health as
+    | {
+        conditions?: { name: string; level: string }[];
+        allergies?: { name: string; level: string }[];
+      }
+    | null
+    | undefined;
+  const derivedConditions = derived?.conditions ?? [];
+  const derivedAllergies = derived?.allergies ?? [];
+  const confirmedDerived = [
+    ...derivedConditions.filter((c) => c.level === "confirmed").map((c) => c.name),
+    ...derivedAllergies.filter((a) => a.level === "confirmed").map((a) => a.name),
+  ];
+  const determinedDerived = [
+    ...derivedConditions.filter((c) => c.level === "determined").map((c) => `${c.name} (suspected)`),
+    ...derivedAllergies.filter((a) => a.level === "determined").map((a) => `${a.name} (suspected)`),
+  ];
+  if (confirmedDerived.length > 0) {
+    profileLines.push(
+      `CONFIRMED CONDITIONS (clinician-established): ${confirmedDerived.join(", ")}`,
+    );
+  }
+  if (determinedDerived.length > 0) {
+    profileLines.push(
+      `AI-DETERMINED, UNCONFIRMED (watch for these): ${determinedDerived.join(", ")}`,
+    );
+  }
+
   const fmtMemory = (m: DBHealthMemory) =>
     `  - [${m.fact_category.replaceAll("_", " ")}] ${m.fact_summary}${m.icd10_code ? ` (ICD-10: ${m.icd10_code})` : ""}`;
+
+  const recapBlock =
+    sessionSummaries && sessionSummaries.length > 0
+      ? `\nRECENT SESSION RECAPS:\n${sessionSummaries
+          .map((s) => `  - (${s.when}) ${s.title}: ${s.summary}`)
+          .join("\n")}`
+      : "";
+
+  // Summary-first prompt diet: once the rolling digest exists it REPLACES the
+  // raw memory dump (bounded tokens); atomic facts remain on file for RAG /
+  // clinician tooling. Without a digest we fall back to today's raw list.
+  let memorySection: string;
+  if (userSummary) {
+    memorySection = `LONGITUDINAL SUMMARY (rolling digest of ${name}'s health history):
+${userSummary}${recapBlock}
+
+(Atomic fact-level records are also on file and consulted separately.)`;
+  } else {
+    const verifiedMemories = memories.filter((m) => m.is_verified);
+    const unverifiedMemories = memories.filter((m) => !m.is_verified);
+    memorySection = `VERIFIED HEALTH MEMORIES (clinician-confirmed):
+${verifiedMemories.length > 0 ? verifiedMemories.map(fmtMemory).join("\n") : "  - None recorded yet."}
+
+UNVERIFIED HEALTH MEMORIES (AI-extracted, pending clinician review):
+${unverifiedMemories.length > 0 ? unverifiedMemories.map(fmtMemory).join("\n") : "  - None."}`;
+  }
 
   const vitalLines = recentVitals.slice(0, 8).map((v) => {
     const date = new Date(v.recorded_at).toLocaleDateString();
@@ -106,11 +177,7 @@ ACTIVE CLARIFICATION PROBING:
 <PATIENT_LONGITUDINAL_RECORD patient="${name}">
 ${profileLines.length > 0 ? `HEALTH PROFILE:\n${profileLines.map((l) => `  - ${l}`).join("\n")}` : "Health profile: Not yet set up."}
 
-VERIFIED HEALTH MEMORIES (clinician-confirmed):
-${verifiedMemories.length > 0 ? verifiedMemories.map(fmtMemory).join("\n") : "  - None recorded yet."}
-
-UNVERIFIED HEALTH MEMORIES (AI-extracted, pending clinician review):
-${unverifiedMemories.length > 0 ? unverifiedMemories.map(fmtMemory).join("\n") : "  - None."}
+${memorySection}
 
 RECENT VITALS:
 ${vitalLines.length > 0 ? vitalLines.join("\n") : "  - No vitals recorded yet."}

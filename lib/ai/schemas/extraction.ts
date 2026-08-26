@@ -63,6 +63,12 @@ export const MedicalExtractionSchema = z.object({
         .string()
         .optional()
         .describe("Matching SNOMED CT code if identifiable, e.g. 37796009"),
+      condition_name: z
+        .string()
+        .optional()
+        .describe(
+          "For diagnosis/chronic_condition/allergy items ONLY: the normalized single condition or allergen name in lowercase, e.g. 'malaria', 'asthma', 'penicillin allergy'. Omit for all other categories.",
+        ),
       icd10_code: z
         .string()
         .optional()
@@ -79,6 +85,12 @@ export const MedicalExtractionSchema = z.object({
         .optional()
         .describe(
           "Optional metadata object with ONLY details the text supports, e.g. { occurred_at: 'this morning', body_part: 'left toe', trigger: 'cold weather', related_readings: { blood_pressure: '135/85' } }",
+        ),
+      source_credibility: z
+        .enum(["clinician", "test_result", "self_reported", "unknown"])
+        .default("unknown")
+        .describe(
+          "Who ESTABLISHED this fact: 'clinician' if a doctor/nurse/clinic/hospital stated it; 'test_result' if confirmed by a lab/scan/test result; 'self_reported' if it is only the patient's own suspicion or experience; 'unknown' when not determinable.",
         ),
     }),
   ),
