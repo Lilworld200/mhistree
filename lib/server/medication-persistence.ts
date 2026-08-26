@@ -127,7 +127,23 @@ export async function persistExtractedMedications(
           .eq("id", existing.id);
         if (error) {
           console.error("[Meds] medication update failed:", error);
+        } else {
+          console.info(
+            '[Meds] UPDATED "%s" (trust %d → %d, dosage=%s, frequency=%s)',
+            existing.drug_name,
+            existingTrust,
+            trust,
+            m.dosage,
+            m.frequency,
+          );
         }
+      } else {
+        console.info(
+          '[Meds] SKIPPED update for "%s" (stored trust %d >= new trust %d, no corrected fields)',
+          existing.drug_name,
+          existingTrust,
+          trust,
+        );
       }
     } else if (!unidentifiedNow) {
       const { error } = await db.from("medications").insert({
@@ -142,11 +158,23 @@ export async function persistExtractedMedications(
       });
       if (error) {
         console.error("[Meds] medication insert failed:", error);
+      } else {
+        console.info(
+          '[Meds] INSERTED "%s" (trust %d, dosage=%s, frequency=%s, inferred_by=%s)',
+          trimmedName,
+          trust,
+          m.dosage,
+          m.frequency,
+          m.inferred_by ?? "n/a",
+        );
       }
     }
 
     // ── 3. Dual-write into health_memories (category "medication") ──
-    if (unidentifiedNow) continue;
+    if (unidentifiedNow) {
+      console.info('[Meds] skipped unidentified drug "%s"', trimmedName);
+      continue;
+    }
 
     const dosagePart =
       m.dosage && m.dosage.toLowerCase() !== "unknown" ? ` ${m.dosage}` : "";
@@ -204,7 +232,7 @@ export async function persistExtractedMedications(
         existingMem.fact_summary.trim().toLowerCase() !==
           memSummary.trim().toLowerCase()
       ) {
-        await db
+        const { error } = await db
           .from("health_memories")
           .update({
             fact_summary: memSummary,
@@ -212,6 +240,11 @@ export async function persistExtractedMedications(
             confidence_score: memConfidence,
           })
           .eq("id", existingMem.id);
+        if (error) {
+          console.error("[Meds] medication memory update failed:", error);
+        } else {
+          console.info('[Meds] memory UPDATED for "%s"', trimmedName);
+        }
       }
     } else {
       const { error } = await db.from("health_memories").insert({
@@ -225,6 +258,12 @@ export async function persistExtractedMedications(
       });
       if (error) {
         console.error("[Meds] medication memory insert failed:", error);
+      } else {
+        console.info(
+          '[Meds] memory INSERTED "%s" (confidence %.2f)',
+          memSummary,
+          memConfidence,
+        );
       }
     }
   }

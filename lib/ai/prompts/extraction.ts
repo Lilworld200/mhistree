@@ -33,7 +33,7 @@ const CLARITY_RUBRIC = `CLARITY SCORE RUBRIC (0.0–1.0) — score EVERY memory 
 Clarity measures how COMPLETELY SPECIFIED the fact is, NOT how confident you are that it happened.
 
 What RAISES clarity for a MEDICATION (in order of importance):
-+ Actual drug name, brand or generic ("Coartem", "artemether-lumefantrine") — REQUIRED to exceed 0.5
++ Actual drug name, brand or generic ("Coartem", "artemether-lumefantrine") — an IDENTIFIABLE drug name ALONE always scores >= 0.6, even when dosage/frequency/duration are still missing. Never score a NAMED drug below the 0.5 storage threshold; put what is missing in missing_details instead.
 + Dosage/strength per unit ("20/120mg", "1 tablet", "500mg")
 + Frequency ("twice daily", "every 8 hours")
 + Duration or quantity ("for 3 days", "5 doses left")
@@ -53,11 +53,15 @@ ANCHOR EXAMPLES — calibrate against these:
   → medication clarity 0.95 — name, strength, frequency, duration all present.
 * "i bought some drugs for the fever at the pharmacy"
   → medication clarity 0.15 — nothing specified. missing_details: ["drug name","strength","dosage schedule"].
+* "am also suppose to take amoxicillin and white color vitamin c"
+  → TWO separate medication items: amoxicillin clarity 0.65, vitamin c clarity 0.6 — each drug is named but the regimen is incomplete. missing_details for both: ["strength/dosage","frequency"]. Extract ONE item PER drug.
 * "my sugar level was 180 this morning"
   → vital (glucose 180 mg/dL) — numeric readings are inherently high-clarity.
 
 HARD RULES:
 - If a medication has NO identifiable drug name, its clarity_score MUST stay below 0.5 and drug_name should be the most literal description possible prefixed with "Unidentified " (e.g. "Unidentified antimalarial tablet").
+- Conversely, when a specific drug IS identifiable (generic name, resolvable brand, or correctable misspelling), its clarity_score MUST be at least 0.6 — do NOT withhold it for lacking dosage/frequency/duration.
+- When the patient names MULTIPLE medications in one message ("amoxicillin and vitamin c", "paracetamol and ibuprofen"), emit one medication item PER drug — never merge them into a single entry or drop any of them.
 - NEVER invent drug names, strengths, dates, or test values that the patient did not say.
 - A fact mentioned earlier in the transcript but only now clarified should be extracted NOW with its new, higher score.`;
 
@@ -111,8 +115,11 @@ inferred_by: Who determined this medication?
 
 const OUTPUT_CONTRACT = `OUTPUT CONTRACT:
 - Respond with ONE raw JSON object matching the requested schema. No markdown fences, no code blocks, no commentary before or after.
-- memories: NEW health facts introduced by the patient (use prior turns ONLY as context for pronouns like "it"/"the medicine").
-- medications: concrete medication regimens mentioned (even vague ones — report them with their true low clarity_score and missing_details). Always include trust_score and inferred_by.
+- memories: health facts introduced by the PATIENT in the latest turn(s). Prior turns and ASSISTANT turns are context ONLY (to resolve pronouns like "it"/"the medicine") — never a source of facts on their own.
+- ATOMICITY: exactly ONE fact per memory item — one condition, one symptom pattern, one life event, one allergy. When the patient introduces SEVERAL distinct facts at once, emit one SEPARATE item per fact. Multiple items are correct; bundled items are not.
+- NO RECAPS: never emit summary/recap statements that bundle multiple things ("Patient is being treated for malaria and typhoid with amoxicillin and vitamin C"). Medications belong exclusively in the medications array, one item per drug — do NOT re-list them inside memories.
+- Do NOT re-emit or lightly paraphrase a memory that is already stated earlier in the transcript or would obviously already be recorded. Only genuinely NEW patient information goes into memories.
+- medications: concrete medication regimens mentioned (even vague ones — report them with their true low clarity_score and missing_details), ONE item PER drug. Re-emitting an already-known medication WITH newly clarified details (e.g. confirmed strength/frequency) is REQUIRED so the server can merge the update. Always include trust_score and inferred_by.
 - vitals: any numeric or descriptive vital reading stated.
 - If the message contains no health information, return empty arrays for all three.`;
 

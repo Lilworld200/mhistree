@@ -74,7 +74,12 @@ export async function GET(request: NextRequest) {
 
       events.push({
         id: `mem_${mem.id}`,
-        category: mem.fact_category === "allergy" ? "symptom" : "clinical_note",
+        category:
+          mem.fact_category === "allergy"
+            ? "symptom"
+            : mem.fact_category === "medication"
+              ? "medication"
+              : "clinical_note",
         title: mem.fact_summary,
         summary: `Category: ${mem.fact_category.replaceAll("_", " ")}${occurredAt ? ` — When: ${occurredAt}` : ""}${mem.snomed_code ? ` (SNOMED: ${mem.snomed_code})` : ""}`,
         timestamp: mem.created_at,

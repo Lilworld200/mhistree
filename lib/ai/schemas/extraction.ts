@@ -40,7 +40,7 @@ export const MedicalExtractionSchema = z.object({
       fact_summary: z
         .string()
         .describe(
-          "Clear clinical summary statement, e.g. Patient experiences intermittent migraines triggered by stress",
+          "One-sentence ATOMIC clinical statement about exactly ONE fact (one condition, symptom pattern, life event, or allergy). Never a recap bundling multiple things. Good: 'Patient experiences intermittent migraines triggered by stress'. Bad: 'Patient is being treated for malaria and typhoid with amoxicillin and vitamin C'.",
         ),
       severity: SeverityEnum.describe(
         "Weighted clinical severity of this fact per the rubric provided in the prompt. Use 'unknown' only when there is genuinely not enough information to weigh it.",
@@ -117,7 +117,7 @@ export const MedicalExtractionSchema = z.object({
         .max(1)
         .default(0)
         .describe(
-          "0.0–1.0: how fully specified the medication is. A named drug with dose and frequency scores high; 'malaria medicine' without a name must score below 0.5.",
+          "0.0–1.0: how fully specified the medication is. An identifiable drug name ALONE always scores at least 0.6; adding dose/frequency/duration raises it further. 'malaria medicine' without a name must score below 0.5.",
         ),
       missing_details: z
         .array(z.string())
