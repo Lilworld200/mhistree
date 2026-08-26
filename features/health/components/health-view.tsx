@@ -1,6 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Btn, IconBtn } from "@/components/ui/button";
 import { Reveal } from "@/components/ui/reveal";
 import { useAiAssistantStore } from "@/features/ai-assistant/store";
@@ -12,11 +13,40 @@ import { RecentActivityCard } from "./recent-activity-card";
 import { UpcomingCard } from "./upcoming-card";
 import { VitalsCard } from "./vitals-card";
 
+interface ProfileDerivedHealth {
+  conditions?: { name: string; level: string }[];
+  allergies?: { name: string; level: string }[];
+  resolved?: { name: string; resolved_at: string }[];
+}
+
 export function HealthView() {
   const router = useRouter();
   const events = useTimelineStore((s) => s.events);
   const recent = events.slice(0, 3);
   const openAssistant = useAiAssistantStore((s) => s.open);
+
+  // Derived profile data (two-tier conditions + resolved history).
+  const [derived, setDerived] = useState<ProfileDerivedHealth | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/profile?user_id=default")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          json:
+            | { profile?: { derived_health?: ProfileDerivedHealth } | null }
+            | null,
+        ) => {
+          if (!cancelled && json?.profile?.derived_health) {
+            setDerived(json.profile.derived_health);
+          }
+        },
+      )
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Active medication labels for the baseline card (live from /api/timeline).
   const activeMedEvents = events.filter(
@@ -31,6 +61,24 @@ export function HealthView() {
             .map((e) => cleanMedLabel(e.title))
             .join(", ")})`
       : null;
+
+  // Two-tier condition labels + resolved history (from derived_health JSONB).
+  const confirmedConditions = [
+    ...(derived?.conditions?.filter((c) => c.level === "confirmed") ?? []),
+    ...(derived?.allergies?.filter((a) => a.level === "confirmed") ?? []),
+  ].map((c) => c.name);
+  const conditionLabel = confirmedConditions.length
+    ? confirmedConditions.join(", ")
+    : null;
+  const allergyLabel =
+    derived?.allergies && derived.allergies.length > 0
+      ? derived.allergies.map((a) => a.name).join(", ")
+      : null;
+  const resolvedList =
+    derived?.resolved?.map((r) => ({
+      name: r.name,
+      resolvedAt: r.resolved_at,
+    })) ?? null;
 
   const startCheckIn = () => {
     useChatStore.getState().newChat();
@@ -66,7 +114,12 @@ export function HealthView() {
       <div className="grid2">
         <Reveal d={0.05}>
           <BaselineCard
-            data={{ medications: medLabel }}
+            data={{
+              allergies: allergyLabel,
+              conditions: conditionLabel,
+              medications: medLabel,
+              resolved: resolvedList,
+            }}
             onViewAll={() => router.push("/profile")}
           />
         </Reveal>

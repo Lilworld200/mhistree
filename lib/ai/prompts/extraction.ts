@@ -69,7 +69,8 @@ const DRUG_NAME_RESOLUTION = `DRUG NAME RESOLUTION (applies to every medication)
 - Resolve brand names and common misspellings to the GENERIC (INN) drug name, keeping the original brand wording in clinical_payload.brand_name:
   Coartem → artemether-lumefantrine · Panadol/Tylenol → paracetamol · Advil/Nurofen/Brufen → ibuprofen · Voltaren → diclofenac · Naprosyn → naproxen · Amoxil → amoxicillin · Flagyl → metronidazole · Zinnat → cefuroxime · Augmentin → amoxicillin-clavulanate · Aspirin stays aspirin.
 - Tolerate spelling errors ("panadole", "ibuprofin") and resolve them to the generic name.
-- If the patient describes a class only ("an NSAID", "antimalarial tablets"), do NOT invent a specific drug: use "Unidentified <class>" as drug_name and keep clarity below 0.5.
+- INDIRECT REFERENCES: when the patient refers to a drug indirectly ("my malaria medicine", "the antibiotics", "those tablets"), FIRST check the KNOWN MEDICATIONS ON FILE section below — if exactly one listed medication matches the description, use its exact drug_name and set clarity >= 0.6. Only fall back to "Unidentified <description>" when nothing on file or in the transcript matches. Do NOT invent.
+- If the patient describes a class only ("an NSAID", "antimalarial tablets") and nothing on file matches, do NOT invent a specific drug: use "Unidentified <class>" as drug_name and keep clarity below 0.5.
 - When a doctor prescribed it but no name surfaced yet, still report inferred_by "doctor" — trust scoring handles the rest.`;
 
 const SOURCE_CREDIBILITY_RULES = `SOURCE CREDIBILITY (set for EVERY memory item):
@@ -78,6 +79,24 @@ const SOURCE_CREDIBILITY_RULES = `SOURCE CREDIBILITY (set for EVERY memory item)
 - "self_reported": only the patient's own experience or suspicion ("i think i have", "i feel like").
 - "unknown": genuinely not determinable from the transcript.
 This field decides whether a fact is promoted to the CONFIRMED/DETERMINED tiers of the health profile. Be accurate — never generous.`;
+
+const MEDICATION_LIFECYCLE_RULES = `MEDICATION LIFE-CYCLE (stopping, finishing, resuming):
+- When the patient says they STOPPED a medication ("am no longer taking…", "i stopped the…"), FINISHED a course ("i have finished the drugs", "the course is complete"), or RESUMED one ("i started taking it again"), you MUST emit a medication item for that drug:
+  * status: "discontinued" (stopped) | "completed" (finished course) | "active" (resumed)
+  * status_change_reason: why it was stopped/finished (e.g. "malaria infection resolved")
+  * status_change_by: "doctor" if a clinician confirmed or ordered it, "patient" if self-decided
+  * Resolve the drug name exactly as usual — against the KNOWN MEDICATIONS ON FILE list first, then the transcript.
+- Life-cycle changes are NEW information: emitting them NEVER violates the no-re-emission rule.
+- ANCHOR EXAMPLE:
+  PATIENT: "my doctor just confirmed that my malaria is gone but i still have typhoid so am no longer taking the malaria medicine but i am still taking the other ones"
+  → medication item: { drug_name: from KNOWN MEDICATIONS ON FILE (e.g. "artemether-lumefantrine"), status: "discontinued", status_change_reason: "Malaria infection has resolved", status_change_by: "doctor", clarity >= 0.6 }
+- If the drug cannot be resolved to ANY name (on-file or in-transcript), emit "Unidentified <description>" with low clarity per the HARD RULES — do not invent.`;
+
+const CONDITION_STATUS_RULES = `CONDITION STATUS (for diagnosis / chronic_condition items):
+- Set condition_status: "resolved" when the patient reports being CURED, CLEARED, RECOVERED, or a doctor confirmed the condition is GONE ("my doctor just confirmed that my malaria is gone", "the typhoid has cleared", "i no longer have asthma symptoms").
+- Set condition_status: "active" when the patient currently HAS the condition (new diagnosis or ongoing).
+- Omit the field when nothing about current status changed.
+- A resolution statement is NEW information and must be extracted even though the condition itself is old.`;
 
 const SEVERITY_RUBRIC = `SEVERITY RUBRIC — weigh each fact's clinical seriousness:
 
@@ -130,13 +149,22 @@ const OUTPUT_CONTRACT = `OUTPUT CONTRACT:
 - vitals: any numeric or descriptive vital reading stated.
 - If the message contains no health information, return empty arrays for all three.`;
 
-export function buildExtractionPrompt(turns: ExtractionTurn[]): string {
+export function buildExtractionPrompt(
+  turns: ExtractionTurn[],
+  knownMedications: string[] = [],
+): string {
   const transcript = turns
     .map(
       (t) =>
         `${t.role === "user" ? "PATIENT" : t.role.toUpperCase()}: ${t.content}`,
     )
     .join("\n");
+
+  const knownMedsSection =
+    knownMedications.length > 0
+      ? `KNOWN MEDICATIONS ON FILE (use these exact drug_name values when the patient refers to them directly or indirectly):
+${knownMedications.map((m) => `- ${m}`).join("\n")}`
+      : "KNOWN MEDICATIONS ON FILE: none recorded yet.";
 
   return `You are the clinical entity extractor for Mhistree, a personal health-record system. You read a slice of conversation between a patient and their AI health companion and output structured health facts.
 
@@ -148,13 +176,19 @@ ${CLARITY_RUBRIC}
 
 ${DRUG_NAME_RESOLUTION}
 
+${MEDICATION_LIFECYCLE_RULES}
+
 ${SOURCE_CREDIBILITY_RULES}
+
+${CONDITION_STATUS_RULES}
 
 ${SEVERITY_RUBRIC}
 
 ${TRUST_SCORE_RUBRIC}
 
 ${OUTPUT_CONTRACT}
+
+${knownMedsSection}
 
 TRANSCRIPT (most recent last):
 ${transcript}`;

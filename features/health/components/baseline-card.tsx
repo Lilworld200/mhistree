@@ -8,6 +8,8 @@ export interface BaselineData {
   conditions?: string | null;
   medications?: string | null;
   bloodGroup?: string | null;
+  /** Resolved-condition history entries, newest first. */
+  resolved?: { name: string; resolvedAt: string }[] | null;
 }
 
 /** Strip API title formatting ("Medication: Drug (500mg)") to a clean label. */
@@ -21,6 +23,17 @@ export function BaselineCard({
   data: BaselineData;
   onViewAll: () => void;
 }) {
+  const resolvedLabel =
+    data.resolved && data.resolved.length > 0
+      ? data.resolved
+          .slice(0, 3)
+          .map(
+            (r) =>
+              `${r.name} (${new Date(r.resolvedAt).toLocaleDateString()})`,
+          )
+          .join(", ")
+      : null;
+
   return (
     <div className="card">
       <Label
@@ -36,6 +49,11 @@ export function BaselineCard({
       <FactRow k="Conditions" v={data.conditions || "None recorded"} src="ai" />
       <FactRow k="Medications" v={data.medications || "None recorded"} src="ai" />
       <FactRow k="Blood group" v={data.bloodGroup || "Not specified"} src="self" />
+      <FactRow
+        k="Resolved"
+        v={resolvedLabel || "No resolved history"}
+        src="ai"
+      />
     </div>
   );
 }

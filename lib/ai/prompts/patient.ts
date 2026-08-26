@@ -59,11 +59,13 @@ export function buildPatientSystemPrompt(ctx: PatientContext): string {
     | {
         conditions?: { name: string; level: string }[];
         allergies?: { name: string; level: string }[];
+        resolved?: { name: string; level?: string; resolved_at: string }[];
       }
     | null
     | undefined;
   const derivedConditions = derived?.conditions ?? [];
   const derivedAllergies = derived?.allergies ?? [];
+  const derivedResolved = derived?.resolved ?? [];
   const confirmedDerived = [
     ...derivedConditions.filter((c) => c.level === "confirmed").map((c) => c.name),
     ...derivedAllergies.filter((a) => a.level === "confirmed").map((a) => a.name),
@@ -80,6 +82,17 @@ export function buildPatientSystemPrompt(ctx: PatientContext): string {
   if (determinedDerived.length > 0) {
     profileLines.push(
       `AI-DETERMINED, UNCONFIRMED (watch for these): ${determinedDerived.join(", ")}`,
+    );
+  }
+  if (derivedResolved.length > 0) {
+    profileLines.push(
+      `RESOLVED CONDITIONS (medical history — no longer active): ${derivedResolved
+        .slice(0, 10)
+        .map(
+          (r) =>
+            `${r.name} — resolved ${new Date(r.resolved_at).toLocaleDateString()}`,
+        )
+        .join("; ")}`,
     );
   }
 

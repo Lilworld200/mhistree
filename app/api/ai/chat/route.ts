@@ -360,7 +360,20 @@ export async function POST(request: Request) {
             const recentWindow: ExtractionTurn[] = sanitizedMessages
               .slice(-6)
               .map((m) => ({ role: m.role, content: m.content }));
-            const prompt = buildExtractionPrompt(recentWindow);
+            const prompt = buildExtractionPrompt(
+              recentWindow,
+              // On-file meds let the extractor resolve indirect references
+              // like "my malaria medicine" / "the antibiotics" even when the
+              // actual name was mentioned in a much older session.
+              activeMedications.map(
+                (m) =>
+                  `${m.drug_name}${
+                    m.dosage && m.dosage.toLowerCase() !== "unknown"
+                      ? ` (${m.dosage})`
+                      : ""
+                  }`,
+              ),
+            );
 
             console.info(
               "[Extraction] start — provider=%s model=%s window=%d turns",

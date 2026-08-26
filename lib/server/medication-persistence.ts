@@ -34,10 +34,16 @@ interface ExistingMedRow {
   status: string;
   trust_score: number | string | null;
   inferred_by: string | null;
+  rxnorm_code: string | null;
 }
 
 const norm = (v: unknown): string =>
   typeof v === "string" ? v.trim().toLowerCase() : "";
+
+/** Values the extractor uses for "not stated" — never written over real data. */
+const UNKNOWN_VALUES = new Set(["", "unknown", "unspecified", "n/a", "none"]);
+const isUnknownValue = (v: string | null | undefined): boolean =>
+  v == null || UNKNOWN_VALUES.has(v.trim().toLowerCase());
 
 const numTrust = (v: number | string | null | undefined): number => {
   const n = typeof v === "string" ? Number.parseFloat(v) : v;
@@ -56,7 +62,7 @@ export async function persistExtractedMedications(
   const { data: existingMeds, error: fetchErr } = await db
     .from("medications")
     .select(
-      "id, drug_name, dosage, frequency, status, trust_score, inferred_by",
+      "id, drug_name, dosage, frequency, status, trust_score, inferred_by, rxnorm_code",
     )
     .eq("patient_id", patientId);
 
@@ -83,31 +89,69 @@ export async function persistExtractedMedications(
     const brandName =
       typeof payload.brand_name === "string" ? payload.brand_name : null;
 
+    // ── 2. medications table upsert ──
+    const existing = existingByName.get(trimmedName.toLowerCase());
+
+    // Sparse-safe merge: life-cycle mentions often restate ONLY the status.
+    // "unknown" must never clobber stored regimen details, and trust is
+    // scored on the MERGED regimen so sparse discontinuations are not
+    // unfairly penalized by the tolerance gates.
+    const effDosage = isUnknownValue(m.dosage)
+      ? (existing?.dosage ?? m.dosage)
+      : m.dosage;
+    const effFrequency = isUnknownValue(m.frequency)
+      ? (existing?.frequency ?? m.frequency)
+      : m.frequency;
+    const effDuration = isUnknownValue(m.duration)
+      ? (existing ? "unknown" : m.duration) // duration is not stored on rows
+      : m.duration;
+
     // Dynamic trust score — deterministic, replaces raw LLM guess.
     const trust = computeTrustScore({
       drug_name: trimmedName,
-      dosage: m.dosage,
-      frequency: m.frequency,
-      duration: m.duration,
+      dosage: effDosage,
+      frequency: effFrequency,
+      duration: effDuration,
       inferred_by: m.inferred_by,
     });
 
     const unidentifiedNow = !isIdentifiedDrug(trimmedName);
 
-    // ── 2. medications table upsert ──
-    const existing = existingByName.get(trimmedName.toLowerCase());
+    // Life-cycle transitions (stopped / completed / resumed) are declared
+    // facts of record: they override UNCONDITIONALLY, bypassing the trust-
+    // tolerance gates that govern ordinary detail corrections.
+    const lifecycleTransition =
+      existing != null &&
+      norm(existing.status) !== norm(m.status) &&
+      norm(m.status) !== "";
+
+    const lastUserMsg = [...sourceWindow]
+      .reverse()
+      .find((t) => t.role === "user");
+    const buildLifecycleMetadata = () => ({
+      event: m.status === "active" ? "resumed" : m.status,
+      reason: m.status_change_reason || null,
+      confirmed_by: m.status_change_by || "unknown",
+      confirmation_strength: m.clarity_score,
+      evidence_message: lastUserMsg?.content
+        ? String(lastUserMsg.content).slice(0, 500)
+        : null,
+      recorded_at: new Date().toISOString(),
+    });
+    const todayIso = new Date().toISOString().slice(0, 10);
 
     if (existing) {
       const existingTrust = numTrust(existing.trust_score);
       const wasUnidentified = !isIdentifiedDrug(existing.drug_name);
       const corrected =
-        norm(existing.dosage) !== norm(m.dosage) ||
-        norm(existing.frequency) !== norm(m.frequency) ||
+        norm(existing.dosage) !== norm(effDosage) ||
+        norm(existing.frequency) !== norm(effFrequency) ||
         norm(existing.status) !== norm(m.status);
       const withinTolerance =
         trust >= existingTrust - CORRECTION_TRUST_TOLERANCE;
 
       const shouldOverride =
+        lifecycleTransition ||
         trust > existingTrust ||
         (wasUnidentified && !unidentifiedNow) ||
         (corrected && withinTolerance && !unidentifiedNow);
@@ -117,24 +161,30 @@ export async function persistExtractedMedications(
           .from("medications")
           .update({
             drug_name: trimmedName,
-            dosage: m.dosage,
-            frequency: m.frequency,
-            rxnorm_code: m.rxnorm_code || null,
+            dosage: effDosage,
+            frequency: effFrequency,
+            rxnorm_code: m.rxnorm_code ?? existing.rxnorm_code ?? null,
             status: m.status,
             trust_score: trust,
-            inferred_by: m.inferred_by ?? null,
+            inferred_by: m.inferred_by ?? existing.inferred_by ?? null,
+            ended_at: m.status === "active" ? null : todayIso,
+            ...(lifecycleTransition
+              ? { lifecycle_metadata: buildLifecycleMetadata() }
+              : {}),
           })
           .eq("id", existing.id);
         if (error) {
           console.error("[Meds] medication update failed:", error);
         } else {
           console.info(
-            '[Meds] UPDATED "%s" (trust %d → %d, dosage=%s, frequency=%s)',
+            '[Meds] UPDATED "%s"%s (trust %d → %d, dosage=%s, frequency=%s, status=%s)',
             existing.drug_name,
+            lifecycleTransition ? " [lifecycle-transition]" : "",
             existingTrust,
             trust,
-            m.dosage,
-            m.frequency,
+            effDosage,
+            effFrequency,
+            m.status,
           );
         }
       } else {
@@ -149,12 +199,16 @@ export async function persistExtractedMedications(
       const { error } = await db.from("medications").insert({
         patient_id: patientId,
         drug_name: trimmedName,
-        dosage: m.dosage,
-        frequency: m.frequency,
+        dosage: effDosage,
+        frequency: effFrequency,
         rxnorm_code: m.rxnorm_code || null,
         status: m.status,
         trust_score: trust,
         inferred_by: m.inferred_by ?? null,
+        ended_at: m.status === "active" ? null : todayIso,
+        ...(m.status !== "active"
+          ? { lifecycle_metadata: buildLifecycleMetadata() }
+          : {}),
       });
       if (error) {
         console.error("[Meds] medication insert failed:", error);
@@ -176,13 +230,27 @@ export async function persistExtractedMedications(
       continue;
     }
 
-    const dosagePart =
-      m.dosage && m.dosage.toLowerCase() !== "unknown" ? ` ${m.dosage}` : "";
-    const freqPart =
-      m.frequency && m.frequency.toLowerCase() !== "unknown"
-        ? `, ${m.frequency}`
-        : "";
-    const memSummary = `Patient is taking ${trimmedName}${dosagePart}${freqPart}`;
+    const dosagePart = !isUnknownValue(effDosage) ? ` ${effDosage}` : "";
+    const freqPart = !isUnknownValue(effFrequency)
+      ? `, ${effFrequency}`
+      : "";
+    // Truthful life-cycle wording — the timeline must not claim the patient
+    // is still taking a drug they just reported stopping.
+    let memSummary: string;
+    if (m.status === "discontinued") {
+      memSummary = `Patient stopped taking ${trimmedName}${dosagePart}${freqPart}`;
+    } else if (m.status === "completed") {
+      memSummary = `Patient completed ${trimmedName} course${dosagePart}${freqPart}`;
+    } else {
+      memSummary = `Patient is taking ${trimmedName}${dosagePart}${freqPart}`;
+    }
+    if (
+      m.status !== "active" &&
+      m.status_change_reason &&
+      m.status_change_reason.toLowerCase() !== "unknown"
+    ) {
+      memSummary += ` (${m.status_change_reason})`;
+    }
 
     const { data: existingMemRows } = await db
       .from("health_memories")
@@ -196,8 +264,9 @@ export async function persistExtractedMedications(
     const memPayload = {
       drug_name: trimmedName,
       ...(brandName ? { brand_name: brandName } : {}),
-      dosage: m.dosage,
-      frequency: m.frequency,
+      status: m.status,
+      dosage: effDosage,
+      frequency: effFrequency,
       ...(m.duration && m.duration.toLowerCase() !== "unknown"
         ? { duration: m.duration }
         : {}),
@@ -205,6 +274,13 @@ export async function persistExtractedMedications(
       llm_trust_score: m.trust_score ?? null,
       inferred_by: m.inferred_by ?? null,
       rxnorm_code: m.rxnorm_code || null,
+      ...(m.status !== "active"
+        ? {
+            lifecycle_event: m.status,
+            status_change_reason: m.status_change_reason || null,
+            status_change_by: m.status_change_by || "unknown",
+          }
+        : {}),
       source_messages: sourceWindow
         .filter((t) => t.role === "user")
         .map((t) => t.content),
@@ -221,14 +297,15 @@ export async function persistExtractedMedications(
           : {};
       const prevTrust = numTrust(prevPayload.trust_score as number | null);
       const correctedMem =
-        norm(prevPayload.dosage) !== norm(m.dosage) ||
-        norm(prevPayload.frequency) !== norm(m.frequency);
-      const withinTolerance =
-        trust >= prevTrust - CORRECTION_TRUST_TOLERANCE;
+        norm(prevPayload.dosage) !== norm(effDosage) ||
+        norm(prevPayload.frequency) !== norm(effFrequency);
+      const statusChanged =
+        norm(prevPayload.status as string | undefined) !== norm(m.status);
 
       if (
         trust > prevTrust ||
-        (correctedMem && withinTolerance) ||
+        (correctedMem && trust >= prevTrust - CORRECTION_TRUST_TOLERANCE) ||
+        statusChanged ||
         existingMem.fact_summary.trim().toLowerCase() !==
           memSummary.trim().toLowerCase()
       ) {

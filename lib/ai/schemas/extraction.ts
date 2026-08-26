@@ -69,6 +69,12 @@ export const MedicalExtractionSchema = z.object({
         .describe(
           "For diagnosis/chronic_condition/allergy items ONLY: the normalized single condition or allergen name in lowercase, e.g. 'malaria', 'asthma', 'penicillin allergy'. Omit for all other categories.",
         ),
+      condition_status: z
+        .enum(["active", "resolved"])
+        .optional()
+        .describe(
+          "For diagnosis/chronic_condition items ONLY: whether the patient currently HAS this condition ('active') or it has been cured/cleared/recovered/doctor-confirmed-gone ('resolved'). Omit when no status change or state is implied.",
+        ),
       icd10_code: z
         .string()
         .optional()
@@ -142,6 +148,18 @@ export const MedicalExtractionSchema = z.object({
         .optional()
         .describe("Matching RxNorm code if identifiable"),
       status: z.enum(["active", "discontinued", "completed"]).default("active"),
+      status_change_reason: z
+        .string()
+        .optional()
+        .describe(
+          "For discontinued/completed items ONLY: WHY the medication was stopped, e.g. 'malaria infection resolved'. Omit for active medications.",
+        ),
+      status_change_by: z
+        .enum(["doctor", "patient", "pharmacist", "unknown"])
+        .default("unknown")
+        .describe(
+          "For discontinued/completed items ONLY: who declared the stop — 'doctor' if a clinician confirmed/ordered it; 'patient' if the patient decided on their own. Use 'unknown' when not stated.",
+        ),
       clinical_payload: z
         .record(z.string(), z.unknown())
         .nullable()
