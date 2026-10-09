@@ -425,7 +425,15 @@ Pin verified dependencies and one lockfile. Avoid duplicate app/schema systems e
 
 MUST inspect actual components, global styles, spacing, typography, colors, motion, navigation, density, and responsive behavior before UI changes. The PDF supplies no replacement brand palette/layout. Reuse suitable styling primitives/assets after review; separate visual reuse from obsolete business behavior.
 
-Design measurements and rendered verification are awaiting read-only inspection. This table is an evidence requirement, not an invented design system.
+The T03 design guide and catalog preserve source-inspected tokens, guest chat/auth references and a separately rendered representative page/button reconstruction. Authenticated-screen verification remains tracked in WORKFLOW; source inspection is not rendered acceptance. Read `docs/design/UI_GUIDE.md` and `docs/design/component-catalog.md` before UI work.
+
+Portable measured foundation (2026-10-09): Manrope, Latin, swap display, with system sans fallback; body 16px/24px and -0.01em letter spacing. Light surfaces: stage #f3f3f2, shell #ececeb, secondary shell #f1f1f0, card #f6f6f5. Text: #181818, #6e6e6e, #9a9a9a. Hero blues #69a5ff/#347bdd; green #2f8f5b, amber #c08a2d, red #cc5348. Soft white borders at .8/.55 opacity. Shadows: 0 3px 8px black .05; 0 6px 14px black .06; 0 22px 45px black .1. Dark tokens exist in source but rendered dark acceptance is not established.
+
+Desktop shell at 1440×1000: 20px outer padding, 288px sidebar, 20px gap, remaining-width main; sidebar radius28, main radius32. Navigation rows44px, pill radius999, 13.5px weight700. At width ≤980 use one column, 12px padding/gap, hide desktop sidebar and show sticky mobile topbar; measured mobile reference390×844. Keep the flexible header/content/composer layout and wrapping empty-state actions. Regular soft/dark buttons are50px tall, pill radius999, 13.5px weight800, 8px icon gap; focus outline2px offset3. Source button shadows/gradients and exact component variants are in the guide. Preserve density while repairing mobile input14px to the required16px, focus return, reduced motion and hit areas; known defects are not design requirements.
+
+Original brand assets are `app/assets/images/logos/mhistree_black_logo.png` and `mhistree_white_logo.png`; hashes and unresolved source/license needs are in the design guide. Manrope is loaded through next/font/google; a portable transfer must include verified font assets/license or declare that build dependency. Do not substitute the scaffold README's font description. Page motion uses opacity/translate, .26s, easing [.22,1,.36,1]; honor reduced-motion preferences when adopting it.
+
+The following table remains the coverage checklist; uncertain properties must not be invented.
 
 | Annex area | Evidence to capture at T03 |
 | --- | --- |

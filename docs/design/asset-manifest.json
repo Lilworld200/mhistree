@@ -1,0 +1,119 @@
+{
+  "date": "2026-10-09",
+  "assets": [
+    {
+      "path": "app/assets/images/logos/mhistree_black_logo.png",
+      "sha256": "e52cae21e8bc1898f0b14063b1d79815fefbd82f155a1c3d86b747db6e538b53",
+      "width": 649,
+      "height": 223,
+      "kind": "original-logo",
+      "license": "not independently verified"
+    },
+    {
+      "path": "app/assets/images/logos/mhistree_white_logo.png",
+      "sha256": "9af09f6cfa991ad7f8c339478b308fdcdd7cd1999c7870c69daa0f233869ec3c",
+      "width": 660,
+      "height": 247,
+      "kind": "original-logo",
+      "license": "not independently verified"
+    },
+    {
+      "path": "docs/design/reference/auth-desktop-light.jpg",
+      "sha256": "91833225bfaebe2b618b1a53e932723d62e02841f370342f5e61b804c8e880dc",
+      "width": 1440,
+      "height": 1000,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/auth-mobile-light.jpg",
+      "sha256": "e3f4bafe285bd46c2870b3639bb38cfe8d0cb45087ead7b0ddde58f50481b58a",
+      "width": 390,
+      "height": 843,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/auth-reconstruction-desktop.jpg",
+      "sha256": "474bd1063d7f229849fc4bbebca3200667507df7640861c32d49848e7ab87b52",
+      "width": 1440,
+      "height": 1000,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/auth-reconstruction-error.jpg",
+      "sha256": "632d0b2505611dd035b14e985a6025f5054beffcd6e1daf96b41d0c57b1b4035",
+      "width": 1440,
+      "height": 1000,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/auth-reconstruction-mobile.jpg",
+      "sha256": "504a986e86056923b5d4803fe1a721aa9fcf7a09718bbf26e5fb9fa058b5314f",
+      "width": 390,
+      "height": 843,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/auth-required-field.jpg",
+      "sha256": "4276ca8962965165f834c1fdb45a64ec0c2d9b6b54deb5ce9cda360aadd9305e",
+      "width": 1440,
+      "height": 1000,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/chat-desktop-light.jpg",
+      "sha256": "ea9d8d9fb73c0ef9fa042bff8a9dfdb5710663ad3a26e75558ab18d2141970ea",
+      "width": 1440,
+      "height": 1000,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/chat-laptop-light.jpg",
+      "sha256": "33f45482681ffdf939985f95d6f76f3a641ddeb257b47146a5a21f1b414bbf7d",
+      "width": 1366,
+      "height": 768,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/chat-mobile-light.jpg",
+      "sha256": "345fa6b1833897b23ea2abccc5d420bd3536754d121c84cccaa0d2f95de900b2",
+      "width": 390,
+      "height": 843,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/chat-ultrawide-light.jpg",
+      "sha256": "024f81efd01e9d7c0e9801e0d8f707adfe0a970c34c33fb7bd8cc01837d60119",
+      "width": 2560,
+      "height": 1440,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    },
+    {
+      "path": "docs/design/reference/navigation-mobile-focus.jpg",
+      "sha256": "71a96b151538934cb6d36875abdcd922a3d5a7df46d055c3a0a29c0c8fd1f638",
+      "width": 390,
+      "height": 843,
+      "kind": "synthetic-guest-reference",
+      "license": "local synthetic UI capture"
+    }
+  ],
+  "font": {
+    "family": "Manrope",
+    "source": "app/layout.tsx next/font/google Latin, swap",
+    "specimenSource": "existing .next build Latin woff2, served locally; not copied",
+    "license": "source/license bundle required before portable redistribution"
+  },
+  "icons": {
+    "source": "components/ui/icons.tsx",
+    "license": "provenance review pending"
+  }
+}

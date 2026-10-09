@@ -1,0 +1,21 @@
+{
+  "bodyScrollHeight": 844,
+  "inputFont": "14px",
+  "scrollWidth": 390,
+  "stageColumns": "366.4px",
+  "stagePadding": "12px",
+  "topbar": {
+    "bottom": 70.79999923706055,
+    "height": 58.79999923706055,
+    "left": 12,
+    "right": 378.3999938964844,
+    "top": 12,
+    "width": 366.3999938964844,
+    "x": 12,
+    "y": 12
+  },
+  "viewport": {
+    "height": 844,
+    "width": 390
+  }
+}
