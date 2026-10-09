@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import * as Tabs from "@radix-ui/react-tabs";
 import { motion } from "motion/react";
 import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { FactRow } from "@/components/ui/fact-row";
 import { Label } from "@/components/ui/label";
 import { Reveal } from "@/components/ui/reveal";
@@ -17,6 +18,14 @@ const TABS = [
   "Conditions",
   "Emergency",
 ];
+
+function formatDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(
+    date,
+  );
+}
 
 function Panel({ children }: { children: React.ReactNode }) {
   return (
@@ -46,6 +55,11 @@ interface UserProfileData {
     allergies?: string;
     chronic_conditions?: string;
     lifestyle?: string;
+    derived_health?: {
+      conditions?: { name: string; level: string }[];
+      allergies?: { name: string; level: string }[];
+      resolved?: { name: string; resolved_at: string }[];
+    } | null;
   } | null;
   memories: Array<{
     id: string;
@@ -75,7 +89,17 @@ export function ProfileView() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch("/api/profile?user_id=default");
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (!user) {
+          setData(null);
+          return;
+        }
+
+        const res = await fetch(`/api/profile?user_id=${user.id}`);
         if (!res.ok) {
           const json = await res.json().catch(() => ({}));
           const errMsg = json.error || `HTTP ${res.status} ${res.statusText}`;
@@ -107,6 +131,18 @@ export function ProfileView() {
     data?.memories.filter((m) => m.fact_category === "allergy") ?? [];
   const conditions =
     data?.memories.filter((m) => m.fact_category === "chronic_condition") ?? [];
+
+  const derived = data?.profile?.derived_health ?? null;
+  const confirmedConditions =
+    derived?.conditions?.filter((c) => c.level === "confirmed") ?? [];
+  const determinedConditions =
+    derived?.conditions?.filter((c) => c.level === "determined") ?? [];
+  const resolvedConditions = derived?.resolved ?? [];
+
+  const confirmedAllergies =
+    derived?.allergies?.filter((a) => a.level === "confirmed") ?? [];
+  const determinedAllergies =
+    derived?.allergies?.filter((a) => a.level === "determined") ?? [];
 
   return (
     <div className="scroll">
@@ -239,20 +275,55 @@ export function ProfileView() {
         <Tabs.Content value="Allergies">
           <Panel>
             <div className="card">
-              <Label>Allergies</Label>
-              {allergies.length > 0 ? (
-                allergies.map((a) => (
-                  <FactRow
-                    key={a.id}
-                    k={a.fact_summary}
-                    v="Recorded fact"
-                    src="clinician"
-                  />
-                ))
+              {derived ? (
+                <>
+                  <Label>Confirmed allergies</Label>
+                  {confirmedAllergies.length > 0 ? (
+                    confirmedAllergies.map((a) => (
+                      <FactRow
+                        key={a.name}
+                        k={a.name}
+                        v="Clinician verified"
+                        src="clinician"
+                      />
+                    ))
+                  ) : (
+                    <p className="small" style={{ color: "var(--ink2)" }}>
+                      No confirmed allergies recorded.
+                    </p>
+                  )}
+                  {determinedAllergies.length > 0 && (
+                    <>
+                      <Label>Suspected / unconfirmed</Label>
+                      {determinedAllergies.map((a) => (
+                        <FactRow
+                          key={a.name}
+                          k={a.name}
+                          v="AI determined"
+                          src="ai"
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
               ) : (
-                <p className="small" style={{ color: "var(--ink2)" }}>
-                  No allergy facts found in Supabase.
-                </p>
+                <>
+                  <Label>Allergies</Label>
+                  {allergies.length > 0 ? (
+                    allergies.map((a) => (
+                      <FactRow
+                        key={a.id}
+                        k={a.fact_summary}
+                        v="Recorded fact"
+                        src="clinician"
+                      />
+                    ))
+                  ) : (
+                    <p className="small" style={{ color: "var(--ink2)" }}>
+                      No allergy facts found in Supabase.
+                    </p>
+                  )}
+                </>
               )}
             </div>
           </Panel>
@@ -311,20 +382,69 @@ export function ProfileView() {
         <Tabs.Content value="Conditions">
           <Panel>
             <div className="card">
-              <Label>Conditions</Label>
-              {conditions.length > 0 ? (
-                conditions.map((c) => (
-                  <FactRow
-                    key={c.id}
-                    k={c.fact_summary}
-                    v="Recorded memory"
-                    src="ai"
-                  />
-                ))
+              {derived ? (
+                <>
+                  <Label>Active conditions</Label>
+                  {confirmedConditions.length > 0 ? (
+                    confirmedConditions.map((c) => (
+                      <FactRow
+                        key={c.name}
+                        k={c.name}
+                        v="Clinician verified"
+                        src="clinician"
+                      />
+                    ))
+                  ) : (
+                    <p className="small" style={{ color: "var(--ink2)" }}>
+                      No confirmed chronic conditions recorded.
+                    </p>
+                  )}
+                  {determinedConditions.length > 0 && (
+                    <>
+                      <Label>Suspected / unconfirmed</Label>
+                      {determinedConditions.map((c) => (
+                        <FactRow
+                          key={c.name}
+                          k={c.name}
+                          v="AI determined"
+                          src="ai"
+                        />
+                      ))}
+                    </>
+                  )}
+                  {resolvedConditions.length > 0 && (
+                    <>
+                      <Label>Resolved</Label>
+                      {resolvedConditions.map((r) => (
+                        <FactRow
+                          key={r.name}
+                          k={r.name}
+                          v={`Resolved ${formatDate(r.resolved_at)}`}
+                          src="self"
+                        />
+                      ))}
+                    </>
+                  )}
+                </>
+              ) : conditions.length > 0 ? (
+                <>
+                  <Label>Conditions</Label>
+                  {conditions.map((c) => (
+                    <FactRow
+                      key={c.id}
+                      k={c.fact_summary}
+                      v="Recorded memory"
+                      src="ai"
+                    />
+                  ))}
+                </>
               ) : (
-                <p className="small" style={{ color: "var(--ink2)" }}>
-                  No chronic conditions recorded.
-                </p>
+                <>
+                  <Label>Conditions</Label>
+                  <p className="small" style={{ color: "var(--ink2)" }}>
+                    No chronic conditions recorded.
+                  </p>
+                </>
               )}
             </div>
           </Panel>

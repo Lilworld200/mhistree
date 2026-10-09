@@ -31,7 +31,26 @@ export async function middleware(request: NextRequest) {
   );
 
   // Refresh session if it exists — do NOT remove this line
-  await supabase.auth.getUser();
+  try {
+    const { error } = await supabase.auth.getUser();
+    if (
+      error &&
+      (error.status === 400 || error.status === 401)
+    ) {
+      const staleCookies = request.cookies
+        .getAll()
+        .filter(({ name }) => name.startsWith("sb-"));
+      if (staleCookies.length > 0) {
+        supabaseResponse = NextResponse.next({ request });
+        staleCookies.forEach(({ name }) => {
+          request.cookies.delete(name);
+          supabaseResponse.cookies.delete(name);
+        });
+      }
+    }
+  } catch {
+    // Transient network failure — keep cookies and let the client retry.
+  }
 
   return supabaseResponse;
 }
