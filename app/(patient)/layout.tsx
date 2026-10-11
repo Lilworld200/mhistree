@@ -1,16 +1,10 @@
-"use client";
-
-import { AppShell } from "@/features/shell/components/app-shell";
-import { PatientNavContent } from "@/features/shell/components/patient-nav-content";
-
-export default function PatientLayout({
+import { AppShell } from "@/components/layout/app-shell";
+import { requirePatient } from "@/lib/auth/patient";
+export default async function Layout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <AppShell renderNav={(onClose) => <PatientNavContent onClose={onClose} />}>
-      {children}
-    </AppShell>
-  );
+  await requirePatient();
+  return <AppShell>{children}</AppShell>;
 }

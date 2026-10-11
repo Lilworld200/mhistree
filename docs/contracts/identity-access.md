@@ -1,5 +1,7 @@
 # Identity and access contract v1 — planned
 
+Implementation checkpoint2026-10-10: T07–T09 now implement the foundational semantics in the private `mhistree` schema. [Feature map](../feature-map.md) and owning READMEs name actual APIs. Sessions use a provider-verified exchange followed by current opaque app-session registry checks; [auth contract](auth.md) specifies the tested Keycloak adapter. No webhooks are registered. Grants/reviewer/org producers and merge/reversal remain their later tasks. Clinical SQL policy and RLS share `mhistree.can_access`; prepared contexts never bypass rechecks. The original v1 shapes below remain the target semantic contract, not a requirement to match every property name literally.
+
 Owner: identity/auth/access with organizations/practitioner policy projections. Producers T07–09; consumers T10,T17,T19–32. This document defines semantics, not deployed SQL. IDs below are opaque internal strings; provider subject is a separate string, never assumed UUID. Schema implementation must enforce referenced uniqueness/foreign keys and privilege separation.
 
 ## Identity and session

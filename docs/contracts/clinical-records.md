@@ -1,5 +1,7 @@
 # Clinical record, processing and care contracts v1 — planned
 
+Implementation checkpoint2026-10-10: T09 source/event/head/state/audit/outbox transactions and controlled correction versions are implemented and tested; see [record owner](../../features/health-records/README.md). New source evidence accompanies corrections, with prior versions recoverable through contribution lineage. Record categories are validated; event time precision remains explicit. Durable extraction, timeline pagination, AI retrieval and real care producers below remain later task contracts. Private original delivery has a current-access/checksum adapter boundary; T13 owns production storage and processing.
+
 Owner: health-records; documents/ai-chat/clinical-care are source producers. Access contract v1 is mandatory. Target implementation paths are in [feature map](../feature-map.md). No new schema/API is implemented in this planning round.
 
 ## Source, time and contribution

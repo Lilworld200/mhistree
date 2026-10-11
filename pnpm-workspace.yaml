@@ -1,5 +1,7 @@
-ignoredBuiltDependencies:
+onlyBuiltDependencies:
+  - embedded-postgres
+  - '@embedded-postgres/windows-x64'
+  - supabase
+  - esbuild
   - sharp
   - unrs-resolver
-onlyBuiltDependencies:
-  - '@openrouter/sdk'

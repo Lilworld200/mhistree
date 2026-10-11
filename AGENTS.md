@@ -1,6 +1,6 @@
 # Mhistree: portable product specification and agent rules
 
-Revision: 2026-10-09. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages.
+Revision: 2026-10-10. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages.
 Source SHA-256: 4FB82A3DB86AEA4DC07E8D3B96C354FF847E4A34C6F0CD99C664F3FB14833C6A.
 
 This file is Mhistree's portable project brain. It defines the product, its boundaries, the meaning of its records, and the discipline required to implement it. It must be understandable to a developer or agent without previous chat history. It describes required behavior, not proof that existing code works.
@@ -423,6 +423,8 @@ Pin verified dependencies and one lockfile. Avoid duplicate app/schema systems e
 
 ### 12.1 Visual authority and design annex
 
+Owner direction (2026-10-10): use the established visual guide and references for routine work. Reserve browser automation and visual testing for occasional essential checks; prefer code and integration verification otherwise. Do not repeatedly recheck an unchanged layout.
+
 MUST inspect actual components, global styles, spacing, typography, colors, motion, navigation, density, and responsive behavior before UI changes. The PDF supplies no replacement brand palette/layout. Reuse suitable styling primitives/assets after review; separate visual reuse from obsolete business behavior.
 
 The T03 design guide and catalog preserve source-inspected tokens, guest chat/auth references and a separately rendered representative page/button reconstruction. Authenticated-screen verification remains tracked in WORKFLOW; source inspection is not rendered acceptance. Read `docs/design/UI_GUIDE.md` and `docs/design/component-catalog.md` before UI work.
@@ -642,3 +644,9 @@ The 2026-10-09 owner instruction required extracting the existing AGENTS, filter
 Source map: operating rules/canon pp. 1-8; tasks pp. 9-44; AGENTS contract p. 45; WORKFLOW p. 46; maintenance/errors p. 47; integrated acceptance p. 48; provenance/defaults/references p. 49.
 
 Official implementation references named by the playbook: Next.js project structure, authentication, Server/Client Components, and Supabase password authentication. Consult current official documentation against selected versions during implementation. This refactor does not certify any installed provider behavior.
+
+Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework boundaries. Pin behavior to the selected version; for example, Next16.3 error retry can refetch, while reset only re-renders. Keep generated framework guidance from overwriting or repeatedly appending to this product brain.
+
+### Owner-selected email services (2026-10-11)
+
+Use Resend as the main email provider and Supabase Auth email sending for email authentication/verification. Preserve no-contact authentication, permanent person/account separation, verified contact state and current server authorization. Provider selection is not proof of configured delivery. Any additional provider identity/session must be explicitly bound to the existing account; do not create duplicate people, merge by email or grant clinical authority from a verified email alone. Use only a confirmed Mhistree environment, never the unrelated Reslz project. Keep configuration and delivery acceptance evidence in WORKFLOW.

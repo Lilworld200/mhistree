@@ -1,0 +1,5 @@
+# Private patient documents
+
+server.ts owns authenticated upload, receipt/list and parse jobs; parser.ts validates text/PDF up to 10MB and extracts up to 100 pages with a bounded text budget. lib/storage/local.ts stores originals under a private filesystem root with UUID keys; production must configure durable PRIVATE_STORAGE_ROOT. Original checksum and receipt survive parser/model failure. PDF active/encrypted features are quarantined; this is not full malware certification or OCR.
+
+/api/documents uploads/parses; /api/documents/[id] checks current access before and after storage read and serves attachment-only, no-store bytes. Extraction writes use the same T09 source/event kernel and durable extraction journal. documents-view.tsx shows original, processing/error state and manual retry; upload never implies clinical verification. Tests cover actual PDF parsing, private isolation, failure retention and duplicate retry. Deployment/worker/scan/backup gates remain explicit in patient-phase-evidence.md.

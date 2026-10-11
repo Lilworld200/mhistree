@@ -1,28 +1,24 @@
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import "./globals.css";
-import { AppOverlays } from "@/components/app-overlays";
-import { ThemeProvider } from "@/components/theme-provider";
-
 const manrope = Manrope({
-  variable: "--font-manrope",
   subsets: ["latin"],
   display: "swap",
+  variable: "--font-manrope",
 });
-
 export const metadata: Metadata = {
-  title: "Mhistree — Longitudinal Health Companion",
-  description:
-    "A living medical history. Mhistree turns everyday interactions, measurements and documents into a time-aware health record with provenance you control.",
+  title: { default: "Mhistree", template: "%s · Mhistree" },
+  description: "Your continuing health history.",
 };
-
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" className={`${manrope.variable} h-full antialiased`}>
-      <body className="min-h-full">
-        <ThemeProvider />
+    <html lang="en">
+      <body className={manrope.className + " " + manrope.variable}>
         {children}
-        <AppOverlays />
       </body>
     </html>
   );

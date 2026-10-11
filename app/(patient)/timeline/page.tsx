@@ -1,13 +1,4 @@
-﻿import { TimelineView } from "@/features/timeline/components/timeline-view";
-import { AuthGuard } from "@/components/auth/auth-guard";
-
-export default function Page() {
-  return (
-    <AuthGuard
-      title="Health Timeline Protected"
-      description="Please sign in or create an account to view your medical timeline and health history."
-    >
-      <TimelineView />
-    </AuthGuard>
-  );
+import { TimelineView } from "@/features/health-records/timeline-view";
+export default function Timeline() {
+  return <TimelineView />;
 }

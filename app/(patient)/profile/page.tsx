@@ -1,13 +1,14 @@
-﻿import { ProfileView } from "@/features/profile/components/profile-view";
-import { AuthGuard } from "@/components/auth/auth-guard";
-
-export default function Page() {
+import { requirePatient } from "@/lib/auth/patient";
+import { accountProfile } from "@/features/patient/account/server";
+import { ProfileView } from "@/features/patient/account/profile";
+import { database } from "@/lib/db/client";
+export default async function Profile() {
+  const { session } = await requirePatient();
   return (
-    <AuthGuard
-      title="Patient Profile Protected"
-      description="Please sign in or create an account to view and update your personal medical profile."
-    >
-      <ProfileView />
-    </AuthGuard>
+    <ProfileView
+      initial={JSON.parse(
+        JSON.stringify(await accountProfile(database(), session)),
+      )}
+    />
   );
 }
