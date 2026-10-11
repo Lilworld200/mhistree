@@ -1,6 +1,13 @@
 import "server-only";
 import type { PoolClient } from "pg";
 export type AuditAction =
+  | "clinical.request.updated"
+  | "clinical.work.saved"
+  | "clinical.entry.finalized"
+  | "professional.submitted"
+  | "professional.approved"
+  | "professional.rejected"
+  | "professional.suspended"
   | "appointment.requested"
   | "appointment.updated"
   | "care.message.saved"

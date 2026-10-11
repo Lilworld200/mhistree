@@ -1,0 +1,103 @@
+import { NextRequest } from "next/server";
+import { z } from "zod";
+import { database } from "@/lib/db/client";
+import { directWorkspace } from "@/features/practitioner/workspace";
+import { saveWork, editWork } from "@/features/clinical-care/work";
+import { finalizeEntry } from "@/features/clinical-care/entries";
+import {
+  createServiceRequest,
+  changeServiceRequest,
+  publishResult,
+  requestList,
+} from "@/features/clinical-care/requests";
+import { practitionerAssistance } from "@/features/ai-chat/practitioner";
+import { careMessages, sendCareMessage } from "@/features/messaging/server";
+import { changeAppointment } from "@/features/appointments/server";
+import { markThreadRead } from "@/features/practitioner/daily";
+import { aiGateway } from "@/lib/ai/gateway";
+import {
+  mutationGuard,
+  jsonBody,
+  sessionFrom,
+  success,
+  failure,
+} from "@/lib/http";
+export async function GET(r: NextRequest) {
+  try {
+    const connectionId = z
+      .uuid()
+      .parse(r.nextUrl.searchParams.get("connection"));
+    const pool = database(),
+      session = sessionFrom(r),
+      context = { kind: "direct" as const, connectionId };
+    const data = await directWorkspace(pool, session, connectionId);
+    return success({
+      ...data,
+      requests: await requestList(pool, session, context),
+      messages: await careMessages(pool, session, context, connectionId),
+    });
+  } catch (e) {
+    return failure(e);
+  }
+}
+export async function POST(r: NextRequest) {
+  try {
+    mutationGuard(r);
+    const d = z
+      .object({
+        connectionId: z.uuid(),
+        action: z.enum([
+          "save",
+          "edit",
+          "finalize",
+          "request",
+          "request-transition",
+          "result",
+          "ai",
+          "message",
+          "appointment",
+          "read",
+        ]),
+        data: z.unknown(),
+      })
+      .strict()
+      .parse(await jsonBody(r, 50000));
+    const pool = database(),
+      session = sessionFrom(r),
+      context = { kind: "direct" as const, connectionId: d.connectionId };
+    if (d.action === "read")
+      return success(await markThreadRead(pool, session, d.connectionId));
+    if (d.action === "ai") {
+      const data = z
+        .object({
+          question: z.string(),
+          purpose: z.enum(["summary", "question", "assessment", "draft"]),
+          includeOwnNotes: z.boolean(),
+        })
+        .strict()
+        .parse(d.data);
+      return success(
+        await practitionerAssistance(
+          pool,
+          session,
+          { ...data, connectionId: d.connectionId },
+          aiGateway(),
+        ),
+      );
+    }
+    return success(
+      await {
+        save: saveWork,
+        edit: editWork,
+        finalize: finalizeEntry,
+        request: createServiceRequest,
+        "request-transition": changeServiceRequest,
+        result: publishResult,
+        message: sendCareMessage,
+        appointment: changeAppointment,
+      }[d.action](pool, session, context, d.data),
+    );
+  } catch (e) {
+    return failure(e);
+  }
+}

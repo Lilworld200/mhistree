@@ -1,9 +1,14 @@
-import { PageState } from "@/components/ui/page-state";
-export const metadata = { title: "Clinician workspace" };
-export default function Page() {
+import { requirePatient } from "@/lib/auth/patient";
+import { database } from "@/lib/db/client";
+import { practitionerToday } from "@/features/practitioner/daily";
+import { TodayView } from "@/features/practitioner/today-view";
+export default async function Page() {
+  const { session } = await requirePatient();
   return (
-    <PageState title="Clinician workspace is being prepared">
-      Verified professional access and care tools are not available yet.
-    </PageState>
+    <TodayView
+      initial={JSON.parse(
+        JSON.stringify(await practitionerToday(database(), session)),
+      )}
+    />
   );
 }
