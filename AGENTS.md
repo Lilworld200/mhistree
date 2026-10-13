@@ -1,6 +1,6 @@
 # Mhistree: portable product specification and agent rules
 
-Revision: 2026-10-09. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages.
+Revision: 2026-10-10. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages.
 Source SHA-256: 4FB82A3DB86AEA4DC07E8D3B96C354FF847E4A34C6F0CD99C664F3FB14833C6A.
 
 This file is Mhistree's portable project brain. It defines the product, its boundaries, the meaning of its records, and the discipline required to implement it. It must be understandable to a developer or agent without previous chat history. It describes required behavior, not proof that existing code works.
@@ -422,6 +422,8 @@ Pin verified dependencies and one lockfile. Avoid duplicate app/schema systems e
 ## 12. Interface preservation and retained engineering rules
 
 ### 12.1 Visual authority and design annex
+
+Owner direction (2026-10-10): use the established visual guide and references for routine work. Reserve browser automation and visual testing for occasional essential checks; prefer code and integration verification otherwise. Do not repeatedly recheck an unchanged layout.
 
 MUST inspect actual components, global styles, spacing, typography, colors, motion, navigation, density, and responsive behavior before UI changes. The PDF supplies no replacement brand palette/layout. Reuse suitable styling primitives/assets after review; separate visual reuse from obsolete business behavior.
 

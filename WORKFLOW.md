@@ -1,5 +1,15 @@
 # Mhistree execution memory
 
+## Active rebuild handoff — 2026-10-10
+
+T06–T09 were implemented and verified in the attached independent worktree, **not this preserved original app checkout**. Continue at `C:/Users/maseglo.com/.codex/worktrees/mhistree-rebuild/mhistree`, branch `codex/rebuild`, based on saved planning commit `645c9e2`. Read that worktree's AGENTS.md and WORKFLOW.md plus `docs/tasks/shared-foundations-evidence.md` for actual files, APIs, decisions and remaining gates. All160 archived legacy files match their original Git hashes.
+
+Final rebuild checks: frozen install, typecheck, lint,25 tests across5 files, production build and client-secret scan passed. Tests used isolated real native PostgreSQL18.4 and Keycloak26.8 contactless authentication; no Reslz project, real patient data, legacy credentials, production migration or deployment. Application source in this original checkout is unchanged. Rebuild source is uncommitted for review.
+
+Owner direction: authentication may start afresh; email/password availability does not remove contactless requirements. Avoid routine browser automation/visual retesting; rely on saved references and code/integration checks except when essential. This preference is also saved in AGENTS.
+
+Next task is T10 when the owner authorizes it. The historical T01–T05 checkpoint below is retained for preservation evidence; its future-worktree/not-started statements do not supersede this active handoff.
+
 Revision: 2026-10-09 (Africa/Lagos). Scope: T01–T05 preservation and planning. These planning gates are verified within the evidence boundaries below. **T06 has not started.** Future implementation requires the next owner instruction; no production work was performed.
 
 ## Roots, preservation and source
@@ -101,3 +111,5 @@ Next authorized build task is T06. Minimum packet: AGENTS, this file, full PDF p
 ## Handoff
 
 2026-10-09: recovered pre-interruption audit and completed T02–T05 documentation/reference work; updated AGENTS measured annex. No application/source schema behavior was changed; defects were documented, not silently fixed. Detailed record/checks: docs/tasks/preservation-evidence.md. Temporary specimen server3102 stopped; original local preview3100 remains running. Source and data recovery paths remain separate; no deployment or live migration is implied by planning completion.
+
+2026-10-11 patient-phase handoff: implementation is in C:/Users/maseglo.com/.codex/worktrees/mhistree-rebuild/mhistree on codex/rebuild, still uncommitted. Read that worktree's WORKFLOW.md and docs/tasks/patient-phase-evidence.md for current T10–T18 state. Full50 tests, targeted7, real HTTP patient journey, lint/type/build/client scan passed; no browser tests. Original application remains preserved. Owner selected Resend main email and Supabase Auth email verification; intended Mhistree project/delivery configuration and verification integration remain open. Never use the unrelated Reslz project.
