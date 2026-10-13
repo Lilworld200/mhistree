@@ -37,7 +37,7 @@ export async function saveWork(
   input: unknown,
 ) {
   const d = workInput.parse(input);
-  if (context.kind !== "direct" && context.kind !== "organization")
+  if (context.kind !== "direct" && context.kind !== "organization" && context.kind !== "initial-care")
     throw new DomainError("ACCESS_DENIED");
   if (
     (context.kind !== "organization" || d.kind !== "draft") &&
@@ -55,7 +55,7 @@ export async function saveWork(
         authorAccountId: a.actor.accountId,
         originalContext: a.contextId,
         originalOrganizationId:
-          context.kind === "organization" ? context.organizationId : null,
+          context.kind === "organization" || context.kind === "initial-care" ? context.organizationId : null,
       },
       "write",
     );
@@ -71,7 +71,18 @@ export async function saveWork(
     if (existing) {
       if (
         existing.author_account_id !== a.actor.accountId ||
-        existing.body.text !== d.body.text ||
+        JSON.stringify(contributionInput.shape.body.parse(existing.body)) !==
+          JSON.stringify(d.body) ||
+        JSON.stringify(
+          contributionInput.shape.occurredAt.parse(existing.occurred_at),
+        ) !== JSON.stringify(d.occurredAt) ||
+        existing.category !== d.category ||
+        existing.timezone !== d.timezone ||
+        (existing.due_at?.toISOString() ?? null) !==
+          (d.dueAt ? new Date(d.dueAt).toISOString() : null) ||
+        JSON.stringify(existing.team_account_ids) !==
+          JSON.stringify(d.teamAccountIds) ||
+        (existing.ai_provenance?.runId ?? null) !== (d.aiRunId ?? null) ||
         existing.patient_person_id !== d.patientPersonId ||
         existing.kind !== d.kind ||
         existing.original_context !== a.contextId
@@ -81,13 +92,13 @@ export async function saveWork(
     }
     const row = (
       await a.tx.query(
-        "insert into mhistree.clinical_work(patient_person_id,author_account_id,connection_id,original_context,organization_id,kind,category,body,occurred_at,timezone,due_at,team_account_ids,request_key) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *",
+        "insert into mhistree.clinical_work(patient_person_id,author_account_id,connection_id,original_context,organization_id,kind,category,body,occurred_at,timezone,due_at,team_account_ids,request_key,initial_care_basis_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *",
         [
           d.patientPersonId,
           a.actor.accountId,
-          context.connectionId,
+          context.kind === "initial-care" ? null : context.connectionId,
           a.contextId,
-          context.kind === "organization" ? context.organizationId : null,
+          context.kind === "organization" || context.kind === "initial-care" ? context.organizationId : null,
           d.kind,
           d.category,
           JSON.stringify(d.body),
@@ -96,10 +107,12 @@ export async function saveWork(
           d.dueAt,
           d.teamAccountIds,
           d.requestKey,
+          context.kind === "initial-care" ? context.basisId : null,
         ],
       )
     ).rows[0];
     if (d.aiRunId) {
+      if (context.kind === "initial-care") throw new DomainError("ACCESS_DENIED");
       const run = (
         await a.tx.query(
           "select id,purpose from mhistree.practitioner_ai_runs where id=$1 and account_id=$2 and connection_id=$3",

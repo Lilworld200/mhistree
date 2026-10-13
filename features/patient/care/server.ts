@@ -11,7 +11,7 @@ export async function eligibleCareProviders(pool: Pool, session: string) {
         `select distinct c.id connection_id,a.id practitioner_id,p.display_name,c.kind from mhistree.connections c
  join mhistree.accounts a on a.id=c.practitioner_account_id or(c.kind='organization' and exists(select 1 from mhistree.memberships m join mhistree.assignments ass on ass.organization_id=m.organization_id and ass.account_id=m.account_id where m.organization_id=c.organization_id and m.account_id=a.id and m.active and 'appointments.manage'=any(m.privileges) and ass.patient_person_id=c.patient_person_id and ass.active))
  join mhistree.persons p on p.id=a.person_id join mhistree.professionals prof on prof.account_id=a.id and prof.status='approved' and 'appointments.manage'=any(prof.privileges)
- where c.patient_person_id=$1 and c.status='active' and a.status='active' and(c.kind='direct' or exists(select 1 from mhistree.organizations o where o.id=c.organization_id and o.status='approved')) limit 100`,
+ where mhistree.canonical_person(c.patient_person_id)=$1 and c.status='active' and a.status='active' and(c.kind='direct' or exists(select 1 from mhistree.organizations o where o.id=c.organization_id and o.status='approved')) limit 100`,
         [actor.personId],
       )
     ).rows;

@@ -1,6 +1,6 @@
 # Feature ownership and bounded navigation
 
-Revision 2026-10-10. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The active source lives in the codex/rebuild worktree; old entrypoints below now have a `legacy/` prefix there. The following foundation owners are implemented; the older planning table retains future targets, not claims of completion.
+Revision 2026-10-13. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The active source lives in the codex/rebuild worktree; old entrypoints below now have a `legacy/` prefix there. The following foundation owners are implemented; the older planning table retains historical targets, not claims of completion. Current T19-T31 owners are indexed below; no T32+ implementation is authorized by this phase.
 
 | Implemented owner | Entry/API and evidence |
 | --- | --- |
@@ -35,6 +35,22 @@ Every planned feature also receives `README.md` and meaningful `server.test.ts` 
 Dependencies and exact T06–T36 work packets: [task packets](tasks/rebuild-packets.md). Domain shapes: [identity/access](contracts/identity-access.md), [clinical records](contracts/clinical-records.md). Visual reference: [guide](design/UI_GUIDE.md). Current behavior/keep-adapt-replace rationale: [audit](audit/current-state.md).
 
 ## Implemented patient owners — 2026-10-11
+
+## Practitioner and Organization Owners - 2026-10-13
+
+| Tasks | Owner and entry points | Verification |
+| --- | --- | --- |
+| T19-T20 | [Practitioner](../features/practitioner/README.md), profile.ts and patients.ts; /clinician, /api/practitioner, /review | practitioner-profile, direct-connections; direct HTTP |
+| T21-T23 | [Clinical care](../features/clinical-care/README.md), work.ts, entries.ts, requests.ts; both workspace transports | clinical-work, clinical-entries, service-requests |
+| T24 | ai-chat/practitioner.ts -> authorized retrieval -> reviewed suggestion | practitioner-ai, live provider gate remains explicit |
+| T25 | practitioner/daily.ts with appointments and messaging | care tests and verify-direct-http.mts |
+| T26-T28 | [Organizations](../features/organizations/README.md), server/membership/assignments/care; /organizations and /api/organizations | organization approval/assignments/care; real HTTP |
+| T29 | [Identity](../features/identity/README.md) assistance.ts -> auth/server.ts; /organizations/assistance, /review/identity | real Keycloak identity-assistance and auth |
+| T30-T31 | identity/duplicates.ts, merge.ts; patient/staff flags, /review/duplicates, /api/review/merges | duplicates, merge, verify-organization-http.mts |
+
+Evidence: [recovered practitioner phase](tasks/practitioner-phase-evidence.md), [organization phase and dependency mind map](tasks/organization-phase-evidence.md). Read the latter for actual outcomes, open external gates and safe resume instructions. Current organization and identity producers reuse T07-T18 services; they do not replace the existing patient/direct engines.
+
+## Patient Owner Index
 
 | Owner | Actual entry points |
 | --- | --- |

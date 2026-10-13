@@ -27,6 +27,8 @@
 
 ## Remaining acceptance limits — do not hide these
 
+2026-10-13 owner update: optional contact verification/delivery is explicitly deferred to a future resource-backed task; required inputs and execution/acceptance guide are in [resource-dependent follow-ups](resource-dependent-follow-ups.md). T19-T31 producer screens now exist and their direct/organization HTTP journeys passed; the future-producer paragraph below records the original patient-phase checkpoint, not current absence. No production/human-review gate is falsely marked passed.
+
 - **T10/T18 full phase acceptance remains open for optional contact verification delivery.** No email/SMS delivery service is configured; contacts remain visibly unverified, cannot establish ownership or enable email login automatically. Core provider tests support a verified-email login fixture, but that does not verify the patient's delivery journey. Configure an approved delivery/provider flow, implement challenge/verification UI and exercise receipt/replay/contact-change before closing this gate. No invented contact is used for contactless login.
 - T13 currently supports text PDFs and UTF-8 text, not image OCR. Unreadable/scanned originals are retained with failure status. PDF keyword quarantine is not a certified malware scanner. Production durable storage, scanning, encrypted backup/restore and job deployment require T33/T35 evidence.
 - Jobs persist with bounded leases/attempts and explicit manual retry; processing is driven by the current request/UI. There is no deployed autonomous worker/dead-letter operator yet. Closing a tab can leave queued work, visible on return.

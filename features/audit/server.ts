@@ -1,6 +1,20 @@
 import "server-only";
 import type { PoolClient } from "pg";
 export type AuditAction =
+  | "identity.duplicate.flagged"
+  | "identity.duplicate.reviewed"
+  | "identity.merged"
+  | "identity.merge.reversed"
+  | "identity.support.requested"
+  | "identity.support.reviewed"
+  | "identity.recovery.designated"
+  | "organization.invited"
+  | "organization.membership.updated"
+  | "organization.assignment.updated"
+  | "organization.submitted"
+  | "organization.approved"
+  | "organization.rejected"
+  | "organization.suspended"
   | "clinical.request.updated"
   | "clinical.work.saved"
   | "clinical.entry.finalized"

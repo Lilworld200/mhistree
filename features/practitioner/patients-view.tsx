@@ -10,7 +10,21 @@ type Patient = {
   patient_person_id: string;
   status: string;
 };
-export function PatientsView({ initial }: { initial: Patient[] }) {
+type AssignedPatient = {
+  assignment_id: string;
+  organization_id: string;
+  organization_name: string;
+  connection_id: string;
+  basis_id?: string;
+  display_name: string;
+};
+export function PatientsView({
+  initial,
+  assigned = [],
+}: {
+  initial: Patient[];
+  assigned?: AssignedPatient[];
+}) {
   const [rows, setRows] = useState(initial),
     [candidates, setCandidates] = useState<
       { personId: string; displayName: string; reviewRequired: boolean }[]
@@ -30,11 +44,21 @@ export function PatientsView({ initial }: { initial: Patient[] }) {
   }
   return (
     <section className="patient-page">
-      <h1>My patients · Direct context</h1>
-      <p>
-        Finding a person identifies them; it does not authorize reading their
-        history. Organization contexts arrive with organization assignments.
-      </p>
+      <h1>My patients</h1>
+      <h2>Organization assignments</h2>
+      {assigned.length === 0 && <p>No active organization assignments.</p>}
+      {assigned.map((row) => (
+        <article className="record-card" key={row.assignment_id}>
+          <strong>{row.display_name}</strong>
+          <p>{row.organization_name}</p>
+          <Link
+            href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
+          >
+            Open organization record
+          </Link>
+        </article>
+      ))}
+      <h2>Direct connections</h2>
       {rows.map((row) => (
         <article className="record-card" key={row.id}>
           <strong>{row.display_name}</strong>
@@ -68,7 +92,7 @@ export function PatientsView({ initial }: { initial: Patient[] }) {
           {p.reviewRequired && (
             <p>
               Provisional identity: resolve uncertainty without opening another
-              person's history.
+              person’s history.
             </p>
           )}
           <form

@@ -33,7 +33,7 @@ export async function retrieveEvidence(
     const rows = (
       await a.tx.query(
         `select e.*,s.captured_at,s.chat_message_id,s.parent_source_id from mhistree.record_heads h join mhistree.contributions e on e.id=h.current_id join mhistree.sources s on s.id=e.source_id
-   where e.patient_person_id=$1 and e.visibility='finalized' order by
+   where mhistree.canonical_person(e.patient_person_id)=mhistree.canonical_person($1) and e.visibility='finalized' order by
    case when e.category in ('medication-use','allergy','baseline','ongoing') then 0 when e.body->>'text' ilike any($2::text[]) then 1 else 2 end,
    e.recorded_at desc,e.id desc limit 40`,
         [patientPersonId, words],

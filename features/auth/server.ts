@@ -51,26 +51,55 @@ export async function issueCredential(
     const code = secret();
     const issued = await transaction(async (tx) => {
       const actor = await verifySession(tx, staffSession);
-      await requireStaff(
+      const authority = await requireStaff(
         tx,
         { accountId: actor.accountId, contextId: data.contextId },
         data.purpose === "activation" ? "auth.activate" : "auth.recover",
       );
       const person = await tx.query(
-        "select id from mhistree.persons where id=$1 for update",
+        "select id,original_organization_id from mhistree.persons where id=$1 and canonical_person_id is null for update",
         [data.personId],
       );
       if (!person.rowCount) throw new DomainError("ACCESS_DENIED");
+      if (
+        authority.organization_id &&
+        person.rows[0].original_organization_id !== authority.organization_id &&
+        !(
+          await tx.query(
+            "select 1 from mhistree.connections where patient_person_id=$1 and organization_id=$2 and status='active'",
+            [data.personId, authority.organization_id],
+          )
+        ).rowCount
+      )
+        throw new DomainError("ACCESS_DENIED");
       const account = (
         await tx.query(
           "select * from mhistree.accounts where person_id=$1 and status<>'retired' for update",
           [data.personId],
         )
       ).rows[0];
+      const retired = !account
+        ? (
+            await tx.query(
+              "select * from mhistree.accounts where person_id=$1 and status='retired' order by last_successful_patient_login_at desc nulls last,id limit 1",
+              [data.personId],
+            )
+          ).rows[0]
+        : undefined;
+      const reversed =
+        retired &&
+        (
+          await tx.query(
+            "select 1 from mhistree.merge_journal j join mhistree.merge_reversals r on r.merge_operation_id=j.operation_id where j.loser_id=$1",
+            [data.personId],
+          )
+        ).rowCount;
+      if (retired && (data.purpose !== "recovery" || !reversed))
+        throw new DomainError("IDENTITY_REVIEW_REQUIRED");
       if (
         data.purpose === "activation"
           ? Boolean(account && account.status !== "setup")
-          : !account
+          : !account && !reversed
       )
         throw new DomainError("ACCESS_DENIED");
       const id = randomUUID();
@@ -82,6 +111,12 @@ export async function issueCredential(
             `u_${secret().slice(0, 22).toLowerCase()}`,
         ],
       );
+      // Reversal never reactivates an old credential. Reviewed recovery starts a new provider enrollment.
+      if (reversed)
+        await tx.query(
+          "update mhistree.auth_enrollments set login_identifier=$2,provider_subject=null where person_id=$1",
+          [data.personId, `u_${secret().slice(0, 22).toLowerCase()}`],
+        );
       await tx.query(
         `insert into mhistree.setup_credentials(id,person_id,purpose,digest,expires_at,issuer_account_id,evidence_reference) values($1,$2,$3,$4,clock_timestamp()+interval '20 minutes',$5,$6)`,
         [
@@ -98,13 +133,14 @@ export async function issueCredential(
         [id, data.personId],
       );
       if (data.purpose === "recovery") {
+        const recoveryAccount = account ?? retired;
         await tx.query(
-          `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1 where id=$1`,
-          [account.id],
+          `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1 where id=$1 and status<>'retired'`,
+          [recoveryAccount.id],
         );
         await tx.query(
           `update mhistree.sessions set retired_at=clock_timestamp() where account_id=$1 and retired_at is null`,
-          [account.id],
+          [recoveryAccount.id],
         );
         await tx.query(
           `insert into mhistree.auth_reconciliation(person_id,operation) values($1,'revoke-provider-sessions') on conflict(person_id) do update set pending=true,operation=excluded.operation,updated_at=clock_timestamp()`,
@@ -118,7 +154,9 @@ export async function issueCredential(
         contextId: data.contextId,
         referenceId: id,
       });
-      return { subject: account?.provider_subject as string | undefined };
+      return {
+        subject: (account ?? retired)?.provider_subject as string | undefined,
+      };
     }, pool);
     let providerRevocationPending = false;
     if (issued.subject && data.purpose === "recovery") {
@@ -206,10 +244,12 @@ export async function completeSetup(
         "update mhistree.setup_sessions set used_at=coalesce(used_at,clock_timestamp()) where credential_id=$1",
         [setup.id],
       );
-      await tx.query(
+      const activated = await tx.query(
         `insert into mhistree.accounts(person_id,provider,provider_subject,login_identifier,status) values($1,'keycloak',$2,$3,'active') on conflict(provider,provider_subject) do update set status='active',session_epoch=mhistree.accounts.session_epoch+1 where mhistree.accounts.status<>'retired'`,
         [setup.person_id, subject, setup.login_identifier],
       );
+      if (!activated.rowCount)
+        throw new DomainError("IDENTITY_REVIEW_REQUIRED");
       await tx.query(
         `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
         [setup.person_id],

@@ -1,9 +1,11 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 type Profile = {
+  accountId: string;
   display_name: string;
   birth_date: string | null;
   profile_version: number;
@@ -36,6 +38,8 @@ export function ProfileView({ initial }: { initial: Profile }) {
   return (
     <section className="patient-page">
       <h1>Your account</h1>
+      <p>Organization invitation identifier: {profile.accountId}</p>
+      <Link href="/identity/duplicates">Report a possible duplicate identity</Link>
       <p>
         Private login identifier: <strong>{profile.login_identifier}</strong>
       </p>

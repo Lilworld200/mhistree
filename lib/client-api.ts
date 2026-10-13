@@ -28,6 +28,7 @@ export function errorMessage(error: unknown) {
         CONFIGURATION_REQUIRED:
           "This service needs local configuration before it can run.",
         ACCESS_DENIED: "This action is not permitted.",
+        IDENTITY_REVIEW_REQUIRED: "Identity or ownership needs further review. Records remain separate.",
       } as Record<string, string>
     )[code] ??
     "The service is unavailable. Your saved information is retained. Please retry."

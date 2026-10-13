@@ -5,6 +5,7 @@ import { transaction } from "@/lib/db/client";
 import { requirePractitioner } from "./profile";
 import { directPatients } from "./patients";
 import { withAccess } from "@/features/access/server";
+import type { ActingContext } from "@/features/access/server";
 import { DomainError } from "@/lib/errors";
 export async function practitionerToday(pool: Pool, session: string) {
   const connections = (await directPatients(pool, session))
@@ -137,12 +138,13 @@ export async function markThreadRead(
   pool: Pool,
   session: string,
   connectionId: string,
+  selectedContext?: Extract<ActingContext, { kind: "organization" }>,
 ) {
   z.uuid().parse(connectionId);
   return withAccess(
     pool,
     session,
-    { kind: "direct", connectionId },
+    selectedContext ?? { kind: "direct", connectionId },
     async (a) => {
       const row = (
         await a.tx.query(

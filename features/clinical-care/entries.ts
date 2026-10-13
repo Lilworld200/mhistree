@@ -42,7 +42,7 @@ export async function finalizeEntryInAccess(
     })
     .strict()
     .parse(input);
-  if (context.kind !== "direct" && context.kind !== "organization")
+  if (context.kind !== "direct" && context.kind !== "organization" && context.kind !== "initial-care")
     throw new DomainError("ACCESS_DENIED");
 
   const row = (

@@ -1,4 +1,5 @@
 export type ErrorCode =
+  | "IDENTITY_REVIEW_REQUIRED"
   | "AUTH_REQUIRED"
   | "SESSION_RETIRED"
   | "ACCESS_DENIED"

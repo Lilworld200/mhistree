@@ -1,6 +1,6 @@
-# Identity and access contract v1 — planned
+# Identity and access contract v1
 
-Implementation checkpoint2026-10-10: T07–T09 now implement the foundational semantics in the private `mhistree` schema. [Feature map](../feature-map.md) and owning READMEs name actual APIs. Sessions use a provider-verified exchange followed by current opaque app-session registry checks; [auth contract](auth.md) specifies the tested Keycloak adapter. No webhooks are registered. Grants/reviewer/org producers and merge/reversal remain their later tasks. Clinical SQL policy and RLS share `mhistree.can_access`; prepared contexts never bypass rechecks. The original v1 shapes below remain the target semantic contract, not a requirement to match every property name literally.
+Implementation checkpoint 2026-10-12: T07-T31 foundational, patient, practitioner and organization producers now use the private `mhistree` schema. [Feature map](../feature-map.md) and owning READMEs name actual APIs. Sessions use a provider-verified exchange followed by current opaque app-session registry checks; [auth contract](auth.md) specifies the tested Keycloak adapter. No webhooks are registered. Clinical SQL policy and RLS share `mhistree.can_access`; prepared contexts never bypass rechecks. [Phase evidence](../tasks/organization-phase-evidence.md) distinguishes local implementation from launch acceptance. Shapes below specify semantics rather than identical implementation property names.
 
 Owner: identity/auth/access with organizations/practitioner policy projections. Producers T07–09; consumers T10,T17,T19–32. This document defines semantics, not deployed SQL. IDs below are opaque internal strings; provider subject is a separate string, never assumed UUID. Schema implementation must enforce referenced uniqueness/foreign keys and privilege separation.
 
@@ -36,6 +36,8 @@ type AccessContext = {
 
 initial-care is an explicit narrow registration/care basis for authorized care without a login; it is not another shared-history connection. Direct initial care requires verified practitioner/registration privilege; organization initial care requires approved org, membership/privilege and required assignment. basisId binds recorded identity/consent procedure, permitted actions/categories and origins. It never opens another provider's history. Staff may record in-person consent through its own audited operation. Do not synthesize patient self context for staff.
 
+Activation or retirement into a different canonical identity ends the initial-care path. A new care operation must establish a valid consent/assignment context; an old registration basis cannot bypass the activated survivor's sharing controls. Valid unactivated bases remain explicitly selectable in assigned-patient lists.
+
 Client sends selection IDs only. The server resolves canonical identity and establishes this context; arbitrary supplied actor, role, epoch, revision or qualification is rejected/ignored. Re-establish/recheck current authority at each operation and protected delivery; a previously validated struct is not a perpetual grant.
 
 Policy inputs: current account/session; person ownership; organization approval; membership/privileges; professional verification; assignment(patient, staff/team, categories, status); connection and consent; resource category, original person/org/context, lifecycle, author and permitted private team. These projections are read by access without importing producer service code. Roles are readable presets, not independent evidence of effective permission.
@@ -55,6 +57,16 @@ Duplicate candidates/evidence have limited visibility. Designated reviewer appro
 Lock participating identities and operation ID; recheck approval, account statuses and survivor evidence. Transaction writes canonical mapping/aliases, preserved immutable origin fields, before/after grant boundaries, mapping journal, session retirement and outbox. Retain clinical sources/versions and no wider permissions. Provider revocation is reconciled out of transaction while local retired state denies access. Repeat merge request returns prior result; conflicting concurrent merge gives VERSION_CONFLICT.
 
 Post-merge contributions retain original actor/context plus explicit origin partition and merge operation lineage; do not infer assignment during reversal. Reversal preview accounts for later records, corrections and consent. Unassignable later work requires support review, not silent copying to both people. Apply journaled mapping transactionally; reindex views; never restore retired credentials or unused tokens automatically.
+
+### Implemented Mapping Boundary
+
+The survivor's patient-read context resolves canonical_person for retained finalized records, chat and patient care/connection controls. Direct and organization reads still require the original connection patient ID, categories and consent origins. Neither connections, assignments, source ownership nor clinical rows are reparented. The journal retains their before-state; after-state grants are identical apart from revision invalidation. New writes retain the currently selected origin, with the immutable time-stamped mapping journal supplying reconciliation lineage. A patient cannot edit another account's authored reports merely because the identities were merged.
+
+Merge serializes mapping operations and participating auth changes, locks identities/accounts/connections, rechecks the approved snapshot and records a stable operation ID. Losing accounts, app sessions and unused setup credentials are retired atomically. Provider retirement runs afterward and has a restricted retry transport; local access stays blocked on failure. Read models query authoritative rows, not a separate merged copy or grant union.
+
+Reversal requires a fresh inventory digest of later contributions/versions, consent and mapping state. Writes to these tables are locked during reconciliation. Later records remain with their stored origin identity. Later consent explicitly spanning both identities requires support resolution before reversal. A survivor that has itself subsequently merged must first have that newer mapping reviewed/reversed. Prior credentials never revive: after reviewed reversal, separately designated recovery staff can issue fresh provider enrollment following renewed identity evidence. Ordinary activation of a retired identity is denied.
+
+Restricted reviewer contexts are review:professionals, review:organizations and review:identity with explicit corresponding privileges. Staff membership cannot self-grant qualification, recovery or review privileges. Operational menus are not security controls; every service rechecks its own authority.
 
 ## Errors, display models and checks
 

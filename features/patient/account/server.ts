@@ -111,7 +111,7 @@ export async function accountProfile(pool: Pool, session: string) {
         [actor.personId],
       )
     ).rows;
-    return { ...person, ...account, contacts };
+    return { ...person, ...account, contacts, accountId: actor.accountId };
   }, pool);
 }
 export async function updateProfile(

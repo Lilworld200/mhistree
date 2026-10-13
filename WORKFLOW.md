@@ -1,5 +1,11 @@
 # Mhistree execution memory
 
+## T01-T31 Local Closeout - 2026-10-13
+
+Owner authorized T26-T31 and T01-T31 continuity checks, with visual testing only when essential; reaffirmed 2026-10-13 to stop at T31 and not start later tasks. Active root remains `C:/Users/maseglo.com/.codex/worktrees/mhistree-rebuild/mhistree`, baseline `0e8081b`. [Organization phase evidence and dependency map](docs/tasks/organization-phase-evidence.md) records completed local implementation/verification. T26-T31 services/screens include immutable merge/reversal, fresh reviewed recovery after reversal, provider retirement retry and initial-care canonical-identity guard. Final full suite 74/74; final affected access/care/assignment/merge suite 18/18; direct and organization real HTTP journeys passed. Final typecheck/lint/build passed. All six new migrations applied only to local synthetic databases, never hosted in this turn. Existing practitioner changes remain preserved; changes are uncommitted and nothing was deployed.
+
+Resume trace 2026-10-13: re-read workflow, current changes and interrupted commands. An earlier 73/74 run had one stopped-Keycloak failure; restarting and rerunning resolved it, then the full suite passed 74/74. Live practitioner AI passed without replacing the provider with a mock. Original chat/files, original organizational grants, revoked scopes, stale reversal review and fresh post-reversal login are covered. No visual testing performed. Owner explicitly deferred contact verification and resource-dependent work: [future-task requirements and execution guide](docs/tasks/resource-dependent-follow-ups.md). These remain unverified future tasks, not silently counted as successful integration. The authorized local work stops here at T31. T32-T36 remain unstarted; local completion is not production launch approval. Preview: http://127.0.0.1:3101.
+
 Revision: 2026-10-11 (Africa/Lagos). Authorized scope: T10–T18 patient first, on top of verified T06–T09. Owner reaffirmed no routine browser/visual tests. T10–T18 local implementation and HTTP journey are present; full phase acceptance remains open for contact-verification delivery and declared external gates.
 
 ## Current patient-phase checkpoint
@@ -74,7 +80,7 @@ Verified T01–T05 rows mean preservation/planning outputs. T06–T09 are local 
 | T07 | People and identifiers | verified | Four real PostgreSQL18.4 tests passed: no-contact identity/care reference, non-linking, minimal lookup/denial, rate limit and immutable origins/audit. |
 | T08 | Contactless auth core | verified | Real Keycloak26.8/PostgreSQL tests: no-contact setup/login, atomic redemption, replay/expiry/replacement, recovery retirement, password change, logout, staff/role denial and rate limiting. Hosted production configuration is not certified. |
 | T09 | Access audit and atomic kernel | verified | Eleven real PostgreSQL tests cover current contexts/RLS, isolation, rollback/replay, correction conflicts, initial care, private file recheck, consent exclusions and revoked author denial. |
-| T10 | Patient account entry | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
+| T10 | Patient account entry | verified locally; contact delivery deferred | Owner-approved 2026-10-13 resource deferral; [future-task guide](docs/tasks/resource-dependent-follow-ups.md). No-contact account/activation/recovery verified. |
 | T11 | Durable patient chat | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
 | T12 | Temporal report extraction | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
 | T13 | Private originals and extraction | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
@@ -82,20 +88,20 @@ Verified T01–T05 rows mean preservation/planning outputs. T06–T09 are local 
 | T15 | Persistent state and corrections | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
 | T16 | Grounded retrieval and assessment | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
 | T17 | Patient access and account controls | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
-| T18 | Patient phase and care surfaces | locally implemented; acceptance limits open | See [patient evidence](docs/tasks/patient-phase-evidence.md); real service and HTTP checks, external delivery/producer gates explicitly retained. |
-| T19 | Practitioner profile verification | not-started | Bounded packet T19; PDF page 27; prerequisites/gate not yet run. |
-| T20 | Direct connections and registration | not-started | Bounded packet T20; PDF page 28; prerequisites/gate not yet run. |
-| T21 | Practitioner records and private work | not-started | Bounded packet T21; PDF page 29; prerequisites/gate not yet run. |
-| T22 | Finalize and correct clinical care | not-started | Bounded packet T22; PDF page 30; prerequisites/gate not yet run. |
-| T23 | Narrow service requests/results | not-started | Bounded packet T23; PDF page 31; prerequisites/gate not yet run. |
-| T24 | Practitioner AI with human review | not-started | Bounded packet T24; PDF page 32; prerequisites/gate not yet run. |
-| T25 | Direct-care daily work and gate | not-started | Bounded packet T25; PDF page 33; prerequisites/gate not yet run. |
-| T26 | Organization registration/approval | not-started | Bounded packet T26; PDF page 34; prerequisites/gate not yet run. |
-| T27 | Membership assignments and context | not-started | Bounded packet T27; PDF page 35; prerequisites/gate not yet run. |
-| T28 | Organization care producers | not-started | Bounded packet T28; PDF page 36; prerequisites/gate not yet run. |
-| T29 | Assisted activation and recovery UI | not-started | Bounded packet T29; PDF page 37; prerequisites/gate not yet run. |
-| T30 | Duplicate review | not-started | Bounded packet T30; PDF page 38; prerequisites/gate not yet run. |
-| T31 | Non-expanding merge/reversal | not-started | Bounded packet T31; PDF page 39; prerequisites/gate not yet run. |
+| T18 | Patient phase and care surfaces | verified locally; contact delivery deferred | Care producers now exercised by direct/organization HTTP. Owner deferred delivery; [future-task guide](docs/tasks/resource-dependent-follow-ups.md). |
+| T19 | Practitioner profile verification | verified locally | Professional submission/review and pending/suspended denial; practitioner-profile tests and direct HTTP. Production/external gates remain separately recorded. |
+| T20 | Direct connections and registration | verified locally | Shared identity lookup/registration, direct consent and My patients; direct-connections and HTTP. Production/external gates remain separately recorded. |
+| T21 | Practitioner records and private work | verified locally | Author work with current-context checks; clinical-work, privacy and revocation tests. Production/external gates remain separately recorded. |
+| T22 | Finalize and correct clinical care | verified locally | Atomic retained finalization/corrections; clinical-entries, rollback/replay and HTTP. Production/external gates remain separately recorded. |
+| T23 | Narrow service requests/results | verified locally | Recipient/transition/result authorization; service-requests and direct/organization HTTP. Production/external gates remain separately recorded. |
+| T24 | Practitioner AI with human review | verified locally | Live provider and independent revocation check passed in final focused run; no auto-finalization. Production/external gates remain separately recorded. |
+| T25 | Direct-care daily work and gate | verified locally | Real direct HTTP journey passed twice; care persistence/concurrency tests; practitioner-phase-evidence.md. Production/external gates remain separately recorded. |
+| T26 | Organization registration/approval | verified locally | Independent evidence/review, initial admin and status guards; targeted tests and real HTTP. Production/external gates remain separately recorded. |
+| T27 | Membership assignments and context | verified locally | Explicit invitations/privileges/consent/assignments; both contexts in My patients, no automatic fallback. Production/external gates remain separately recorded. |
+| T28 | Organization care producers | verified locally | No-contact initial care, assigned shared finalization and attributed results; organization-care tests. Production/external gates remain separately recorded. |
+| T29 | Assisted activation and recovery UI | verified locally | Real provider no-contact replacement/recovery, designated staff and old-session denial. Production/external gates remain separately recorded. |
+| T30 | Duplicate review | verified locally | Limited candidates/alias flags, independent reviewer and survivor/access preview; duplicates tests and HTTP. Production/external gates remain separately recorded. |
+| T31 | Non-expanding merge/reversal | verified locally | Locked replay/rollback, retained original files/chat/grants, revoked scope and later-work reversal; merge tests and HTTP. Production/external gates remain separately recorded. |
 | T32 | Cross-context and revocation integration | not-started | Bounded packet T32; PDF page 40; prerequisites/gate not yet run. |
 | T33 | Operations and required reviews | not-started | Bounded packet T33; PDF page 41; prerequisites/gate not yet run. |
 | T34 | Migration rehearsal | not-started | Bounded packet T34; PDF page 42; prerequisites/gate not yet run. |

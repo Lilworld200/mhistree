@@ -3,6 +3,8 @@ import { z } from "zod";
 import type { Pool } from "pg";
 import { withAccess } from "@/features/access/server";
 import { directWorkspace } from "@/features/practitioner/workspace";
+import { organizationWorkspace } from "@/features/organizations/care";
+import type { ActingContext } from "@/features/access/server";
 import { retrieveEvidence } from "./retrieval";
 import type { AIGateway } from "@/lib/ai/gateway";
 import { DomainError } from "@/lib/errors";
@@ -11,6 +13,7 @@ export async function practitionerAssistance(
   session: string,
   input: unknown,
   gateway: AIGateway,
+  selectedContext?: Extract<ActingContext, { kind: "organization" }>,
 ) {
   const d = z
     .object({
@@ -21,8 +24,10 @@ export async function practitionerAssistance(
     })
     .strict()
     .parse(input);
-  const context = { kind: "direct" as const, connectionId: d.connectionId };
-  const workspace = await directWorkspace(pool, session, d.connectionId);
+  const context = selectedContext ?? { kind: "direct" as const, connectionId: d.connectionId };
+  if (context.connectionId !== d.connectionId) throw new DomainError("ACCESS_DENIED");
+  const loadWorkspace = () => selectedContext ? organizationWorkspace(pool, session, selectedContext) : directWorkspace(pool, session, d.connectionId);
+  const workspace = await loadWorkspace();
   const evidence = await retrieveEvidence(
     pool,
     session,
@@ -59,7 +64,7 @@ export async function practitionerAssistance(
   const ids = new Set(evidence.evidence.map((e) => e.id));
   if (response.evidenceIds.some((id) => !ids.has(id)))
     throw new DomainError("PROVIDER_UNAVAILABLE");
-  await directWorkspace(pool, session, d.connectionId);
+  await loadWorkspace();
   const current = await retrieveEvidence(
     pool,
     session,

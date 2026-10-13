@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { withAccess } from "@/features/access/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
 import { directWorkspace } from "@/features/practitioner/workspace";
@@ -31,10 +32,24 @@ export async function GET(r: NextRequest) {
       session = sessionFrom(r),
       context = { kind: "direct" as const, connectionId };
     const data = await directWorkspace(pool, session, connectionId);
+    const canMessage = await withAccess(
+      pool,
+      session,
+      context,
+      async (a) =>
+        (
+          await a.tx.query(
+            "select mhistree.can_participate($1,'messages.send') allowed",
+            [connectionId],
+          )
+        ).rows[0].allowed as boolean,
+    );
     return success({
       ...data,
       requests: await requestList(pool, session, context),
-      messages: await careMessages(pool, session, context, connectionId),
+      messages: canMessage
+        ? await careMessages(pool, session, context, connectionId)
+        : null,
     });
   } catch (e) {
     return failure(e);

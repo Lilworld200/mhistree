@@ -71,6 +71,10 @@ function Navigation({ close }: { close?: () => void }) {
         <Icon n="steth" s={17} />
         Clinician workspace
       </Link>
+      <Link href="/organizations" onClick={close} className="nav-item">
+        <Icon n="share" s={17} />
+        Organizations
+      </Link>
       <Btn asChild kind="dark">
         <Link href="/profile" onClick={close}>
           Your account

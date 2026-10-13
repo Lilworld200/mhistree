@@ -17,13 +17,13 @@ export async function patientConnections(pool: Pool, session: string) {
  from mhistree.connections c left join mhistree.accounts a on a.id=c.practitioner_account_id left join mhistree.persons p on p.id=a.person_id
  left join mhistree.organizations o on o.id=c.organization_id
  left join lateral(select * from mhistree.consents where connection_id=c.id order by recorded_at desc,id desc limit 1)s on true
- where c.patient_person_id=$1 order by c.kind,c.id`,
+ where mhistree.canonical_person(c.patient_person_id)=$1 order by c.kind,c.id`,
         [actor.personId],
       )
     ).rows;
     const history = (
       await tx.query(
-        "select action,actor_account_id,context_id,recorded_at from mhistree.audit_events where person_id=$1 and (action in ('record.read','file.read.authorized') or action like 'connection.%') order by recorded_at desc,id desc limit 100",
+        "select action,actor_account_id,context_id,recorded_at from mhistree.audit_events where mhistree.canonical_person(person_id)=$1 and (action in ('record.read','file.read.authorized') or action like 'connection.%') order by recorded_at desc,id desc limit 100",
         [actor.personId],
       )
     ).rows;
@@ -55,7 +55,7 @@ export async function setPatientConsent(
     const actor = await verifySession(tx, session);
     const connection = (
       await tx.query(
-        "select * from mhistree.connections where id=$1 and patient_person_id=$2 for update",
+        "select * from mhistree.connections where id=$1 and mhistree.canonical_person(patient_person_id)=$2 for update",
         [data.connectionId, actor.personId],
       )
     ).rows[0];

@@ -1,6 +1,6 @@
 # Mhistree rebuild
 
-Read AGENTS.md, WORKFLOW.md and the current playbook task packet before editing. This is the independent `codex/rebuild` worktree. `legacy/` preserves the old application and migrations as reference only; do not execute its cleanup or expose its APIs.
+Read AGENTS.md, WORKFLOW.md and the current playbook task packet before editing. This rebuild can run from the project checkout or the independent `codex/rebuild` worktree. `legacy/` preserves the old application and migrations as reference only; do not execute its cleanup or expose its APIs. Local runtime configuration remains specific to each checkout; merging source does not copy ignored environment or database files.
 
 ## Local shell
 

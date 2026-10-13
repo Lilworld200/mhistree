@@ -114,7 +114,7 @@ export async function lookupPeople(
       ? z.string().min(1).max(80).parse(query.exactAlias)
       : z.string().trim().min(3).max(80).parse(query.namePrefix);
     const sql = exact
-      ? `select p.id,p.display_name,p.birth_date,p.identity_status from mhistree.patient_identifiers i join mhistree.persons p on p.id=coalesce((select canonical_person_id from mhistree.persons where id=i.person_id),i.person_id) where i.alias=$1 limit 1`
+      ? `select p.id,p.display_name,p.birth_date,p.identity_status from mhistree.patient_identifiers i join mhistree.persons p on p.id=mhistree.canonical_person(i.person_id) where i.alias=$1 limit 1`
       : `select id,display_name,birth_date,identity_status from mhistree.persons where lower(left(display_name,length($1)))=lower($1) order by created_at,id limit 10`;
     const { rows } = await tx.query(sql, [value]);
     await appendEvent(tx, {

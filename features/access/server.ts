@@ -123,7 +123,7 @@ export async function revokeConnection(
     const actor = await verifySession(tx, session);
     const connection = (
       await tx.query(
-        "select * from mhistree.connections where id=$1 and patient_person_id=$2 for update",
+        "select * from mhistree.connections where id=$1 and mhistree.canonical_person(patient_person_id)=$2 for update",
         [connectionId, actor.personId],
       )
     ).rows[0];

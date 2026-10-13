@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
+import type { ActingContext } from "@/features/access/server";
 type Entry = {
   id: string;
   logical_id: string;
@@ -46,7 +47,9 @@ type Workspace = {
     }[];
   } | null;
 };
-export function WorkspaceView({ connectionId }: { connectionId: string }) {
+export function WorkspaceView({ connectionId, organizationContext }: { connectionId: string; organizationContext?: ActingContext }) {
+  const endpoint = organizationContext ? "/api/organizations/workspace" : "/api/practitioner/workspace";
+  const query = organizationContext ? `context=${encodeURIComponent(JSON.stringify(organizationContext))}` : `connection=${connectionId}`;
   const [data, setData] = useState<Workspace | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
@@ -60,7 +63,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
     try {
       setData(
         await api<Workspace>(
-          `/api/practitioner/workspace?connection=${connectionId}`,
+          `${endpoint}?${query}`,
         ),
       );
     } catch (e) {
@@ -68,24 +71,36 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
       setSuggestion(null);
       setMessage(errorMessage(e));
     }
-  }, [connectionId]);
+  }, [endpoint, query]);
   useEffect(() => {
-    void refresh();
+    let active = true;
+    api<Workspace>(`${endpoint}?${query}`)
+      .then((value) => {
+        if (active) setData(value);
+      })
+      .catch((error) => {
+        if (active) {
+          setData(null);
+          setSuggestion(null);
+          setMessage(errorMessage(error));
+        }
+      });
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, 15000);
     window.addEventListener("focus", refresh);
     return () => {
+      active = false;
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
-  }, [refresh]);
+  }, [refresh, endpoint, query]);
   async function act(action: string, payload: unknown) {
     setBusy(true);
     setMessage("");
     try {
-      const result = await api<unknown>("/api/practitioner/workspace", {
-        connectionId,
+      const result = await api<unknown>(endpoint, {
+        ...(organizationContext ? { context: organizationContext } : { connectionId }),
         action,
         data: payload,
       });
@@ -129,7 +144,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
     <section className="patient-page">
       <h1>Patient workspace</h1>
       <p>
-        Acting context: direct connection {connectionId} · consent revision{" "}
+        Acting context: {organizationContext ? `${organizationContext.kind} ${"organizationId" in organizationContext ? organizationContext.organizationId : ""}` : `direct connection ${connectionId}`} · revision{" "}
         {data.revision}
       </p>
       <p>
@@ -224,7 +239,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
         {suggestion && (
           <label>
             <input type="checkbox" name="useAi" />
-            Retain this AI suggestion's provenance (clinical draft only)
+            Retain this AI suggestion’s provenance (clinical draft only)
           </label>
         )}
         <Btn type="submit" disabled={busy}>
@@ -374,7 +389,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
           )}
         </article>
       ))}
-      <h2>Practitioner AI assistance</h2>
+      {organizationContext?.kind !== "initial-care" && <><h2>Practitioner AI assistance</h2>
       <form
         className="account-form"
         onSubmit={async (e) => {
@@ -453,7 +468,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
           <input name="service" required />
         </label>
         <label>
-          Recipient's authorized direct connection ID
+          Recipient’s authorized connection ID
           <input name="connection" required />
         </label>
         <label>
@@ -613,6 +628,7 @@ export function WorkspaceView({ connectionId }: { connectionId: string }) {
       <Btn disabled={busy} onClick={() => void act("read", {})}>
         Mark displayed thread read
       </Btn>
+      </>}
     </section>
   );
 }
