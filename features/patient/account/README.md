@@ -1,0 +1,9 @@
+# Patient account entry
+
+T10 composes the T07/T08 identity/authentication services. `server.ts` owns idempotent self-enrollment, minimal profile reads, expected-version profile edits and optional unverified contacts. `entry.tsx` supplies registration, private-code redemption, patient password setup and login; `profile.tsx` supplies profile/contact edits and logout. `/api/auth/[operation]` and `/api/account` validate HTTP inputs and return bounded errors. `lib/http.ts` enforces configured Origin, JSON limits and HttpOnly/SameSite cookies; `lib/auth/patient.ts` guards patient routes. Every service verifies current sessions independently.
+
+Self-enrollment uses a random browser-held operation secret, stores only its hash, creates one provisional person and reuses setup core. Invitation claims never call self-registration. Contacts never transfer account ownership or automatically become verified. SMTP/contact verification delivery is unavailable until configured; UI says so. Public IDs cannot sign in. Clinical records are unaffected by demographic edits.
+
+Tests: tests/integration/patient-account.test.ts (real PostgreSQL and Keycloak), prior auth/identity tests. Configuration: APP_ORIGIN, DATABASE_URL/DATABASE_SSL, AUTH_BASE_URL/REALM/CLIENT_ID/CLIENT_SECRET. A conservative global entry rate bucket is used until a deployment supplies a validated trusted proxy chain. Never trust arbitrary forwarded headers.
+
+Failure points: provider unavailable, expired/replaced setup, missing environment, retired sessions, profile version conflicts. T11 depends on the person mapping/session. T29 provides staff recovery UI; T33 owns production provider and contact delivery operations.

@@ -644,3 +644,9 @@ The 2026-10-09 owner instruction required extracting the existing AGENTS, filter
 Source map: operating rules/canon pp. 1-8; tasks pp. 9-44; AGENTS contract p. 45; WORKFLOW p. 46; maintenance/errors p. 47; integrated acceptance p. 48; provenance/defaults/references p. 49.
 
 Official implementation references named by the playbook: Next.js project structure, authentication, Server/Client Components, and Supabase password authentication. Consult current official documentation against selected versions during implementation. This refactor does not certify any installed provider behavior.
+
+Read the relevant installed Next.js guide in `node_modules/next/dist/docs/` before changing framework boundaries. Pin behavior to the selected version; for example, Next16.3 error retry can refetch, while reset only re-renders. Keep generated framework guidance from overwriting or repeatedly appending to this product brain.
+
+### Owner-selected email services (2026-10-11)
+
+Use Resend as the main email provider and Supabase Auth email sending for email authentication/verification. Preserve no-contact authentication, permanent person/account separation, verified contact state and current server authorization. Provider selection is not proof of configured delivery. Any additional provider identity/session must be explicitly bound to the existing account; do not create duplicate people, merge by email or grant clinical authority from a verified email alone. Use only a confirmed Mhistree environment, never the unrelated Reslz project. Keep configuration and delivery acceptance evidence in WORKFLOW.

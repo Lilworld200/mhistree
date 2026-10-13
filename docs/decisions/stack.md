@@ -1,5 +1,11 @@
 # T04 stack and contactless authentication decision
 
+## Implemented T06–T09 decision — 2026-10-10
+
+The documentary Clerk candidate below is superseded for the rebuild. The owner confirmed no contactless development instance should be assumed and authorized a fresh setup. Selected adapter: Keycloak26.8 with supported username/password and optional verified email, tested against an isolated real loopback provider; PostgreSQL18.4 native local clusters prove transactions/RLS. This avoids the unrelated connected Reslz project and does not synthesize patient contacts. The extra auth service is justified by the contactless invariant, with hosting/hardening costs explicit. It is an implementation choice, not a new owner product requirement. See [auth contract](../contracts/auth.md) and [shared foundation evidence](../tasks/shared-foundations-evidence.md).
+
+Pinned application versions are in package.json/pnpm-lock.yaml. Server-only `pg` transactions operate the private schema; hosted Supabase compatibility/configuration is not claimed from native tests. No hosted credentials, production data, old account migration or cutover was performed. Keycloak local development settings and direct-grant adapter require production security/operations review before deployment. The remaining sections retain the T04 candidate history.
+
 2026-10-09. Status: documented candidate and feasibility plan; no provider account/configuration change or live auth spike performed. Product requirements are fixed; vendor selection is replaceable. No package upgrades during preservation/planning.
 
 ## Application/backend

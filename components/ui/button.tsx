@@ -1,6 +1,6 @@
 "use client";
 
-import { Slot } from "@radix-ui/react-slot";
+import { Slot, Slottable } from "@radix-ui/react-slot";
 import * as Tooltip from "@radix-ui/react-tooltip";
 import React from "react";
 import { cn } from "@/lib/utils/cn";
@@ -29,7 +29,7 @@ export function Btn({
       {...rest}
     >
       {icon && <Icon n={icon} s={sm ? 15 : 17} />}
-      {children}
+      <Slottable>{children}</Slottable>
     </Comp>
   );
 }

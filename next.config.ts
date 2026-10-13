@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
-  /* config options here */
+const config: NextConfig = {
+  agentRules: false,
+  poweredByHeader: false,
+  serverExternalPackages: ["pg"],
 };
-
-export default nextConfig;
+export default config;

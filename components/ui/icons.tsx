@@ -77,14 +77,27 @@ export function Icon({
 
 export function Logo({ s = 30 }: { s?: number }) {
   return (
-    <svg width={s} height={s} viewBox="0 0 32 32" fill="none" aria-hidden="true">
+    <svg
+      width={s}
+      height={s}
+      viewBox="0 0 32 32"
+      fill="none"
+      aria-hidden="true"
+    >
       <defs>
         <linearGradient id="mhistree-logo-lgx" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#68A4FF" />
           <stop offset="1" stopColor="#2F74D8" />
         </linearGradient>
       </defs>
-      <rect x="1" y="1" width="30" height="30" rx="10" fill="url(#mhistree-logo-lgx)" />
+      <rect
+        x="1"
+        y="1"
+        width="30"
+        height="30"
+        rx="10"
+        fill="url(#mhistree-logo-lgx)"
+      />
       <path d="M16 25v-7" stroke="#fff" strokeWidth="2" strokeLinecap="round" />
       <path
         d="M16 6c4 0 7 2.8 7 6.4 0 2.8-2.2 4.6-4.8 4.6h-4.4C11.2 17 9 15.2 9 12.4 9 8.8 12 6 16 6z"

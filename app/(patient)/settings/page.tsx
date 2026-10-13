@@ -1,6 +1,4 @@
-﻿import { SettingsView } from "@/features/settings/components/settings-view";
-
-export default function Page() {
-  return <SettingsView />;
+import { redirect } from "next/navigation";
+export default function Settings() {
+  redirect("/sharing");
 }
-
