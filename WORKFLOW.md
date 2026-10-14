@@ -1,5 +1,11 @@
 # Mhistree execution memory
 
+## Auth navigation update - 2026-10-14
+
+Owner requested replacing the three-way /auth toggle with conventional sign-in/sign-up views and secondary setup-code access. Updated `features/patient/account/entry.tsx` and `app/globals.css`: default Sign in, reciprocal account prompts, “Other ways to sign in” / “Use a setup or recovery code,” and Back to sign in from redemption. Retained no-contact signup, existing-person redemption, restricted password setup, pending/error states and server operations. Account README records the navigation. Wording research: Microsoft Support uses “Other ways to sign in” (https://support.microsoft.com/en-us/authenticator/sign-in-using-microsoft-authenticator).
+
+Verification: targeted ESLint, typecheck and git diff --check passed. Initial typecheck found null bytes in ignored `.next/dev/types/root-params.d.ts`; `next typegen` regenerated the production counterpart and that fresh framework-generated declaration replaced the corrupt development cache file. No tracked framework configuration changed. No browser/visual tests or backend changes; source edits remain uncommitted in the project checkout.
+
 ## Project checkout integration - 2026-10-14
 
 Owner authorized merging the Codex rebuild into the actual project checkout after resolving conflicts and checking readiness. The current project root is `C:/Users/maseglo.com/Documents/FS-projects/Mhistree/mhistree`, branch `codex/preservation-planning`. Rebuild source through T31, including previously uncommitted organization/identity work saved as `bb22701`, is now integrated here. The independent `codex/rebuild` worktree remains available; older root/uncommitted statements below are historical checkpoints, not the current integration state.

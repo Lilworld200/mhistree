@@ -93,34 +93,15 @@ export function AccountEntry({
         />
         <h1>
           {mode === "login"
-            ? "Welcome back"
+            ? "Sign in"
             : mode === "signup"
               ? "Create your account"
               : mode === "redeem"
-                ? "Claim your care record"
+                ? "Use your setup or recovery code"
                 : "Choose your password"}
         </h1>
         <p className="muted">Your health story, kept together.</p>
-        {mode !== "setup" && (
-          <div className="account-tabs">
-            {(["login", "signup", "redeem"] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                aria-pressed={mode === value}
-                onClick={() => change(value)}
-                disabled={pending}
-              >
-                {value === "login"
-                  ? "Sign in"
-                  : value === "signup"
-                    ? "Register"
-                    : "Setup code"}
-              </button>
-            ))}
-          </div>
-        )}
-        <form onSubmit={submit} className="account-form">
+        <form key={mode} onSubmit={submit} className="account-form">
           {mode === "signup" && (
             <>
               <label>
@@ -213,6 +194,46 @@ export function AccountEntry({
                   : "Continue"}
           </Btn>
         </form>
+        {(mode === "login" || mode === "signup") && (
+          <div className="account-navigation">
+            <p>
+              {mode === "login"
+                ? "Don’t have an account? "
+                : "Already have an account? "}
+              <button
+                type="button"
+                className="account-link"
+                onClick={() => change(mode === "login" ? "signup" : "login")}
+                disabled={pending}
+              >
+                {mode === "login" ? "Sign up" : "Sign in"}
+              </button>
+            </p>
+            <div className="account-other-methods">
+              <p className="muted">Other ways to sign in</p>
+              <button
+                type="button"
+                className="account-link"
+                onClick={() => change("redeem")}
+                disabled={pending}
+              >
+                Use a setup or recovery code
+              </button>
+            </div>
+          </div>
+        )}
+        {mode === "redeem" && (
+          <p className="account-navigation">
+            <button
+              type="button"
+              className="account-link"
+              onClick={() => change("login")}
+              disabled={pending}
+            >
+              Back to sign in
+            </button>
+          </p>
+        )}
         <p className="muted">
           Your public Mhistree ID is a record locator, not a login credential.
         </p>
