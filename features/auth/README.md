@@ -1,5 +1,15 @@
 # Authentication core
 
+## Current Supabase MVP - 2026-10-14
+
+`email.ts` owns email/password signup, live verified-subject binding, login, confirmation, verification resend, email-reset requests, restricted reset completion and reviewed staff setup. `lib/auth/supabase.ts` performs supported Supabase SDK calls; `config.ts` selects it. `sessions.ts` still enforces current local account/epoch authority on every clinical operation. The new private migration adds pending enrollments, single-use proof journals, provider cutoffs and reviewed provider-transition history. A verified reset JWT must have recent provider OTP/recovery authentication; a normal password JWT cannot call email reset completion. Provider sign-out precedes password change because admin password updates may invalidate that session.
+
+Staff-created patients may have no account/email/password; MVP activation now requires email. Keycloak functions/tests below are historical and not selected by active routes. Primary login contact removal is denied; email changes need a dedicated verified provider/contact operation. Supabase identity disabling during retirement is not represented as instant revocation of delivered JWTs; current local retirement/epoch and provider cutoff deny reuse in the app. No private schema is exposed through the Data API.
+
+Run `pnpm exec vitest run tests/integration/supabase-email.test.ts`. Opt-in real provider test: set MHISTREE_LIVE_AUTH_TEST=1; it uses only a temporary synthetic identity in the intended Mhistree project, generates a recovery proof without sending email, verifies old-password/session denial and cleans up that exact test user. Inbox receipt remains unverified until owner configuration/testing. [Manual SMTP/callback setup](../../docs/tasks/supabase-auth-setup.md).
+
+## Historical Keycloak foundation
+
 T29-T31 update: staff assistance screens call the same issuance service. Organizational issuance requires current privilege and an original organizational person or active connection. Merge retires accounts/sessions/setup credentials locally; reconciliation.ts provides reviewer-restricted provider-retirement retry. Controlled reversal leaves retired accounts untouched. A new identity-checked recovery after reversal creates a fresh provider enrollment; ordinary activation cannot reuse a retired login. completeSetup checks its account write succeeded before reporting success. Real auth/identity-assistance/merge tests cover these paths. T10 transports now exist; the future-tense transport paragraph below is the historical foundation contract, not an absent implementation.
 
 T08 owns setup/recovery credentials, restricted setup sessions, app sessions and provider reconciliation. `server.ts` exports issueCredential, redeemCredential, completeSetup, signIn, signOut. `sessions.ts` verifies every current local session; `lib/auth/keycloak.ts` owns provider I/O and signed-token validation. No staff API accepts a patient password. Passwords are submitted only with the restricted patient setup bearer and never stored in app tables/logs. Tokens are32 random bytes, SHA256 digests at rest.

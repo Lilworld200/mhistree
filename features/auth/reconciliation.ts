@@ -1,7 +1,7 @@
 import "server-only";
 import type { Pool } from "pg";
 import { z } from "zod";
-import type { KeycloakProvider } from "@/lib/auth/keycloak";
+import type { CredentialProvider } from "@/lib/auth/provider";
 import { transaction } from "@/lib/db/client";
 import { requireStaff } from "@/features/identity/server";
 import { verifySession } from "./sessions";
@@ -9,7 +9,7 @@ import { DomainError } from "@/lib/errors";
 /** Restricted retry; local retirement denies access during provider outages. */
 export async function reconcileRetiredSessions(
   pool: Pool,
-  provider: KeycloakProvider,
+  provider: CredentialProvider,
   session: string,
   personId: string,
 ) {
@@ -29,7 +29,7 @@ export async function reconcileRetiredSessions(
     ).rows;
   }, pool);
   for (const row of rows) {
-    if (row.provider !== "keycloak")
+    if (row.provider !== (provider.name ?? "keycloak"))
       throw new DomainError("PROVIDER_UNAVAILABLE");
     await provider.revokeSessions(row.provider_subject);
   }

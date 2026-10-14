@@ -1,5 +1,11 @@
 # T04 stack and contactless authentication decision
 
+## Supabase MVP decision - 2026-10-14
+
+Owner explicitly switched authentication back to Supabase and deferred no-email login. Active source now uses Supabase email/password signup, verified-email identity binding, login, password-reset request/callback and reviewed staff activation. Staff-created Person records still need no email/password until login activation. Supabase phone/password and SMS OTP are supported vendor capabilities, but no SMS service is configured or newly implemented. Keycloak is retained solely as historical evidence; do not deploy it as the current MVP provider. Existing patient records/credentials are not bulk migrated by this source change. Custom SMTP and redirect allowlists must be configured for real-user delivery.
+
+2026-10-14 clarification: only authorized organizations/practitioners may create users without email and password. Owner requested documentation only and an explanation of the historical Keycloak choice. The choice below was an agent implementation decision addressing the earlier broad contactless-login requirement; it is replaceable and not mandated by the product. Creating a Person without credentials does not itself require Keycloak. Later activation/login requirements must be settled before concluding whether Keycloak remains necessary. No provider migration or email-recovery bridge has been authorized in this clarification.
+
 ## Implemented T06–T09 decision — 2026-10-10
 
 The documentary Clerk candidate below is superseded for the rebuild. The owner confirmed no contactless development instance should be assumed and authorized a fresh setup. Selected adapter: Keycloak26.8 with supported username/password and optional verified email, tested against an isolated real loopback provider; PostgreSQL18.4 native local clusters prove transactions/RLS. This avoids the unrelated connected Reslz project and does not synthesize patient contacts. The extra auth service is justified by the contactless invariant, with hosting/hardening costs explicit. It is an implementation choice, not a new owner product requirement. See [auth contract](../contracts/auth.md) and [shared foundation evidence](../tasks/shared-foundations-evidence.md).

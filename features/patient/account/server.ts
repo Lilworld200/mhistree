@@ -185,6 +185,11 @@ export async function removeContact(pool: Pool, session: string, id: string) {
   z.uuid().parse(id);
   return transaction(async (tx) => {
     const actor = await verifySession(tx, session);
+    const loginContact = await tx.query(
+      `select 1 from mhistree.contacts c join mhistree.accounts a on a.person_id=c.person_id where c.id=$1 and a.id=$2 and a.provider='supabase' and c.kind='email' and lower(c.address)=lower(a.login_identifier)`,
+      [id, actor.accountId],
+    );
+    if (loginContact.rowCount) throw new DomainError("ACCESS_DENIED");
     await tx.query(
       "delete from mhistree.contacts where id=$1 and person_id=$2",
       [id, actor.personId],

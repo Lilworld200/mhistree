@@ -1,0 +1,121 @@
+"use client";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { api, errorMessage } from "@/lib/client-api";
+import { AuthField } from "./auth-field";
+import { Btn } from "@/components/ui/button";
+
+export function EmailCallback({ recovery = false }: { recovery?: boolean }) {
+  const router = useRouter();
+  const token = useRef("");
+  const started = useRef(false),
+    busy = useRef(false);
+  const [ready, setReady] = useState(false),
+    [pending, setPending] = useState(false),
+    [error, setError] = useState(""),
+    [done, setDone] = useState(false);
+  useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    async function initialize() {
+      // Hydration cannot read URL fragments. Capture and clear them after mount.
+      await Promise.resolve();
+      const params = new URLSearchParams(window.location.hash.slice(1));
+      token.current = params.get("access_token") ?? "";
+      window.history.replaceState(null, "", window.location.pathname);
+      if (!token.current || params.has("error")) {
+        setError("This link is invalid or expired. Request a new link.");
+        return;
+      }
+      if (recovery) {
+        setReady(true);
+        return;
+      }
+      api("/api/auth/confirm", { token: token.current })
+        .then(() => {
+          token.current = "";
+          router.replace("/chat");
+          router.refresh();
+        })
+        .catch((caught) => {
+          setError(errorMessage(caught));
+        });
+    }
+    void initialize();
+  }, [recovery, router]);
+  return (
+    <main className="account-stage">
+      <section className="account-card">
+        <h1>{recovery ? "Choose a new password" : "Verify your email"}</h1>
+        {!recovery && !error && <p role="status">Verifying your email…</p>}
+        {recovery && ready && !done && (
+          <form
+            className="account-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (busy.current) return;
+              const data = new FormData(event.currentTarget);
+              if (data.get("password") !== data.get("confirm")) {
+                setError("Passwords do not match.");
+                return;
+              }
+              busy.current = true;
+              setPending(true);
+              setError("");
+              try {
+                await api("/api/auth/reset-password", {
+                  token: token.current,
+                  password: data.get("password"),
+                });
+                token.current = "";
+                setDone(true);
+              } catch (caught) {
+                setError(errorMessage(caught));
+              } finally {
+                busy.current = false;
+                setPending(false);
+              }
+            }}
+          >
+            <AuthField
+              label="New password"
+              name="password"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
+            <AuthField
+              label="Confirm password"
+              name="confirm"
+              type="password"
+              autoComplete="new-password"
+              minLength={12}
+              maxLength={128}
+              required
+            />
+            <Btn kind="dark" type="submit" disabled={pending}>
+              {pending ? "Updating…" : "Update password"}
+            </Btn>
+          </form>
+        )}
+        {error && <p role="alert">{error}</p>}
+        {done && (
+          <p role="status">
+            Password updated. Your previous sign-in sessions have ended.
+          </p>
+        )}
+        <p className="account-navigation">
+          <Link
+            className="account-link"
+            href={recovery && !done ? "/recovery" : "/auth"}
+          >
+            {recovery && !done ? "Request another link" : "Back to sign in"}
+          </Link>
+        </p>
+      </section>
+    </main>
+  );
+}

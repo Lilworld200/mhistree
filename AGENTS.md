@@ -1,6 +1,6 @@
 # Mhistree: portable product specification and agent rules
 
-Revision: 2026-10-10. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages.
+Revision: 2026-10-14. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages, with subsequent explicit owner decisions recorded below.
 Source SHA-256: 4FB82A3DB86AEA4DC07E8D3B96C354FF847E4A34C6F0CD99C664F3FB14833C6A.
 
 This file is Mhistree's portable project brain. It defines the product, its boundaries, the meaning of its records, and the discipline required to implement it. It must be understandable to a developer or agent without previous chat history. It describes required behavior, not proof that existing code works.
@@ -65,7 +65,7 @@ These are required meanings, not a mandated database schema.
 
 ### 2.2 Included in the first usable release
 
-- Patient self-registration, authorized practitioner/organization registration, activation, login, account/contact controls, and recovery without mandatory contacts.
+- Patient self-registration with email/password and email verification, authorized practitioner/organization registration of people without credentials, activation, login, account/contact controls, and email or reviewed assisted recovery. MVP login activation requires email; no-email authentication is deferred by the owner.
 - Reviewed professional profiles; organization registration/approval; membership, privileges, assignments, and explicit contexts.
 - Independent direct and organization connections; login approval or recorded in-person consent; narrowing, revocation, reconnection, and explicit review of paused work.
 - Durable patient AI chat, automatic capture of clear reports, temporal interpretation, original documents, resilient extraction, source-linked timeline, persistent health details, and corrections.
@@ -84,7 +84,7 @@ Medication/prescription recording does not imply electronic prescribing or fulfi
 ### 2.4 Non-negotiable invariants
 
 - Identification is not authentication or authorization.
-- No-contact and unactivated patients remain supported throughout care, activation, and recovery.
+- No-contact and unactivated patients remain supported throughout care and staff registration. MVP authentication requires email/password; no-email login is a future capability, not a current release gate.
 - Every protected operation checks current server-established authority in one explicit context.
 - Consent ceilings and original grant/provenance boundaries cannot be widened by assignments, context switching, or merging.
 - Revocation ends dependent access while preserving history; reconnection never automatically restarts paused work.
@@ -98,6 +98,8 @@ Medication/prescription recording does not imply electronic prescribing or fulfi
 
 ## 3. Identity, registration, activation, and recovery
 
+Owner decision (2026-10-14, supersedes the earlier documentation-only clarification): switch MVP authentication to Supabase Auth and prioritize patient signup with email/password, email verification and email password reset. Only authorized organizations/practitioners may create a patient record without email/password; that record is not an activated login. Patient activation binds verified email authentication to the existing permanent person through the authorized setup process. No-email login is explicitly deferred until a future supported service is selected. Never fabricate contacts or link ownership by email alone. Phone authentication is being considered; do not enable it without an SMS provider and verified delivery. This decision authorizes source/auth integration changes, not destructive migration of existing patient data.
+
 ### 3.1 People and controlled lookup
 
 - Aim for one permanent person identity while allowing separate provisional identities whenever a match is uncertain. Care continues without opening the possible match's history.
@@ -107,16 +109,16 @@ Medication/prescription recording does not imply electronic prescribing or fulfi
 - Self-registration and authorized practitioner/organization registration reuse identity operations. Preserve creator, original context, and source ownership.
 - Activation claims a hospital-created person; do not create another identity merely because the patient now wants a login.
 
-### 3.2 Activation and contactless login
+### 3.2 Activation and MVP email login
 
 1. Issue a private expiring single-use setup code directly, or a one-time email link when email is available.
 2. Use supported cryptographic primitives and secure randomness; store credentials hashed at rest. Atomic redemption allows concurrent attempts to succeed once.
-3. Redemption grants a restricted setup session. The patient sets their own password and may add contacts. Staff never choose the password or impersonate the patient.
-4. Support a feasible provider-backed username/opaque identifier plus password login path without contacts. A public Mhistree ID alone never authenticates.
+3. Redemption grants a restricted setup session. For the MVP the patient supplies their own email/password and verifies email before obtaining clinical access. Staff never choose the password or impersonate the patient.
+4. Use supported Supabase email/password login and recovery. A public Mhistree ID alone never authenticates. Staff-created no-contact people may continue receiving care without activating a login.
 5. Explain pending, invalid, expired, used, and replaced credentials without leaking account existence. Offer authorized replacement/recovery.
 6. Enforce attempt limits, session freshness, logout, and direct protection of routes and service calls.
 
-Contactless authentication is an invariant. Verify the adapter with real integration behavior before committing to a provider. If direct support is insufficient, document a supported identifier-based adapter. Never synthesize patient contacts, expose service credentials, or hand-roll cryptography to force compatibility. Mocks do not establish provider feasibility.
+The original contactless-login requirement is superseded for this MVP by the 2026-10-14 owner decision. Preserve a future adapter boundary, but do not build speculative no-email login. Verify the selected Supabase integration with real provider behavior; email delivery requires configured SMTP and valid callback URLs. Never synthesize patient contacts, expose service credentials, or hand-roll cryptography. Mocks do not establish delivery or provider feasibility.
 
 ### 3.3 Replacement and recovery
 

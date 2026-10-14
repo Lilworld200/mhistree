@@ -1,5 +1,7 @@
 # Resource-Dependent Follow-Ups
 
+2026-10-14 superseding auth scope: owner selected Supabase email/password for the MVP and deferred no-email authentication. Email signup/confirmation/resend/reset code now exists; owner explicitly takes responsibility for SMTP and callback configuration. See [manual setup](supabase-auth-setup.md). Initial verified login email is now implemented; additional contact-change verification and SMS provider delivery remain separate future work. Original deferrals below do not mean the new email-auth code is absent.
+
 Owner decision, 2026-10-13: keep contact verification and work lacking required resources as future tasks, and document what to provide/how to execute. This is explicit authorization to defer those resource-dependent gates, not evidence they passed. Current execution stops at T31. No T32-T36 work is started by this guide.
 
 ## Optional Contact Verification - T10/T18 Deferred

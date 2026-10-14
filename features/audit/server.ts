@@ -1,6 +1,9 @@
 import "server-only";
 import type { PoolClient } from "pg";
 export type AuditAction =
+  | "auth.supabase.activated"
+  | "auth.supabase.staff-recovery.completed"
+  | "auth.email.password-reset"
   | "identity.duplicate.flagged"
   | "identity.duplicate.reviewed"
   | "identity.merged"

@@ -17,7 +17,10 @@ export function errorMessage(error: unknown) {
   return (
     (
       {
-        AUTH_REQUIRED: "Check your login identifier and password.",
+        EMAIL_DELIVERY_UNAVAILABLE:
+          "Email delivery is not configured for this address yet. Please contact Mhistree support.",
+        AUTH_REQUIRED:
+          "Check your email and password, and verify your email before signing in.",
         SESSION_RETIRED: "Your session ended. Please sign in again.",
         TOKEN_INVALID:
           "This setup code is invalid, expired, already used or replaced. Ask the issuing care team for a replacement.",
@@ -28,7 +31,8 @@ export function errorMessage(error: unknown) {
         CONFIGURATION_REQUIRED:
           "This service needs local configuration before it can run.",
         ACCESS_DENIED: "This action is not permitted.",
-        IDENTITY_REVIEW_REQUIRED: "Identity or ownership needs further review. Records remain separate.",
+        IDENTITY_REVIEW_REQUIRED:
+          "Identity or ownership needs further review. Records remain separate.",
       } as Record<string, string>
     )[code] ??
     "The service is unavailable. Your saved information is retained. Please retry."

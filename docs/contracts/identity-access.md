@@ -6,6 +6,10 @@ Owner: identity/auth/access with organizations/practitioner policy projections. 
 
 ## Identity and session
 
+Current owner decision, 2026-10-14: Supabase email/password is the MVP login provider; no-email login is explicitly deferred. Staff still register Persons without credentials. Verified Supabase subject is bound using pending self-enrollment or a one-time staff setup approval, never by email matching or editable user metadata. Provider transitions retain the permanent Person and existing account/privilege IDs under reviewed ownership. Prior contactless-login statements below describe the superseded foundation contract.
+
+Owner clarification, 2026-10-14 (not implemented): only authorized organizations/practitioners may create a user without email and password; ordinary patient self-signup must not offer that same creation path. Creating an unactivated Person/care record is separate from issuing a login Account. The owner requested documentation only; reconcile later activation details before any service/UI change. Existing no-contact self-enrollment behavior is implementation history, not approval under this clarification.
+
 Person: id, permanent public locator, createdAt, provisional status, immutable originPersonId and current canonical mapping. Account: id, personId, provider+subject unique pair, status (setup/active/recovery-pending/retired), sessionEpoch, lastSuccessfulPatientLoginAt. Contact: person/account association as appropriate, kind, normalized address and independently verifiedAt; optional zero-to-many. An unactivated person has zero accounts. Alias uniquely resolves a historical locator to canonical person without granting access.
 
 No automatic link by shared email/phone/name. Controlled lookup returns minimum matching identifiers/demographics to permitted actors, bounded/rate-limited, no record snippets. Uncertain matches produce a provisional person and review request. Original registration institution/person lineage is immutable. Support/admin/reviewer privileges do not imply clinical browsing.

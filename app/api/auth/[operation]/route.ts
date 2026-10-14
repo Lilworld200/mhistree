@@ -2,13 +2,16 @@ import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
 import { authenticationProvider as authProvider } from "@/lib/auth/config";
-import { beginRegistration } from "@/features/patient/account/server";
 import {
-  completeSetup,
-  redeemCredential,
-  signIn,
-  signOut,
-} from "@/features/auth/server";
+  signupEmail,
+  setupEmail,
+  loginEmail,
+  confirmEmail,
+  requestEmailReset,
+  resetEmailPassword,
+  resendVerification,
+} from "@/features/auth/email";
+import { redeemCredential, signOut } from "@/features/auth/server";
 import {
   mutationGuard,
   jsonBody,
@@ -31,18 +34,60 @@ export async function POST(
     const input = await jsonBody(request);
     const pool = database();
     const rate = requestRateKey();
-    if (operation === "signup" || operation === "redeem") {
-      const result =
-        operation === "signup"
-          ? await beginRegistration(pool, input, rate)
-          : await redeemCredential(
-              pool,
-              z
-                .object({ code: z.string().min(1).max(200) })
-                .strict()
-                .parse(input).code,
-              rate,
-            );
+    if(operation === "resend-verification") {
+      const {email}=z.object({email:z.email().max(254)}).strict().parse(input);
+      return success(await resendVerification(pool,authProvider(),email,rate));
+    }
+    if (operation === "signup")
+      return success(await signupEmail(pool, authProvider(), input, rate));
+    if (operation === "reset-email") {
+      const { email } = z
+        .object({ email: z.email().max(254) })
+        .strict()
+        .parse(input);
+      return success(
+        await requestEmailReset(pool, authProvider(), email, rate),
+      );
+    }
+    if (operation === "reset-password") {
+      const { token, password } = z
+        .object({
+          token: z.string().min(1).max(8192),
+          password: z.string().min(12).max(128),
+        })
+        .strict()
+        .parse(input);
+      const response = success(
+        await resetEmailPassword(pool, authProvider(), token, password, rate),
+      );
+      response.cookies.set(sessionCookie, "", {
+        ...cookieOptions(),
+        maxAge: 0,
+      });
+      return response;
+    }
+    if (operation === "confirm") {
+      const { token } = z
+        .object({ token: z.string().min(1).max(8192) })
+        .strict()
+        .parse(input);
+      const result = await confirmEmail(pool, authProvider(), token, rate);
+      const response = success({ next: "/chat" });
+      response.cookies.set(sessionCookie, result.session, {
+        ...cookieOptions(),
+        expires: result.expiresAt,
+      });
+      return response;
+    }
+    if (operation === "redeem") {
+      const result = await redeemCredential(
+        pool,
+        z
+          .object({ code: z.string().min(1).max(200) })
+          .strict()
+          .parse(input).code,
+        rate,
+      );
       const response = success({ next: "setup" });
       response.cookies.set(setupCookie, result.setupSession, {
         ...cookieOptions(),
@@ -51,15 +96,11 @@ export async function POST(
       return response;
     }
     if (operation === "setup") {
-      const data = z
-        .object({ password: z.string().min(12).max(128) })
-        .strict()
-        .parse(input);
-      const result = await completeSetup(
+      const result = await setupEmail(
         pool,
         authProvider(),
+        input,
         request.cookies.get(setupCookie)?.value ?? "",
-        data.password,
         rate,
       );
       const response = success(result);
@@ -74,7 +115,7 @@ export async function POST(
         })
         .strict()
         .parse(input);
-      const result = await signIn(
+      const result = await loginEmail(
         pool,
         authProvider(),
         data.identifier,

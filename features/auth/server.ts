@@ -6,7 +6,7 @@ import { z } from "zod";
 import { transaction } from "@/lib/db/client";
 import { consumeAttempt } from "@/lib/db/rate-limit";
 import { DomainError } from "@/lib/errors";
-import { KeycloakProvider } from "@/lib/auth/keycloak";
+import type { CredentialProvider } from "@/lib/auth/provider";
 import { requireStaff } from "@/features/identity/server";
 import { digest, secret, verifySession } from "./sessions";
 
@@ -41,7 +41,7 @@ const issueInput = z
 
 export async function issueCredential(
   pool: Pool,
-  provider: KeycloakProvider,
+  provider: CredentialProvider,
   staffSession: string,
   input: unknown,
 ) {
@@ -135,7 +135,7 @@ export async function issueCredential(
       if (data.purpose === "recovery") {
         const recoveryAccount = account ?? retired;
         await tx.query(
-          `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1 where id=$1 and status<>'retired'`,
+          `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1,provider_valid_after=clock_timestamp() where id=$1 and status<>'retired'`,
           [recoveryAccount.id],
         );
         await tx.query(
@@ -156,11 +156,14 @@ export async function issueCredential(
       });
       return {
         subject: (account ?? retired)?.provider_subject as string | undefined,
+        providerName: (account ?? retired)?.provider as string | undefined,
       };
     }, pool);
     let providerRevocationPending = false;
     if (issued.subject && data.purpose === "recovery") {
       try {
+        if (issued.providerName !== (provider.name ?? "keycloak"))
+          throw new DomainError("PROVIDER_UNAVAILABLE");
         await provider.revokeSessions(issued.subject);
         await pool.query(
           `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
@@ -201,7 +204,7 @@ export async function redeemCredential(
 
 export async function completeSetup(
   pool: Pool,
-  provider: KeycloakProvider,
+  provider: CredentialProvider,
   setupSession: string,
   password: string,
   requestKey: string,
@@ -266,7 +269,7 @@ export async function completeSetup(
 
 export async function signIn(
   pool: Pool,
-  provider: KeycloakProvider,
+  provider: CredentialProvider,
   identifier: string,
   password: string,
   requestKey: string,

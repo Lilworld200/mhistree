@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
+import { AuthField } from "./auth-field";
 type Mode = "login" | "signup" | "redeem" | "setup";
 export function AccountEntry({
   initialMode = "login",
@@ -17,13 +18,16 @@ export function AccountEntry({
     [pending, setPending] = useState(false),
     [error, setError] = useState(""),
     [notice, setNotice] = useState(""),
-    [identifier, setIdentifier] = useState("");
+    [identifier, setIdentifier] = useState(""),
+    [awaitingVerification, setAwaitingVerification] = useState(false);
   const enrollment = useRef("");
   const busy = useRef(false);
   function change(next: Mode) {
     setMode(next);
     setError("");
     setNotice("");
+    setAwaitingVerification(false);
+    enrollment.current = "";
   }
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,9 +49,16 @@ export function AccountEntry({
         await api("/api/auth/signup", {
           displayName: values.get("displayName"),
           birthDate: values.get("birthDate") || null,
+          email: values.get("email"),
+          password: values.get("password"),
           requestKey: enrollment.current,
         });
-        setMode("setup");
+        setIdentifier(String(values.get("email")));
+        setMode("login");
+        enrollment.current = "";
+        setNotice("Check your email for a verification link, then sign in.");
+        setAwaitingVerification(true);
+        form.reset();
       } else if (mode === "redeem") {
         await api("/api/auth/redeem", { code: values.get("code") });
         setMode("setup");
@@ -56,13 +67,25 @@ export function AccountEntry({
           setError("Passwords do not match.");
           return;
         }
-        const result = await api<{ loginIdentifier: string }>(
-          "/api/auth/setup",
-          { password: values.get("password") },
-        );
-        setIdentifier(result.loginIdentifier);
+        if (!enrollment.current) {
+          enrollment.current =
+            crypto.randomUUID().replaceAll("-", "") +
+            crypto.randomUUID().replaceAll("-", "").slice(0, 11);
+        }
+        const result = await api<{
+          loginIdentifier?: string;
+          verificationRequired: boolean;
+        }>("/api/auth/setup", {
+          email: values.get("email"),
+          password: values.get("password"),
+          requestKey: enrollment.current,
+        });
+        setIdentifier(result.loginIdentifier ?? String(values.get("email")));
+        setAwaitingVerification(result.verificationRequired);
         setNotice(
-          "Account ready. Save your private login identifier below, then sign in.",
+          result.verificationRequired
+            ? "Check your email to verify and activate your existing care record."
+            : "Password updated. Sign in with your email.",
         );
         setMode("login");
         form.reset();
@@ -104,85 +127,115 @@ export function AccountEntry({
         <form key={mode} onSubmit={submit} className="account-form">
           {mode === "signup" && (
             <>
-              <label>
-                Full name
-                <input
-                  name="displayName"
-                  autoComplete="name"
-                  maxLength={200}
-                  required
-                />
-              </label>
-              <label>
-                Date of birth (optional)
-                <input name="birthDate" type="date" autoComplete="bday" />
-              </label>
+              <AuthField
+                label="Full name"
+                name="displayName"
+                autoComplete="name"
+                maxLength={200}
+                required
+              />
+              <AuthField
+                label="Date of birth (optional)"
+                name="birthDate"
+                type="date"
+                autoComplete="bday"
+              />
               <p className="muted">
-                No email or phone is required. Already received care with
-                Mhistree? Use your setup code to keep the same record.
+                Already received care with Mhistree? Use your setup code to keep
+                the same record.
               </p>
             </>
           )}
           {mode === "redeem" && (
-            <label>
-              Private setup or recovery code
-              <input
-                name="code"
-                autoComplete="one-time-code"
-                spellCheck={false}
-                required
-                maxLength={200}
-              />
-            </label>
+            <AuthField
+              label="Private setup or recovery code"
+              name="code"
+              autoComplete="one-time-code"
+              spellCheck={false}
+              required
+              maxLength={200}
+            />
           )}
           {mode === "login" && (
-            <label>
-              Private login identifier or verified email
-              <input
-                name="identifier"
-                autoComplete="username"
-                value={identifier}
-                onChange={(e) => setIdentifier(e.target.value)}
-                spellCheck={false}
-                required
-              />
-            </label>
+            <AuthField
+              label="Email address"
+              name="identifier"
+              type="email"
+              autoComplete="username"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
+              spellCheck={false}
+              required
+            />
           )}
-          {(mode === "login" || mode === "setup") && (
-            <label>
-              Password
-              <input
-                name="password"
-                type="password"
-                autoComplete={
-                  mode === "login" ? "current-password" : "new-password"
-                }
-                minLength={mode === "setup" ? 12 : 1}
-                maxLength={128}
-                required
-              />
-            </label>
+          {(mode === "signup" || mode === "setup") && (
+            <AuthField
+              label="Email address"
+              name="email"
+              type="email"
+              autoComplete="email"
+              maxLength={254}
+              required
+            />
+          )}
+          {(mode === "login" || mode === "signup" || mode === "setup") && (
+            <AuthField
+              label="Password"
+              name="password"
+              type="password"
+              autoComplete={
+                mode === "login" ? "current-password" : "new-password"
+              }
+              minLength={mode === "login" ? 1 : 12}
+              maxLength={128}
+              required
+            />
           )}
           {mode === "setup" && (
             <>
-              <label>
-                Confirm password
-                <input
-                  name="confirm"
-                  type="password"
-                  autoComplete="new-password"
-                  minLength={12}
-                  maxLength={128}
-                  required
-                />
-              </label>
+              <AuthField
+                label="Confirm password"
+                name="confirm"
+                type="password"
+                autoComplete="new-password"
+                minLength={12}
+                maxLength={128}
+                required
+              />
               <p className="muted">
                 Use at least 12 characters. Your care team never chooses or
                 receives your password.
               </p>
             </>
           )}
-          <p role="status">{notice}</p>
+          {notice && <p role="status">{notice}</p>}
+          {mode === "login" && awaitingVerification && (
+            <button
+              className="account-link"
+              type="button"
+              disabled={pending}
+              onClick={async () => {
+                if (busy.current) return;
+                busy.current = true;
+                setPending(true);
+                setError("");
+                try {
+                  const result = await api<{ message: string }>(
+                    "/api/auth/resend-verification",
+                    { email: identifier },
+                  );
+                  setNotice(result.message);
+                } catch (caught) {
+                  setError(errorMessage(caught));
+                } finally {
+                  busy.current = false;
+                  setPending(false);
+                }
+              }}
+            >
+              Resend verification email
+            </button>
+          )}
           {error && <p role="alert">{error}</p>}
           <Btn kind="dark" type="submit" disabled={pending}>
             {pending
@@ -191,8 +244,15 @@ export function AccountEntry({
                 ? "Sign in"
                 : mode === "setup"
                   ? "Set password"
-                  : "Continue"}
+                  : mode === "signup"
+                    ? "Sign up"
+                    : "Continue"}
           </Btn>
+          {(mode === "login" || mode === "signup") && (
+            <Link className="account-recovery-link" href="/recovery">
+              Forgot password?
+            </Link>
+          )}
         </form>
         {(mode === "login" || mode === "signup") && (
           <div className="account-navigation">
@@ -210,7 +270,7 @@ export function AccountEntry({
               </button>
             </p>
             <div className="account-other-methods">
-              <p className="muted">Other ways to sign in</p>
+              <p className="account-divider">Other options</p>
               <button
                 type="button"
                 className="account-link"
@@ -234,12 +294,6 @@ export function AccountEntry({
             </button>
           </p>
         )}
-        <p className="muted">
-          Your public Mhistree ID is a record locator, not a login credential.
-        </p>
-        <p>
-          <Link href="/recovery">Need help accessing your account?</Link>
-        </p>
       </section>
     </main>
   );

@@ -2184,6 +2184,54 @@
   font-size: 14px;
   margin: 20px 0;
 }
+.account-form .auth-field {
+  position: relative;
+  display: block;
+  margin-top: 6px;
+}
+.auth-field input {
+  min-height: 52px;
+  font-weight: 400;
+  border-radius: 999px;
+}
+.auth-field-label {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 0 6px;
+  border-radius: 999px;
+  max-width: calc(100% - 40px);
+  font-size: 14px;
+  line-height: 18px;
+  font-weight: 500;
+  color: var(--ink2);
+  background: var(--card);
+  pointer-events: none;
+  transition: top 0.18s ease, font-size 0.18s ease, color 0.18s ease;
+}
+.auth-field input:focus + .auth-field-label,
+.auth-field input:not([type="date"]):not(:placeholder-shown) + .auth-field-label,
+.auth-field input[data-filled="true"] + .auth-field-label,
+.auth-field input:autofill + .auth-field-label {
+  top: 0;
+  font-size: 12px;
+  font-weight: 600;
+}
+.auth-field input:focus {
+  outline: none;
+  border-color: var(--hero2);
+  box-shadow: 0 0 0 1px var(--hero2);
+}
+.auth-field input:focus + .auth-field-label {
+  color: var(--hero2);
+}
+.auth-field input[type="date"]:not(:focus):not([data-filled="true"])::-webkit-datetime-edit {
+  opacity: 0;
+}
+.auth-field input[type="date"]:not(:focus):not([data-filled="true"]) {
+  color: transparent;
+}
 .account-link {
   border: 0;
   background: transparent;
@@ -2201,9 +2249,57 @@
   cursor: wait;
 }
 .account-other-methods {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--shell);
+  margin-top: 12px;
+}
+.account-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--ink2);
+  font-size: 12px;
+}
+.account-divider::before,
+.account-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--shell);
+}
+.account-recovery-link {
+  justify-self: center;
+  font-size: 12px;
+  color: var(--ink2);
+  padding: 8px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.recovery-options {
+  display: grid;
+  gap: 14px;
+  margin: 24px 0 16px;
+}
+.recovery-option {
+  display: block;
+  padding: 16px;
+  border: 1px solid var(--shell);
+  border-radius: 20px;
+  font-size: 14px;
+}
+.recovery-option strong,
+.recovery-option span {
+  display: block;
+}
+.recovery-option span {
+  margin-top: 4px;
+  color: var(--ink2);
+}
+.recovery-option summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.recovery-option p {
+  margin-top: 12px;
+  color: var(--ink2);
 }
 .muted {
   color: var(--ink2);

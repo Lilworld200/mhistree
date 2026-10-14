@@ -1,5 +1,7 @@
 # Feature ownership and bounded navigation
 
+2026-10-14 current auth owner: `features/auth/email.ts` and `lib/auth/supabase.ts`, selected by `lib/auth/config.ts`; account entry uses email/password and verification. /auth/confirm and /recovery/update compose `features/patient/account/email-callback.tsx`; /recovery composes `email-recovery-form.tsx`. [Auth contract](contracts/auth.md), [SMTP/callback setup](tasks/supabase-auth-setup.md), `tests/integration/supabase-email.test.ts`. Main project checkout now contains this active source; older rebuild-root/provider descriptions below are historical.
+
 Revision 2026-10-13. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The active source lives in the codex/rebuild worktree; old entrypoints below now have a `legacy/` prefix there. The following foundation owners are implemented; the older planning table retains historical targets, not claims of completion. Current T19-T31 owners are indexed below; no T32+ implementation is authorized by this phase.
 
 | Implemented owner | Entry/API and evidence |

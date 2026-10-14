@@ -122,16 +122,16 @@ for (const name of (await readdir("supabase/migrations"))
   }
 }
 await pool.end();
-const auth = JSON.parse(await readFile(".local/auth-config.json", "utf8"));
-const ai = JSON.parse(await readFile(".local/ai-config.json", "utf8"));
+let ai: Record<string, string> = {};
+try {
+  ai = JSON.parse(await readFile(".local/ai-config.json", "utf8"));
+} catch {
+  /* AI can be configured separately in .env. */
+}
 const values = {
   DATABASE_URL: `postgresql://${connection.user}:${encodeURIComponent(String(connection.password))}@127.0.0.1:${connection.port}/${connection.database}`,
   DATABASE_SSL: "local",
   APP_ORIGIN: "http://127.0.0.1:3101",
-  AUTH_BASE_URL: auth.baseUrl,
-  AUTH_REALM: auth.realm,
-  AUTH_CLIENT_ID: auth.clientId,
-  AUTH_CLIENT_SECRET: auth.clientSecret,
   ...ai,
 };
 await writeFile(

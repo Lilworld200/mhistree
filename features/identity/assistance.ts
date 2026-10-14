@@ -6,7 +6,7 @@ import { verifySession } from "@/features/auth/sessions";
 import { requireStaff } from "./server";
 import { requireOrganization } from "@/features/organizations/server";
 import { issueCredential } from "@/features/auth/server";
-import type { KeycloakProvider } from "@/lib/auth/keycloak";
+import type { CredentialProvider } from "@/lib/auth/provider";
 import { appendEvent } from "@/features/audit/server";
 import { DomainError } from "@/lib/errors";
 export async function identityReviewer(tx: PoolClient, session: string) {
@@ -20,7 +20,7 @@ export async function identityReviewer(tx: PoolClient, session: string) {
 }
 export async function assistedCredential(
   pool: Pool,
-  provider: KeycloakProvider,
+  provider: CredentialProvider,
   session: string,
   input: unknown,
 ) {
