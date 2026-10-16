@@ -37,6 +37,8 @@ Build a patient-centered advanced electronic health record (EHR) with a continui
 
 Mhistree is not Reslz: do not import commerce concepts, permissions, or design decisions from it. Source rebuild, database migration, authentication migration, and production cutover are separate activities.
 
+Owner UI decision (2026-10-16): Git snapshot `71121bd` is the design reference for /chat, /timeline, /health and related existing pages. Read historical UI/styles only and reimplement their layouts in current components; do not restore historical authentication, stores, APIs, seeded clinical claims or permission behavior. Durable visual reference: docs/design/snapshot-71121bd.md. Preserve current functional contracts.
+
 ## 2. Product model and release boundary
 
 A person can receive care indefinitely without activating a login. Information persists across time, practitioners, and organizations with explicit attribution and access boundaries. Activated patients contribute reports, upload documents, inspect history, converse with AI, and control connections. Verified practitioners and approved organizations contribute care through authorized contexts. AI organizes and interprets evidence without becoming an autonomous clinical authority.

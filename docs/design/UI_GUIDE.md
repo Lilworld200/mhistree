@@ -1,3 +1,5 @@
+Owner update, 2026-10-16: `71121bd` is the selected reference for restoring existing page UI. Read [snapshot-71121bd.md](snapshot-71121bd.md) alongside this earlier measured guide. Current product/auth/access contracts remain authoritative for behavior.
+
 # Preserved interface guide — T03
 
 2026-10-09, original application at commit `2c8c46c`. Read before every UI task. Visual authority is the inspected application, not the PDF. All dimensions below are CSS pixels at normal zoom. References contain guest/synthetic UI only. No authenticated patient content was captured.

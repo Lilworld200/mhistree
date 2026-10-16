@@ -36,15 +36,31 @@ export function ProfileView({ initial }: { initial: Profile }) {
     }
   }
   return (
-    <section className="patient-page">
-      <h1>Your account</h1>
+    <section className="patient-page restored-profile">
+      <header className="hero">
+        <div className="hrow">
+          <span className="hid">
+            <span className="profile-avatar">
+              {profile.display_name.slice(0, 1).toUpperCase()}
+            </span>
+            <b>{profile.display_name}</b>
+          </span>
+          <span className="hpill">Your profile</span>
+        </div>
+        <div className="hcenter">
+          <h1 className="display health-hero-title">Your health profile</h1>
+          <span className="hsub">Personal details and account controls</span>
+        </div>
+      </header>
       <p>Organization invitation identifier: {profile.accountId}</p>
-      <Link href="/identity/duplicates">Report a possible duplicate identity</Link>
+      <Link href="/identity/duplicates">
+        Report a possible duplicate identity
+      </Link>
       <p>
         Private login identifier: <strong>{profile.login_identifier}</strong>
       </p>
       <form
-        className="account-form"
+        className="account-form card profile-edit-form"
         onSubmit={(e) => {
           e.preventDefault();
           const f = new FormData(e.currentTarget);

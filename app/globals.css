@@ -2208,10 +2208,15 @@
   color: var(--ink2);
   background: var(--card);
   pointer-events: none;
-  transition: top 0.18s ease, font-size 0.18s ease, color 0.18s ease;
+  transition:
+    top 0.18s ease,
+    font-size 0.18s ease,
+    color 0.18s ease;
 }
 .auth-field input:focus + .auth-field-label,
-.auth-field input:not([type="date"]):not(:placeholder-shown) + .auth-field-label,
+.auth-field
+  input:not([type="date"]):not(:placeholder-shown)
+  + .auth-field-label,
 .auth-field input[data-filled="true"] + .auth-field-label,
 .auth-field input:autofill + .auth-field-label {
   top: 0;
@@ -2226,7 +2231,10 @@
 .auth-field input:focus + .auth-field-label {
   color: var(--hero2);
 }
-.auth-field input[type="date"]:not(:focus):not([data-filled="true"])::-webkit-datetime-edit {
+.auth-field
+  input[type="date"]:not(:focus):not(
+    [data-filled="true"]
+  )::-webkit-datetime-edit {
   opacity: 0;
 }
 .auth-field input[type="date"]:not(:focus):not([data-filled="true"]) {
@@ -2347,4 +2355,423 @@ textarea:focus-visible {
   .account-card {
     padding: 32px 24px;
   }
+}
+
+/* UI restoration from 71121bd: current services, original Soft-Float layout. */
+.stage {
+  height: 100dvh;
+  min-height: 0;
+}
+.main-shell {
+  height: calc(100dvh - 40px);
+  min-height: 0;
+}
+.page,
+.pagecol {
+  min-height: 0;
+}
+.recent-heading {
+  margin: 18px 14px 8px;
+}
+.profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #f4d9da;
+  color: #6e4446;
+  box-shadow: inset 0 1px 1px #ffffff80;
+}
+.sidefoot .prow {
+  min-height: 52px;
+}
+.patient-page {
+  max-width: none;
+  margin: 0;
+  padding: 28px 32px;
+  height: 100%;
+}
+.patient-page > h1,
+.patient-page .ptitle {
+  font-size: 25px;
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  margin: 0;
+}
+.patient-page > p {
+  font-size: 13px;
+  color: var(--ink2);
+  line-height: 1.6;
+}
+.patient-page > h2 {
+  font-size: 15px;
+  font-weight: 800;
+  margin-top: 24px;
+}
+.patient-page .card,
+.patient-page .record-card {
+  box-shadow:
+    var(--sh1),
+    inset 0 1px 1px #ffffff80;
+  border-color: var(--bl);
+}
+.patient-page .record-card {
+  padding: 20px;
+}
+.patient-page .record-card h2 {
+  margin-top: 0;
+  font-size: 15px;
+}
+.patient-page .record-card .btn {
+  margin: 4px 6px 4px 0;
+}
+.patient-page a:not(.btn):not(.prow) {
+  text-underline-offset: 3px;
+}
+.chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+.chat-tools {
+  position: relative;
+}
+.chat-tools > summary {
+  cursor: pointer;
+  list-style: none;
+  min-height: 38px;
+}
+.chat-tools-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(340px, calc(100vw - 56px));
+  z-index: 5;
+  display: grid;
+  gap: 12px;
+  background: var(--card);
+  box-shadow: var(--sh3);
+}
+.chat-tools-panel select {
+  display: block;
+  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 12px;
+  background: var(--shell);
+  color: var(--ink);
+  font-size: 13px;
+}
+.restored-chat .empty {
+  min-height: 300px;
+}
+.restored-chat .empty h2 {
+  margin: 18px 0 10px;
+}
+.restored-chat .msgs {
+  min-height: 0;
+}
+.restored-chat .bubble {
+  max-width: min(720px, 85%);
+  overflow-wrap: anywhere;
+}
+.restored-chat .message-content {
+  white-space: pre-wrap;
+  margin: 0;
+}
+.restored-chat .message-meta {
+  font-size: 10px;
+  margin-top: 10px;
+  opacity: 0.8;
+}
+.restored-chat .message-meta summary {
+  cursor: pointer;
+}
+.restored-chat .bubble-user .message-meta {
+  color: #ffffffc9;
+}
+.message-status {
+  margin-top: 10px;
+  font-size: 12px;
+}
+.message-status .btn {
+  margin-left: 8px;
+}
+.conversation-gap {
+  text-align: center;
+  font-size: 11px;
+  color: var(--ink3);
+  margin: 8px 0 16px;
+}
+.restored-chat .composer {
+  flex-shrink: 0;
+  margin: 0;
+}
+.restored-chat textarea.cinput {
+  resize: none;
+  min-height: 48px;
+  max-height: 160px;
+  font-family: inherit;
+  line-height: 22px;
+}
+.processing-disclosure {
+  font-size: 11px;
+  color: var(--ink2);
+  margin-top: auto;
+  padding-top: 12px;
+}
+.processing-disclosure > summary {
+  cursor: pointer;
+  width: fit-content;
+}
+.processing-disclosure h2 {
+  font-size: 13px;
+  margin: 12px 0;
+  font-weight: 800;
+}
+.ui-notice {
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--bs);
+  color: var(--ink2);
+  font-size: 13px;
+}
+.ui-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--ink2);
+}
+.ui-empty > svg {
+  margin: 0 auto 12px;
+  color: var(--ink3);
+}
+.ui-empty p {
+  font-size: 14px;
+  font-weight: 700;
+  margin: 6px 0;
+}
+.ui-empty span {
+  font-size: 12px;
+}
+.timeline-explanation {
+  margin-top: 18px;
+}
+.timeline-records-label {
+  margin: 22px 4px 12px;
+}
+.restored-timeline .tl > details {
+  position: relative;
+  margin-bottom: 12px;
+}
+.restored-timeline .tl > details::before {
+  content: "";
+  position: absolute;
+  left: -20px;
+  top: 26px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--hero2);
+  box-shadow: 0 0 0 3px var(--stage);
+}
+.record-evidence {
+  padding: 0;
+  margin-bottom: 12px;
+}
+.record-evidence > summary {
+  padding: 18px;
+  margin: 0;
+  list-style: none;
+  cursor: pointer;
+}
+.record-evidence > summary::-webkit-details-marker,
+.chat-tools > summary::-webkit-details-marker {
+  display: none;
+}
+.record-evidence > summary .evdesc {
+  -webkit-line-clamp: 2;
+}
+.record-category-icon {
+  background: #347bdd18;
+  color: var(--hero2);
+}
+.record-evidence[open] > summary > svg {
+  transform: rotate(90deg);
+}
+.record-evidence-body {
+  border-top: 1px solid var(--bs);
+  padding: 18px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.record-evidence-body > p {
+  margin: 8px 0;
+}
+.record-evidence-body > .btn {
+  height: 38px;
+  padding: 0 14px;
+  font-size: 12px;
+  margin: 8px 8px 8px 0;
+}
+.record-evidence-body details {
+  margin-top: 12px;
+}
+.record-evidence-body summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+.health-hero-title {
+  font-size: clamp(22px, 3vw, 32px);
+  margin-top: 6px;
+}
+.hero .profile-avatar {
+  width: 30px;
+  height: 30px;
+}
+.health-intro {
+  max-width: 760px;
+  line-height: 1.6;
+  margin-top: 18px;
+}
+.health-category {
+  min-width: 0;
+  min-height: 170px;
+}
+.health-category h2,
+.prescription-card h2 {
+  margin-bottom: 16px;
+}
+.health-empty {
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--ink2);
+  padding: 18px 0;
+}
+.health-category .record-evidence {
+  box-shadow: none;
+  background: transparent;
+  border-color: var(--bs);
+  margin-top: 12px;
+}
+.health-category .record-evidence > summary {
+  padding: 12px;
+}
+.prescription-card {
+  margin-top: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.document-upload {
+  max-width: none;
+  margin: 20px 0 14px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.document-grid {
+  align-items: start;
+}
+.document-card {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.document-card h2 {
+  font-size: 15px;
+  font-weight: 800;
+  margin: 0 0 12px;
+}
+.document-card p {
+  font-size: 12px;
+}
+.connection-grid {
+  align-items: start;
+  margin-bottom: 24px;
+}
+.connection-group h2 {
+  font-size: 13px;
+  font-weight: 800;
+  margin: 0 0 12px;
+}
+.connection-group > p {
+  font-size: 13px;
+  color: var(--ink2);
+}
+.connection-group .record-card {
+  box-shadow: none;
+  border-color: var(--bs);
+}
+.profile-edit-form {
+  max-width: none;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: end;
+}
+.profile-edit-form > .btn {
+  justify-self: start;
+}
+@media (max-width: 980px) {
+  .stage {
+    min-height: 100dvh;
+    height: 100dvh;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .main-shell {
+    height: 100%;
+    min-height: 0;
+  }
+  .patient-page {
+    padding: 20px 16px;
+  }
+  .restored-chat .bubble {
+    max-width: 88%;
+  }
+  .restored-chat .chead {
+    padding: 14px 16px;
+  }
+  .restored-chat textarea.cinput {
+    font-size: 16px;
+    padding-inline: 14px;
+  }
+  .restored-chat .composer {
+    padding: 12px;
+    gap: 8px;
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+  .restored-chat .msgs {
+    padding: 20px 16px;
+  }
+  .chat-tools > summary {
+    font-size: 10px;
+    padding-inline: 10px;
+  }
+  .document-upload,
+  .profile-edit-form {
+    grid-template-columns: 1fr;
+  }
+  .grid2,
+  .grid3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .restored-health .actrow {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+.sidebar-care {
+  margin-top: 16px;
+}
+.sidebar-care > summary {
+  cursor: pointer;
+  list-style: none;
+}
+.sidebar-care > summary::-webkit-details-marker {
+  display: none;
+}
+.sidebar-care > a {
+  padding-left: 28px;
 }

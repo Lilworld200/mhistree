@@ -13,3 +13,5 @@ Consumers T11–T16, T21–T24 and T28 must call these owning operations. Extrac
 ## Patient consumers implemented in T12–T16
 
 extraction lives in features/ai-chat/extraction. timeline.ts provides snapshot/keyset filtering and authorized source/version reads; current-state.ts supplies bounded persistent state and separate prescription projection. corrections.ts composes the kernel for optimistic retained patient changes and professional review requests. timeline-view, health-view and correction-form are patient UI consumers through /api/records and /api/health. Dedicated /records/[id] provides authenticated citation detail. Earlier references above to future T14/T15 or no HTTP endpoint describe the kernel-only checkpoint and are superseded by this section.
+
+Patient presentation follows docs/design/snapshot-71121bd.md. Timeline uses source/category pill controls and compact expandable RecordCard evidence; current source/version/correction APIs remain. Health uses blue hero and responsive category cards with prescriptions separate.

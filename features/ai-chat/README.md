@@ -7,3 +7,5 @@
 `extraction/server.ts` owns durable extraction jobs, validated item journal, stable source/item identity and per-item atomic record acceptance. Successful partial items survive retries. `extraction/time.ts` anchors supported relative phrases to original capture time/timezone. Sources link to original patient messages; assistant messages cannot become evidence. Unknown medication/other-leg ambiguity remains visible. T13 adds document producers; T14–16 consume accepted source-linked events and state.
 
 Tests: integration/chat.test.ts includes real gateway generation and SQL isolation; injected adapters are explicitly failure/cancellation controls. extraction.test.ts covers model output, temporal interpretation and replay. Missing provider configuration or errors remain failures rather than fabricated replies.
+
+Chat presentation restores the 71121bd pagecol/chead/msgs/bubble/composer design. Conversation options contains the existing assessment/history controls; processing remains available in a disclosure. Sidebar selection uses components/layout/chat-navigation.tsx and current IDs/APIs. No legacy store/provider was restored.

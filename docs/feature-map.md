@@ -66,3 +66,5 @@ Evidence: [recovered practitioner phase](tasks/practitioner-phase-evidence.md), 
 Patient migration sequence follows the three foundation migrations; every filename is unique and active migrations are under supabase/migrations. The legacy table above is historical navigation only. Current implementation and remaining acceptance gates: [patient evidence](tasks/patient-phase-evidence.md). Tests use real isolated native PostgreSQL and provider integrations, never the unrelated connected hosted project.
 
 Current PKCE callback: `app/auth/callback/route.ts`; `lib/auth/flow-cookie.ts` owns encrypted HttpOnly cookies using dedicated AUTH_FLOW_COOKIE_KEY. Browser JavaScript receives no provider token. /auth/confirm is invalid-link guidance; /recovery/update is the guarded password form.
+
+Patient UI reference (2026-10-16): docs/design/snapshot-71121bd.md. Current components/layout/chat-navigation.tsx connects shell recent conversations to features/ai-chat/chat-view.tsx; current API/authorization owners are retained.

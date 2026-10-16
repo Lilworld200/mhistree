@@ -1,0 +1,140 @@
+{
+  "syntheticOnly": true,
+  "apiResponses": "fixture intercepted; no live integration claim",
+  "checks": [
+    {
+      "path": "/chat",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/timeline",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/health",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/documents",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/sharing",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/profile",
+      "width": 1440,
+      "documentWidth": 1440,
+      "viewport": 1440,
+      "shellWidth": 1092
+    },
+    {
+      "path": "/chat",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/timeline",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/health",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/documents",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/sharing",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/profile",
+      "width": 390,
+      "documentWidth": 390,
+      "viewport": 390,
+      "shellWidth": 366
+    },
+    {
+      "path": "/chat",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    },
+    {
+      "path": "/timeline",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    },
+    {
+      "path": "/health",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    },
+    {
+      "path": "/documents",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    },
+    {
+      "path": "/sharing",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    },
+    {
+      "path": "/profile",
+      "width": 1920,
+      "documentWidth": 1920,
+      "viewport": 1920,
+      "shellWidth": 1572
+    }
+  ],
+  "interactions": [
+    "chat send/reply rendering",
+    "timeline evidence expansion and source read",
+    "new chat resets visible history",
+    "sidebar reopens saved conversation",
+    "mobile navigation drawer opens and navigates to health"
+  ],
+  "pageErrors": []
+}

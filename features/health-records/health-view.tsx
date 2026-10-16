@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { Icon } from "@/components/ui/icons";
+import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import { RecordCard, type DisplayRecord } from "./timeline-view";
 type State = {
@@ -19,55 +21,90 @@ export function HealthView() {
       .catch((e) => setError(errorMessage(e)));
   }, []);
   return (
-    <section className="patient-page">
-      <h1>Your health details</h1>
-      <p>
+    <section className="scroll restored-health">
+      <header className="hero">
+        <div className="hrow">
+          <span className="hid">
+            <span className="profile-avatar">
+              <Icon n="user" s={18} />
+            </span>
+            <b>Health Dashboard</b>
+          </span>
+          <Icon n="heart" s={20} />
+        </div>
+        <div className="hcenter">
+          <span className="hpill">Your continuing health record</span>
+          <h1 className="display health-hero-title">Your health, in view</h1>
+          <span className="hsub">Source-linked reports and care, together</span>
+        </div>
+      </header>
+      <div className="actrow">
+        <Btn icon="doc" asChild>
+          <Link href="/documents">Documents</Link>
+        </Btn>
+        <Btn asChild>
+          <Link href="/timeline">View timeline</Link>
+        </Btn>
+        <Btn kind="dark" icon="chat" asChild>
+          <Link href="/chat">Start check-in</Link>
+        </Btn>
+      </div>
+      <p className="psub health-intro">
         Last-known reports with their sources. Silence does not establish
         recovery, continued medication use, or adherence.
       </p>
       {error && <p role="alert">{error}</p>}
       {!state && !error && <p role="status">Loading health details…</p>}
-      {["medication-use", "allergy", "baseline", "ongoing"].map((category) => (
-        <section key={category}>
-          <h2>
-            {
-              (
+      <div className="grid2 health-grid">
+        {["medication-use", "allergy", "baseline", "ongoing"].map(
+          (category) => (
+            <section className="card health-category" key={category}>
+              <h2 className="mlabel">
                 {
-                  "medication-use": "Medication use",
-                  allergy: "Allergies",
-                  baseline: "Baseline",
-                  ongoing: "Ongoing issues",
-                } as Record<string, string>
-              )[category]
-            }
-          </h2>
-          {state && !state.items.some((i) => i.category === category) && (
-            <p>
-              No accepted reports in this category. This does not mean none
-              exist.
-            </p>
-          )}
-          {state?.items
-            .filter((i) => i.category === category)
-            .map((record) => (
-              <div key={record.id}>
-                {record.medicationPresentation && (
-                  <p>
-                    Current use: {record.medicationPresentation.useStatus}.{" "}
-                    {record.medicationPresentation.explanation}
-                  </p>
-                )}
-                <RecordCard record={record} />
-              </div>
-            ))}
-        </section>
-      ))}
-      <section>
-        <h2>Practitioner prescription information</h2>
+                  (
+                    {
+                      "medication-use": "Medication use",
+                      allergy: "Allergies",
+                      baseline: "Baseline",
+                      ongoing: "Ongoing issues",
+                    } as Record<string, string>
+                  )[category]
+                }
+              </h2>
+              {state && !state.items.some((i) => i.category === category) && (
+                <p className="health-empty">
+                  No accepted reports in this category. This does not mean none
+                  exist.
+                </p>
+              )}
+              {state?.items
+                .filter((i) => i.category === category)
+                .map((record) => (
+                  <div key={record.id}>
+                    {record.medicationPresentation && (
+                      <p>
+                        Current use: {record.medicationPresentation.useStatus}.{" "}
+                        {record.medicationPresentation.explanation}
+                      </p>
+                    )}
+                    <RecordCard record={record} />
+                  </div>
+                ))}
+            </section>
+          ),
+        )}
+      </div>
+      <section className="card prescription-card">
+        <h2 className="mlabel">Practitioner prescription information</h2>
         <p>
           Separate from reported use. Recording a prescription does not prove
           dispensing or fulfillment.
         </p>
+        {state && !state.prescriptions.length && (
+          <p className="health-empty">
+            No practitioner prescriptions recorded.
+          </p>
+        )}
         {state?.prescriptions.map((record) => (
           <RecordCard key={record.id} record={record} />
         ))}

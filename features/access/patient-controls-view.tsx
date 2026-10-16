@@ -181,34 +181,41 @@ export function PatientControlsView() {
       .catch((e) => setError(errorMessage(e)));
   }, []);
   return (
-    <section className="patient-page">
-      <h1>Connections and record controls</h1>
+    <section className="patient-page restored-sharing">
+      <header className="phead">
+        <div>
+          <h1 className="ptitle">Health Access</h1>
+          <p className="psub">Your connections, consent and record controls</p>
+        </div>
+      </header>
       <p>
         Direct practitioners and organizations have separate access. Revoking
         one does not revoke the others. Prior downloads cannot be recalled.
       </p>
-      {["direct", "organization"].map((kind) => (
-        <section key={kind}>
-          <h2>
-            {kind === "direct" ? "Direct practitioners" : "Organizations"}
-          </h2>
-          {data && !data.connections.some((c) => c.kind === kind) && (
-            <p>
-              No connections in this group. Provider invitation screens arrive
-              in later tasks; no live invitations are invented here.
-            </p>
-          )}
-          {data?.connections
-            .filter((c) => c.kind === kind)
-            .map((c) => (
-              <ConsentCard
-                key={`${c.id}:${c.revision}`}
-                connection={c}
-                refresh={refresh}
-              />
-            ))}
-        </section>
-      ))}
+      <div className="grid2 connection-grid">
+        {["direct", "organization"].map((kind) => (
+          <section className="card connection-group" key={kind}>
+            <h2>
+              {kind === "direct" ? "Direct practitioners" : "Organizations"}
+            </h2>
+            {data && !data.connections.some((c) => c.kind === kind) && (
+              <p>
+                No connections in this group. Provider invitation screens arrive
+                in later tasks; no live invitations are invented here.
+              </p>
+            )}
+            {data?.connections
+              .filter((c) => c.kind === kind)
+              .map((c) => (
+                <ConsentCard
+                  key={`${c.id}:${c.revision}`}
+                  connection={c}
+                  refresh={refresh}
+                />
+              ))}
+          </section>
+        ))}
+      </div>
       <h2>Meaningful access history</h2>
       <p className="muted">
         Most recent 100 recorded access and connection operations.

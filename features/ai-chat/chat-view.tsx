@@ -1,9 +1,13 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Btn } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
+import { Btn, IconBtn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import { ExtractionStatus } from "./extraction/status-view";
+import { Icon, Logo } from "@/components/ui/icons";
+import { useChatNavigation } from "@/components/layout/chat-navigation";
+
 type Message = {
   id: string;
   role: string;
@@ -15,6 +19,12 @@ type Message = {
 };
 type History = { items: Message[]; nextCursor: string | null };
 export function ChatView() {
+  const router = useRouter();
+  const chatNavigation = useChatNavigation();
+  const requested = chatNavigation?.requested;
+  const setNavigation = chatNavigation?.setNavigation;
+  const initialRequest = useRef(requested);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [conversations, setConversations] = useState<
       { id: string; created_at: string }[]
     >([]),
@@ -35,7 +45,7 @@ export function ChatView() {
     void api<{ id: string; created_at: string }[]>("/api/chat")
       .then((items) => {
         setConversations(items);
-        if (items[0]) {
+        if (items[0] && !initialRequest.current) {
           current.current = items[0].id;
           setSelected(items[0].id);
           void load(items[0].id).catch((e) => setError(errorMessage(e)));
@@ -43,6 +53,30 @@ export function ChatView() {
       })
       .catch((e) => setError(errorMessage(e)));
   }, []);
+  useEffect(() => {
+    setNavigation?.({ conversations, selected, busy });
+  }, [conversations, selected, busy, setNavigation]);
+  useEffect(() => {
+    if (!requested) return;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      current.current = requested.id;
+      setSelected(requested.id);
+      setError("");
+      request.current = null;
+      setHistory({ items: [], nextCursor: null });
+      if (requested.id)
+        void load(requested.id).catch((e) => setError(errorMessage(e)));
+    });
+    return () => {
+      active = false;
+    };
+  }, [requested]);
+  useEffect(() => {
+    const area = scrollRef.current;
+    if (area) area.scrollTop = area.scrollHeight;
+  }, [history.items.length, generating]);
   async function generate(id: string, conversation: string) {
     setGenerating(id);
     setError("");
@@ -103,180 +137,292 @@ export function ChatView() {
     }
   }
   return (
-    <section className="patient-page chat-live">
-      <header>
-        <h1>Your health conversation</h1>
-        <p className="muted">
-          AI interpretation stays in chat. Clear reports are extracted into your
-          record; processing gaps remain visible.
-        </p>
-        <div className="care-links">
-          <Link href="/documents">Documents</Link> ·{" "}
-          <Link href="/health">Health details</Link> ·{" "}
-          <Link href="/sharing">Connections</Link> ·{" "}
-          <Link href="/profile">Account</Link>
+    <section className="pagecol restored-chat">
+      <header className="chead">
+        <div>
+          <h1 className="ctitle">Conversation</h1>
+          <p className="csub">Your health story, kept together</p>
         </div>
-        <label>
-          Conversation{" "}
-          <select
-            value={selected}
-            disabled={busy}
-            onChange={(e) => {
-              current.current = e.target.value;
-              setSelected(e.target.value);
-              void load(e.target.value).catch((e) => setError(errorMessage(e)));
-            }}
-          >
-            <option value="">New conversation</option>
-            {conversations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {new Date(c.created_at).toLocaleString()}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Btn
-          disabled={busy}
-          onClick={() => {
-            setSelected("");
-            current.current = "";
-            setHistory({ items: [], nextCursor: null });
-          }}
-        >
-          New chat
-        </Btn>
-        <Btn
-          disabled={busy || !selected}
-          onClick={async () => {
-            setBusy(true);
-            setError("");
-            try {
-              await api("/api/assessment", {
-                conversationId: selected,
-                requestKey: crypto.randomUUID(),
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-              });
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setBusy(false);
-              await load(selected);
-            }
-          }}
-        >
-          Assess available evidence
-        </Btn>
-      </header>
-      {history.nextCursor && (
-        <Btn
-          disabled={busy}
-          onClick={async () => {
-            try {
-              const older = await api<History>(
-                `/api/chat?id=${selected}&before=${history.nextCursor}`,
-              );
-              setHistory({
-                items: [...older.items, ...history.items],
-                nextCursor: older.nextCursor,
-              });
-            } catch (e) {
-              setError(errorMessage(e));
-            }
-          }}
-        >
-          Earlier messages
-        </Btn>
-      )}
-      <div className="chat-history" aria-label="Conversation history">
-        {!history.items.length && (
-          <div className="chat-welcome">
-            <h2>A place for your health story</h2>
-            <p>
-              Share what happened, ask a question, or return to a previous
-              conversation.
-            </p>
-          </div>
-        )}
-        {history.items.map((m, index) => (
-          <article
-            className={`record-card message-${m.role}`}
-            key={m.id}
-            id={`message-${m.id}`}
-          >
-            <strong>
-              {m.role === "patient" ? "You" : "Mhistree AI · interpretation"}
-            </strong>
-            {index > 0 &&
-              new Date(m.captured_at).getTime() -
-                new Date(history.items[index - 1].captured_at).getTime() >
-                3600000 && (
-                <p className="muted">Conversation resumed after a gap</p>
-              )}
-            <p style={{ whiteSpace: "pre-wrap" }}>{m.content}</p>
-            <small>
-              {new Date(m.captured_at).toLocaleString()} · captured in{" "}
-              {m.timezone}
-            </small>
-            {m.state && m.state !== "succeeded" && (
-              <p>
-                Reply: {m.state}{" "}
-                {["failed", "queued", "running"].includes(m.state) && (
-                  <Btn
-                    disabled={Boolean(generating)}
-                    onClick={() => void generate(m.id, selected)}
-                  >
-                    Retry reply
-                  </Btn>
-                )}
+        <div className="chat-header-actions">
+          <details className="chat-tools">
+            <summary className="hpill hpill-dark">
+              <Icon n="spark" s={13} />
+              Conversation options
+            </summary>
+            <div className="chat-tools-panel card">
+              <label className="mlabel">
+                Saved conversation
+                <select
+                  value={selected}
+                  disabled={busy}
+                  onChange={(e) => {
+                    current.current = e.target.value;
+                    setSelected(e.target.value);
+                    if (e.target.value)
+                      void load(e.target.value).catch((e) =>
+                        setError(errorMessage(e)),
+                      );
+                    else setHistory({ items: [], nextCursor: null });
+                  }}
+                >
+                  <option value="">New conversation</option>
+                  {conversations.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {new Date(c.created_at).toLocaleString()}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <Btn
+                sm
+                disabled={busy}
+                onClick={() => {
+                  setSelected("");
+                  current.current = "";
+                  setHistory({ items: [], nextCursor: null });
+                }}
+              >
+                New chat
+              </Btn>
+              <Btn
+                sm
+                disabled={busy || !selected}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  try {
+                    await api("/api/assessment", {
+                      conversationId: selected,
+                      requestKey: crypto.randomUUID(),
+                      timezone:
+                        Intl.DateTimeFormat().resolvedOptions().timeZone,
+                    });
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  } finally {
+                    setBusy(false);
+                    await load(selected);
+                  }
+                }}
+              >
+                Assess available evidence
+              </Btn>
+              <p className="muted">
+                AI interpretation stays in chat. Clear reports are extracted
+                into your record.
               </p>
-            )}
-          </article>
-        ))}
-      </div>
-      {generating && (
-        <div role="status">
-          Generating reply…{" "}
+            </div>
+          </details>
+          <IconBtn
+            ghost
+            icon="bell"
+            size={40}
+            title="Notifications unavailable"
+            disabled
+          />
+        </div>
+      </header>
+      <div
+        className="msgs"
+        ref={scrollRef}
+        aria-label="Conversation history"
+        aria-busy={busy}
+      >
+        {history.nextCursor && (
           <Btn
+            sm
+            disabled={busy}
             onClick={async () => {
               try {
-                await api("/api/chat", {
-                  action: "cancel",
-                  data: { id: generating },
+                const older = await api<History>(
+                  `/api/chat?id=${selected}&before=${history.nextCursor}`,
+                );
+                setHistory({
+                  items: [...older.items, ...history.items],
+                  nextCursor: older.nextCursor,
                 });
-                await load(selected);
               } catch (e) {
                 setError(errorMessage(e));
               }
             }}
           >
-            Cancel reply
+            Earlier messages
           </Btn>
-        </div>
-      )}
-      {error && <p role="alert">{error}</p>}
-      <form onSubmit={send} className="account-form">
-        <label>
-          Your message
-          <textarea
-            name="message"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={10000}
-            rows={3}
-            required
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                e.currentTarget.form?.requestSubmit();
-              }
-            }}
-          />
+        )}
+        {!history.items.length && (
+          <div className="empty">
+            <div>
+              <Logo s={44} />
+              <h2 className="display-sm display">
+                How can I help with
+                <br />
+                your health today?
+              </h2>
+              <p className="esub">
+                Tell me what you’re experiencing, ask about your health history,
+                or just talk normally.
+              </p>
+              <div className="qrow">
+                <Btn
+                  sm
+                  icon="chat"
+                  onClick={() => {
+                    document.getElementById("chat-message")?.focus();
+                  }}
+                >
+                  Describe how you feel
+                </Btn>
+                <Btn sm icon="heart" asChild>
+                  <Link href="/health">Review my health</Link>
+                </Btn>
+                <Btn sm icon="doc" asChild>
+                  <Link href="/documents">Add a document</Link>
+                </Btn>
+              </div>
+            </div>
+          </div>
+        )}
+        {history.items.map((m, index) => (
+          <div key={m.id}>
+            {index > 0 &&
+              new Date(m.captured_at).getTime() -
+                new Date(history.items[index - 1].captured_at).getTime() >
+                3600000 && (
+                <p className="conversation-gap">
+                  Conversation resumed after a gap
+                </p>
+              )}
+            <article
+              className={`brow ${m.role === "patient" ? "brow-user" : "brow-ai"}`}
+              id={`message-${m.id}`}
+            >
+              {m.role !== "patient" && (
+                <span className="aav">
+                  <Logo s={22} />
+                </span>
+              )}
+              <div
+                className={`bubble${m.role === "patient" ? " bubble-user" : ""}`}
+              >
+                <span className="sr-only">
+                  {m.role === "patient" ? "You" : "Mhistree AI interpretation"}
+                </span>
+                <p className="message-content">{m.content}</p>
+                <details className="message-meta">
+                  <summary>
+                    {m.role === "patient"
+                      ? "Message details"
+                      : "AI interpretation · details"}
+                  </summary>
+                  <small>
+                    {new Date(m.captured_at).toLocaleString()} · captured in{" "}
+                    {m.timezone}
+                  </small>
+                </details>
+                {m.state && m.state !== "succeeded" && (
+                  <p className="message-status">
+                    Reply: {m.state}{" "}
+                    {["failed", "queued", "running"].includes(m.state) && (
+                      <Btn
+                        sm
+                        disabled={Boolean(generating)}
+                        onClick={() => void generate(m.id, selected)}
+                      >
+                        Retry reply
+                      </Btn>
+                    )}
+                  </p>
+                )}
+              </div>
+            </article>
+          </div>
+        ))}
+        {generating && (
+          <div className="brow brow-ai" role="status">
+            <span className="aav">
+              <Logo s={22} />
+            </span>
+            <div className="bubble">
+              <span className="tdots" aria-label="Generating reply">
+                <i />
+                <i />
+                <i />
+              </span>
+              <Btn
+                sm
+                onClick={async () => {
+                  try {
+                    await api("/api/chat", {
+                      action: "cancel",
+                      data: { id: generating },
+                    });
+                    await load(selected);
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  }
+                }}
+              >
+                Cancel reply
+              </Btn>
+            </div>
+          </div>
+        )}
+        {error && (
+          <p className="ui-notice" role="alert">
+            {error}
+          </p>
+        )}
+        <details className="processing-disclosure">
+          <summary>Report processing</summary>
+          <ExtractionStatus revision={history.items.length} />
+        </details>
+      </div>
+      <form onSubmit={send} className="composer">
+        <IconBtn
+          icon="clip"
+          size={44}
+          title="Attach a document"
+          onClick={() => router.push("/documents")}
+        />
+        <IconBtn
+          icon="mic"
+          size={44}
+          title="Voice input unavailable"
+          disabled
+        />
+        <label className="sr-only" htmlFor="chat-message">
+          Message Mhistree
         </label>
-        <Btn kind="dark" type="submit" disabled={busy}>
-          {busy ? "Sending…" : "Send message"}
-        </Btn>
+        <textarea
+          id="chat-message"
+          className="cinput"
+          name="message"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          maxLength={10000}
+          rows={1}
+          required
+          placeholder={busy ? "Replying…" : "Message…"}
+          onKeyDown={(e) => {
+            if (
+              e.key === "Enter" &&
+              !e.shiftKey &&
+              !e.nativeEvent.isComposing
+            ) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+        />
+        <button
+          className="btn btn-dark send"
+          type="submit"
+          aria-label="Send message"
+          disabled={busy || !text.trim()}
+        >
+          <Icon n="up" s={17} />
+        </button>
       </form>
-      <ExtractionStatus revision={history.items.length} />
     </section>
   );
 }

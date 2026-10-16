@@ -76,13 +76,20 @@ export function DocumentsView() {
     }
   }
   return (
-    <section className="patient-page">
-      <h1>Your documents</h1>
+    <section className="scroll restored-documents patient-page">
+      <header className="phead">
+        <div>
+          <h1 className="ptitle">Documents</h1>
+          <p className="psub">
+            Labs, prescriptions and reports — evidence behind your timeline
+          </p>
+        </div>
+      </header>
       <p>
         Keep the original and see what was extracted. Uploads are
         patient-provided information, not clinically verified results.
       </p>
-      <form className="account-form" onSubmit={upload}>
+      <form className="account-form card document-upload" onSubmit={upload}>
         <label>
           PDF or UTF-8 text file (up to 10 MB)
           <input
@@ -104,47 +111,50 @@ export function DocumentsView() {
       </p>
       {error && <p role="alert">{error}</p>}
       {!documents.length && <p>No documents uploaded yet.</p>}
-      {documents.map((doc) => (
-        <article className="record-card" key={doc.source_id}>
-          <h2>{doc.filename}</h2>
-          <p>Status: {doc.status}</p>
-          <a href={`/api/documents/${doc.source_id}`}>Download original</a>
-          {["queued", "failed", "parsing"].includes(doc.status) &&
-            doc.attempts < 5 && (
-              <Btn
-                disabled={busy}
-                onClick={async () => {
-                  setBusy(true);
-                  try {
-                    await parse(doc.source_id);
-                  } catch (e) {
-                    setError(errorMessage(e));
-                  } finally {
-                    setBusy(false);
-                  }
-                }}
-              >
-                Retry processing
-              </Btn>
+      <div className="grid3 document-grid">
+        {documents.map((doc) => (
+          <article className="card document-card" key={doc.source_id}>
+            <h2>{doc.filename}</h2>
+            <p>Status: {doc.status}</p>
+            <a href={`/api/documents/${doc.source_id}`}>Download original</a>
+            {["queued", "failed", "parsing"].includes(doc.status) &&
+              doc.attempts < 5 && (
+                <Btn
+                  disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    try {
+                      await parse(doc.source_id);
+                    } catch (e) {
+                      setError(errorMessage(e));
+                    } finally {
+                      setBusy(false);
+                    }
+                  }}
+                >
+                  Retry processing
+                </Btn>
+              )}
+            {doc.status === "quarantined" && (
+              <p>
+                Held for review. The original is retained; extraction has not
+                run.
+              </p>
             )}
-          {doc.status === "quarantined" && (
-            <p>
-              Held for review. The original is retained; extraction has not run.
-            </p>
-          )}
-          {doc.pages && (
-            <details>
-              <summary>Read extracted pages</summary>
-              {doc.pages.map((page) => (
-                <section key={page.page}>
-                  <h3>Page {page.page}</h3>
-                  <p style={{ whiteSpace: "pre-wrap" }}>{page.text}</p>
-                </section>
-              ))}
-            </details>
-          )}
-        </article>
-      ))}
+            {doc.pages && (
+              <details>
+                <summary>Read extracted pages</summary>
+                {doc.pages.map((page) => (
+                  <section key={page.page}>
+                    <h3>Page {page.page}</h3>
+                    <p style={{ whiteSpace: "pre-wrap" }}>{page.text}</p>
+                  </section>
+                ))}
+              </details>
+            )}
+          </article>
+        ))}
+      </div>
       <ExtractionStatus revision={revision} />
     </section>
   );
