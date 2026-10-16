@@ -146,7 +146,8 @@ export function ChatView() {
       });
       setText("");
       request.current = null;
-      await load(id);
+      // A display refresh must not prevent a saved message from receiving a reply.
+      await load(id).catch(() => {});
       // Extraction is durable and independently retryable; it must never gate a reply.
       void processReport(result.messageId);
       await generate(result.messageId, id);
@@ -343,7 +344,7 @@ export function ChatView() {
                 {m.state && m.state !== "succeeded" && (
                   <p className="message-status">
                     Reply: {m.state}{" "}
-                    {["failed", "queued", "running"].includes(m.state) && (
+                    {m.state === "failed" && generating !== m.id && (
                       <Btn
                         sm
                         disabled={Boolean(generating)}

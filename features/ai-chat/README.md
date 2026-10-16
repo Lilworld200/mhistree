@@ -10,6 +10,8 @@ Tests: integration/chat.test.ts includes real gateway generation and SQL isolati
 
 Chat presentation restores the 71121bd pagecol/chead/msgs/bubble/composer design. Conversation options contains the existing assessment/history controls; processing remains available in a disclosure. Sidebar selection uses components/layout/chat-navigation.tsx and current IDs/APIs. No legacy store/provider was restored.
 
+2026-10-16 first-send follow-up: Retry reply appears only for a failed generation and is hidden while that message is being retried. A failed post-send history GET cannot prevent extraction/reply requests after a successful save. UI regressions live in tests/chat-send-flow.test.ts. A fresh native synthetic first-send passes with a controlled gateway; the opt-in live case now also uses a fresh queued message rather than retrying an earlier failed message. Live investigation reproduced three upstream503 responses from the configured model; see docs/tasks/chat-first-send-2026-10-16.md. Provider availability remains unresolved.
+
 ## Chat resilience — 2026-10-16
 
 lib/ai/request.ts retries network failures and transient408/429/500/502/503/504, at most3 total attempts with exponential backoff/jitter and Retry-After handling. One45-second deadline covers retries and response consumption within the60-second generation lease. Cancellation/permanent errors are not retried; long quota waits return for manual retry. Safe console diagnostics include model/attempt/status only, never key/prompts/records. No fallback model or fabricated answer.

@@ -72,6 +72,22 @@ describe("durable patient chat", () => {
     expect(page.items[0].state).toBe("failed");
     expect(page.items[0].content).toContain("Synthetic test");
   });
+  it("generates on the first attempt without a preceding failure or manual retry", async () => {
+    const id = randomUUID();
+    await createConversation(db.pool, patient.session, id);
+    const sent = await sendMessage(db.pool, patient.session, {
+      conversationId: id,
+      requestKey: randomUUID(),
+      content: "Synthetic first-send test",
+      timezone: "Africa/Lagos",
+    });
+    expect((await generateReply(db.pool, patient.session, sent.messageId, {
+      generate: async () => "Synthetic first reply",
+    })).state).toBe("succeeded");
+    const history = await conversationHistory(db.pool, patient.session, id);
+    expect(history.items.map((m) => m.role)).toEqual(["patient", "assistant"]);
+    expect(history.items[0].state).toBe("succeeded");
+  });
   it.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
     "real configured gateway reply persists separately and never inserts clinical facts",
     async () => {
@@ -85,11 +101,19 @@ describe("durable patient chat", () => {
         chatModel: c.AI_PATIENT_MODEL,
         extractionModel: c.AI_EXTRACTION_MODEL,
       });
-      await generateReply(db.pool, patient.session, message, gateway);
+      const freshConversation = randomUUID();
+      await createConversation(db.pool, patient.session, freshConversation);
+      const fresh = await sendMessage(db.pool, patient.session, {
+        conversationId: freshConversation,
+        requestKey: randomUUID(),
+        content: "Synthetic connectivity check. Please give a brief greeting.",
+        timezone: "Africa/Lagos",
+      });
+      await generateReply(db.pool, patient.session, fresh.messageId, gateway);
       const page = await conversationHistory(
         db.pool,
         patient.session,
-        conversation,
+        freshConversation,
       );
       expect(page.items).toHaveLength(2);
       expect(page.items[1].role).toBe("assistant");

@@ -1,3 +1,19 @@
+## First-send chat investigation — 2026-10-16
+
+Owner reported premature Retry reply and generation failure. Restricted Retry reply to failed messages, hidden during the same message's active retry. Reproduced saved audit finding11 with actual ChatView: post-save history GET failure prevented generate. History refresh failure now cannot stop first generation. Deterministic UI/chat/gateway checks passed15, live case skipped; separate opt-in fresh-message/live-model run passed4 and failed1 on gemini-3.1-flash-lite upstream503 on all three automatic attempts. Synthetic native DB only; no real patient data/provider identity or hosted mutations. The live failure occurred without clinical evidence or concurrent extraction, so audit retrieval/extraction issues did not cause that reproduced error. Provider availability remains unresolved; no model/configuration switch. Detailed evidence: [first-send investigation](docs/tasks/chat-first-send-2026-10-16.md). Other audit issues remain saved for future work.
+
+Final checks for first-send follow-up: full lint and git diff --check passed. No production build or browser run in this follow-up; UI behavior was exercised through actual React ChatView in jsdom and native PostgreSQL integration.
+
+## Chat alignment correction and saved audit — 2026-10-16
+
+Latest owner instruction supersedes the earlier both-left alignment: /chat user bubbles align right and AI bubbles align left. Updated only the scoped .restored-chat .brow-user CSS, preserving the AI rule and message behavior. Static CSS check confirms separate opposing alignment/margins; no browser or backend tests needed for this bounded style edit.
+
+Other findings are retained for future work in [code/workflow audit](docs/audit/code-workflow-2026-10-16.md). Owner requested saving them for later; no audit fixes are authorized by this alignment task. Audit verification: lint passed, 18 focused tests passed, typecheck failed on corrupted generated .next/dev/types/root-params.d.ts. Existing release gates remain open.
+
+## Earlier chat message alignment - 2026-10-16 (superseded)
+
+Owner requested both user and AI messages at the left. Scoped .restored-chat bubble-row CSS sets both rows to flex-start with left0/right-auto margins; bubble colors, content and chat behavior unchanged. Whitespace check passed.
+
 ## Chat resilience implementation - 2026-10-16
 
 Owner authorized fixes after diagnostics. Added lib/ai/request.ts bounded same-model transient retry (max3 attempts, shared45s deadline, backoff/jitter/Retry-After, cancellation and permanent error handling, safe status-only logging). Gateway selects configured clinician model for practitioner purpose. ChatView runs extraction independently of reply so failed/slow extraction lookup no longer blocks generate; separate processing notices/revision refresh and saved-message manual-retry guidance preserve current layout. Existing auth, RLS, idempotency and pre-publication checks unchanged; buffered delivery remains and embeddings are still not in retrieval.
