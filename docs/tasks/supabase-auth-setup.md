@@ -50,6 +50,7 @@ SUPABASE_SERVICE_ROLE_KEY=<Mhistree server-only key>
 AUTH_FLOW_COOKIE_KEY=<64 hex characters from 32 random bytes>
 DATABASE_URL=<private app database connection>
 DATABASE_SSL=verify-full
+DATABASE_SSL_CA_FILE=config/certs/supabase-ca.crt
 APP_ORIGIN=<exact website origin>
 ```
 
@@ -79,3 +80,5 @@ Native PostgreSQL tests cover subject binding, no account before verification, o
 Prior Keycloak accounts are not silently linked by email. A reviewed staff recovery/setup approval can transition an existing Keycloak account to verified Supabase ownership while retaining person/account IDs and a transition journal. Unmapped existing Supabase accounts require identity review. Original data is not deleted. Callback codes are exchanged exclusively on the server; provider tokens never enter browser JavaScript or app tables; hashed opaque app sessions remain the authority for private records.
 
 Phone support: Supabase supports phone/password and phone OTP, but needs enabled phone auth plus a configured SMS provider (e.g. Twilio, Vonage or MessageBird). No phone signup or SMS delivery is implemented in this email-first MVP. [Supabase phone sign-in](https://supabase.com/docs/guides/auth/phone-login).
+
+2026-10-16 hosted connection: app database fields are in ignored .env. Remove DATABASE_URL/DATABASE_SSL from .env.local to prevent overrides. URI passwords must be URL-encoded. The bundled public Supabase CA certificate enables verified TLS; include config/certs/supabase-ca.crt in deployments. Migration 20261016120515_hosted_runtime_membership grants the hosted postgres login explicit SET permission for the restricted runtime role. Restart Next.js after connection changes.

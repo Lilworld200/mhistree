@@ -1,3 +1,4 @@
+import { authDebugStage } from "@/lib/auth/temporary-debug";
 import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Pool } from "pg";
@@ -47,9 +48,13 @@ export async function signupEmail(
   network: string,
   setupSession?: string,
 ) {
+  authDebugStage("signup.validate-fields");
   const data = registration.parse(input);
+  authDebugStage("signup.database-rate-limit");
   await consumeAttempt(pool, "email.signup", network, 10, 3600);
+  authDebugStage("signup.database-lock");
   return lock(pool, `email-signup:${digest(data.requestKey)}`, async () => {
+    authDebugStage("signup.database-enrollment-lookup");
     const previous = (
       await pool.query(
         "select email,display_name,birth_date::text,target_person_id from mhistree.email_enrollments where request_digest=$1",
@@ -86,12 +91,14 @@ export async function signupEmail(
       if (account?.provider === "supabase")
         throw new DomainError("IDENTITY_REVIEW_REQUIRED");
     }
+    authDebugStage("signup.supabase-create-and-send-email");
     const subject = await provider.signup(
       data.email,
       data.password,
       `${origin()}/auth/callback?flow=signup`,
     );
     if (!subject) return { verificationRequired: true };
+    authDebugStage("signup.database-save-enrollment");
     await transaction(async (tx) => {
       if (setup) {
         const consumed = await tx.query(

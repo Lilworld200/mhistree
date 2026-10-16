@@ -4,6 +4,7 @@ import { DomainError } from "./errors";
 const databaseSchema = z.object({
   DATABASE_URL: z.url().refine((v) => /^postgres(ql)?:\/\//.test(v)),
   DATABASE_SSL: z.enum(["verify-full", "local"]).default("verify-full"),
+  DATABASE_SSL_CA_FILE: z.string().min(1).optional(),
 });
 export function databaseEnvironment(
   input: Record<string, string | undefined> = process.env,

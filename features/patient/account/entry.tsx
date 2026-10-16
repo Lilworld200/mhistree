@@ -133,10 +133,6 @@ export function AccountEntry({
                 maxLength={200}
                 required
               />
-              <p className="muted">
-                Already received care with Mhistree? Use your setup code to keep
-                the same record.
-              </p>
             </>
           )}
           {mode === "redeem" && (

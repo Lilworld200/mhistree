@@ -1,3 +1,4 @@
+import { authDebugError } from "@/lib/auth/temporary-debug";
 import "server-only";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { decodeJwt } from "jose";
@@ -65,7 +66,8 @@ export class SupabaseProvider {
       password,
       options: { emailRedirectTo: redirectTo },
     });
-    if (error)
+    if (error) {
+      authDebugError(error);
       throw new DomainError(
         error.code === "email_address_not_authorized"
           ? "EMAIL_DELIVERY_UNAVAILABLE"
@@ -73,6 +75,7 @@ export class SupabaseProvider {
             ? "RATE_LIMITED"
             : "PROVIDER_UNAVAILABLE",
       );
+    }
     // Supabase deliberately obscures an already registered email. Never bind its
     // obfuscated user object to a new person or an invitation.
     return data.user?.identities?.length ? data.user.id : null;
