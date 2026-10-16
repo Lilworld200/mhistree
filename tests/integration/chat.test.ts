@@ -1,5 +1,6 @@
 import { beforeAll, afterAll, describe, it, expect } from "vitest";
 import { readFile } from "node:fs/promises";
+import { parseEnv } from "node:util";
 import { randomUUID } from "node:crypto";
 import { testDatabase } from "../helpers/postgres";
 import { staffFixture } from "../helpers/fixtures";
@@ -71,28 +72,36 @@ describe("durable patient chat", () => {
     expect(page.items[0].state).toBe("failed");
     expect(page.items[0].content).toContain("Synthetic test");
   });
-  it("real configured gateway reply persists separately and never inserts clinical facts", async () => {
-    const c = JSON.parse(await readFile(".local/ai-config.json", "utf8"));
-    const gateway = new GeminiGateway({
-      key: c.GEMINI_API_KEY,
-      chatModel: c.AI_PATIENT_MODEL,
-      extractionModel: c.AI_EXTRACTION_MODEL,
-    });
-    await generateReply(db.pool, patient.session, message, gateway);
-    const page = await conversationHistory(
-      db.pool,
-      patient.session,
-      conversation,
-    );
-    expect(page.items).toHaveLength(2);
-    expect(page.items[1].role).toBe("assistant");
-    expect(
-      Number(
-        (await db.pool.query("select count(*) from mhistree.contributions"))
-          .rows[0].count,
-      ),
-    ).toBe(0);
-  }, 60000);
+  it.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
+    "real configured gateway reply persists separately and never inserts clinical facts",
+    async () => {
+      const c = { ...parseEnv(await readFile(".env", "utf8")), ...process.env };
+      if (!c.GEMINI_API_KEY || !c.AI_PATIENT_MODEL || !c.AI_EXTRACTION_MODEL)
+        throw new Error(
+          "Live Gemini test requires configured .env model fields",
+        );
+      const gateway = new GeminiGateway({
+        key: c.GEMINI_API_KEY,
+        chatModel: c.AI_PATIENT_MODEL,
+        extractionModel: c.AI_EXTRACTION_MODEL,
+      });
+      await generateReply(db.pool, patient.session, message, gateway);
+      const page = await conversationHistory(
+        db.pool,
+        patient.session,
+        conversation,
+      );
+      expect(page.items).toHaveLength(2);
+      expect(page.items[1].role).toBe("assistant");
+      expect(
+        Number(
+          (await db.pool.query("select count(*) from mhistree.contributions"))
+            .rows[0].count,
+        ),
+      ).toBe(0);
+    },
+    60000,
+  );
   it("cancellation during generation withholds output", async () => {
     const sent = await sendMessage(db.pool, patient.session, {
       conversationId: conversation,

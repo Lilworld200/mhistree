@@ -9,3 +9,11 @@
 Tests: integration/chat.test.ts includes real gateway generation and SQL isolation; injected adapters are explicitly failure/cancellation controls. extraction.test.ts covers model output, temporal interpretation and replay. Missing provider configuration or errors remain failures rather than fabricated replies.
 
 Chat presentation restores the 71121bd pagecol/chead/msgs/bubble/composer design. Conversation options contains the existing assessment/history controls; processing remains available in a disclosure. Sidebar selection uses components/layout/chat-navigation.tsx and current IDs/APIs. No legacy store/provider was restored.
+
+## Chat resilience — 2026-10-16
+
+lib/ai/request.ts retries network failures and transient408/429/500/502/503/504, at most3 total attempts with exponential backoff/jitter and Retry-After handling. One45-second deadline covers retries and response consumption within the60-second generation lease. Cancellation/permanent errors are not retried; long quota waits return for manual retry. Safe console diagnostics include model/attempt/status only, never key/prompts/records. No fallback model or fabricated answer.
+
+ChatView starts durable extraction and reply generation independently after the message/history save. Extraction-status lookup/processing failure cannot block generate; a separate notice and processing revision refresh retained retry controls. The reply uses current authorized context plus the saved conversation; new extracted state may become available after that reply. No new background worker is implied: navigating away may interrupt processing, and queued/failed durable jobs remain manually retryable. Replies are still buffered and authorized before delivery.
+
+AI_CLINICIAN_MODEL is used for purpose clinician; if omitted it retains patient-model compatibility. Extraction uses its own configured model. Embedding settings remain reserved; retrieval still uses authorized SQL ranking. Tests: tests/ai-gateway-retry.test.ts; opt-in live chat test now reads .env/process environment with MHISTREE_LIVE_AI_TEST=1 instead of obsolete .local/ai-config.json. Browser fault checks and limits are recorded in docs/tasks/chat-resilience-fix-2026-10-16.md.

@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { requestGemini } from "./request";
 import { DomainError } from "@/lib/errors";
 export type AIMessage = { role: "user" | "assistant"; content: string };
 export interface AIGateway {
@@ -9,14 +10,19 @@ export interface AIGateway {
     options?: {
       json?: boolean;
       signal?: AbortSignal;
-      purpose?: "chat" | "extraction";
+      purpose?: "chat" | "extraction" | "clinician";
     },
   ): Promise<string>;
 }
 /** Reuses the configured provider/model through a single server-only gateway. No tools or provider fallbacks. */
 export class GeminiGateway implements AIGateway {
   constructor(
-    private config: { key: string; chatModel: string; extractionModel: string },
+    private config: {
+      key: string;
+      chatModel: string;
+      extractionModel: string;
+      clinicianModel?: string;
+    },
   ) {}
   async generate(
     system: string,
@@ -24,16 +30,18 @@ export class GeminiGateway implements AIGateway {
     options: {
       json?: boolean;
       signal?: AbortSignal;
-      purpose?: "chat" | "extraction";
+      purpose?: "chat" | "extraction" | "clinician";
     } = {},
   ) {
     const model =
       options.purpose === "extraction"
         ? this.config.extractionModel
-        : this.config.chatModel;
+        : options.purpose === "clinician"
+          ? (this.config.clinicianModel ?? this.config.chatModel)
+          : this.config.chatModel;
     let response: Response;
     try {
-      response = await fetch(
+      response = await requestGemini(
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
         {
           method: "POST",
@@ -43,9 +51,6 @@ export class GeminiGateway implements AIGateway {
           },
           cache: "no-store",
           redirect: "error",
-          signal: options.signal
-            ? AbortSignal.any([options.signal, AbortSignal.timeout(45000)])
-            : AbortSignal.timeout(45000),
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: system }] },
             contents: messages.map((m) => ({
@@ -59,14 +64,13 @@ export class GeminiGateway implements AIGateway {
             },
           }),
         },
+        model,
+        options.signal,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
       throw new DomainError("PROVIDER_UNAVAILABLE");
     }
-    if (!response.ok)
-      throw new DomainError(
-        response.status === 429 ? "RATE_LIMITED" : "PROVIDER_UNAVAILABLE",
-      );
     const result = z
       .object({
         candidates: z
@@ -104,6 +108,7 @@ export function aiGateway(): AIGateway {
       GEMINI_API_KEY: z.string().min(1),
       AI_PATIENT_MODEL: z.string().min(1),
       AI_EXTRACTION_MODEL: z.string().min(1),
+      AI_CLINICIAN_MODEL: z.string().min(1).optional(),
     })
     .safeParse(process.env);
   if (!config.success) throw new DomainError("CONFIGURATION_REQUIRED");
@@ -111,5 +116,6 @@ export function aiGateway(): AIGateway {
     key: config.data.GEMINI_API_KEY,
     chatModel: config.data.AI_PATIENT_MODEL,
     extractionModel: config.data.AI_EXTRACTION_MODEL,
+    clinicianModel: config.data.AI_CLINICIAN_MODEL,
   });
 }

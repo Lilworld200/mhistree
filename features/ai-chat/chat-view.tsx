@@ -33,7 +33,10 @@ export function ChatView() {
     [text, setText] = useState(""),
     [busy, setBusy] = useState(false),
     [error, setError] = useState(""),
-    [generating, setGenerating] = useState("");
+    [generating, setGenerating] = useState(""),
+    [processing, setProcessing] = useState(0),
+    [processingError, setProcessingError] = useState(""),
+    [processingRevision, setProcessingRevision] = useState(0);
   const request = useRef<{ key: string; text: string } | null>(null),
     locked = useRef(false),
     current = useRef("");
@@ -54,8 +57,12 @@ export function ChatView() {
       .catch((e) => setError(errorMessage(e)));
   }, []);
   useEffect(() => {
-    setNavigation?.({ conversations, selected, busy });
-  }, [conversations, selected, busy, setNavigation]);
+    setNavigation?.({
+      conversations,
+      selected,
+      busy: busy || Boolean(generating),
+    });
+  }, [conversations, selected, busy, generating, setNavigation]);
   useEffect(() => {
     if (!requested) return;
     let active = true;
@@ -83,15 +90,37 @@ export function ChatView() {
     try {
       await api("/api/chat", { action: "generate", data: { id } });
     } catch (e) {
-      setError(errorMessage(e));
+      setError(
+        e instanceof Error &&
+          ["PROVIDER_UNAVAILABLE", "RATE_LIMITED"].includes(e.message)
+          ? "The AI could not finish this reply. Your message is saved. Use Retry reply to try again."
+          : errorMessage(e),
+      );
     } finally {
       setGenerating("");
       await load(conversation).catch((e) => setError(errorMessage(e)));
     }
   }
+  async function processReport(messageId: string) {
+    setProcessing((count) => count + 1);
+    setProcessingError("");
+    try {
+      const jobs =
+        await api<{ id: string; message_id: string }[]>("/api/extraction");
+      const job = jobs.find((item) => item.message_id === messageId);
+      if (job) await api("/api/extraction", { id: job.id });
+    } catch {
+      setProcessingError(
+        "Your message is saved, but record processing needs a retry. Open Report processing below.",
+      );
+    } finally {
+      setProcessing((count) => count - 1);
+      setProcessingRevision((value) => value + 1);
+    }
+  }
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (locked.current || !text.trim()) return;
+    if (locked.current || generating || !text.trim()) return;
     locked.current = true;
     setBusy(true);
     setError("");
@@ -118,16 +147,8 @@ export function ChatView() {
       setText("");
       request.current = null;
       await load(id);
-      const jobs =
-        await api<{ id: string; message_id: string }[]>("/api/extraction");
-      const job = jobs.find((j) => j.message_id === result.messageId);
-      if (job) {
-        try {
-          await api("/api/extraction", { id: job.id });
-        } catch (e) {
-          setError(errorMessage(e));
-        }
-      }
+      // Extraction is durable and independently retryable; it must never gate a reply.
+      void processReport(result.messageId);
       await generate(result.messageId, id);
     } catch (error) {
       setError(errorMessage(error));
@@ -154,7 +175,7 @@ export function ChatView() {
                 Saved conversation
                 <select
                   value={selected}
-                  disabled={busy}
+                  disabled={busy || Boolean(generating)}
                   onChange={(e) => {
                     current.current = e.target.value;
                     setSelected(e.target.value);
@@ -175,7 +196,7 @@ export function ChatView() {
               </label>
               <Btn
                 sm
-                disabled={busy}
+                disabled={busy || Boolean(generating)}
                 onClick={() => {
                   setSelected("");
                   current.current = "";
@@ -186,7 +207,7 @@ export function ChatView() {
               </Btn>
               <Btn
                 sm
-                disabled={busy || !selected}
+                disabled={busy || Boolean(generating) || !selected}
                 onClick={async () => {
                   setBusy(true);
                   setError("");
@@ -231,7 +252,7 @@ export function ChatView() {
         {history.nextCursor && (
           <Btn
             sm
-            disabled={busy}
+            disabled={busy || Boolean(generating)}
             onClick={async () => {
               try {
                 const older = await api<History>(
@@ -372,9 +393,21 @@ export function ChatView() {
             {error}
           </p>
         )}
+        {processing > 0 && (
+          <p className="muted" role="status">
+            Updating your health record in parallel…
+          </p>
+        )}
+        {processingError && (
+          <p className="ui-notice" role="alert">
+            {processingError}
+          </p>
+        )}
         <details className="processing-disclosure">
           <summary>Report processing</summary>
-          <ExtractionStatus revision={history.items.length} />
+          <ExtractionStatus
+            revision={history.items.length + processingRevision}
+          />
         </details>
       </div>
       <form onSubmit={send} className="composer">
@@ -418,7 +451,7 @@ export function ChatView() {
           className="btn btn-dark send"
           type="submit"
           aria-label="Send message"
-          disabled={busy || !text.trim()}
+          disabled={busy || Boolean(generating) || !text.trim()}
         >
           <Icon n="up" s={17} />
         </button>
