@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 /** Synthetic local app database only. Never loads a legacy database URL or hosted Supabase configuration. */
 import { readFile, writeFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -128,7 +129,17 @@ try {
 } catch {
   /* AI can be configured separately in .env. */
 }
+let flowKey: string | undefined;
+try {
+  const existing = await readFile(".env.local", "utf8");
+  flowKey = existing.match(
+    /^AUTH_FLOW_COOKIE_KEY=["']?([a-f0-9]{64})["']?$/im,
+  )?.[1];
+} catch {
+  /* First local preparation. */
+}
 const values = {
+  AUTH_FLOW_COOKIE_KEY: flowKey ?? randomBytes(32).toString("hex"),
   DATABASE_URL: `postgresql://${connection.user}:${encodeURIComponent(String(connection.password))}@127.0.0.1:${connection.port}/${connection.database}`,
   DATABASE_SSL: "local",
   APP_ORIGIN: "http://127.0.0.1:3101",

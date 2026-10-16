@@ -1,6 +1,6 @@
 # Feature ownership and bounded navigation
 
-2026-10-14 current auth owner: `features/auth/email.ts` and `lib/auth/supabase.ts`, selected by `lib/auth/config.ts`; account entry uses email/password and verification. /auth/confirm and /recovery/update compose `features/patient/account/email-callback.tsx`; /recovery composes `email-recovery-form.tsx`. [Auth contract](contracts/auth.md), [SMTP/callback setup](tasks/supabase-auth-setup.md), `tests/integration/supabase-email.test.ts`. Main project checkout now contains this active source; older rebuild-root/provider descriptions below are historical.
+2026-10-14 current auth owner: `features/auth/email.ts` and `lib/auth/supabase.ts`, selected by `lib/auth/config.ts`; account entry uses email/password and verification. /auth/callback exchanges PKCE codes server-side; /auth/confirm provides invalid-link guidance and guarded /recovery/update composes `features/patient/account/email-callback.tsx`; /recovery composes `email-recovery-form.tsx`. [Auth contract](contracts/auth.md), [SMTP/callback setup](tasks/supabase-auth-setup.md), `tests/integration/supabase-email.test.ts`. Main project checkout now contains this active source; older rebuild-root/provider descriptions below are historical.
 
 Revision 2026-10-13. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The active source lives in the codex/rebuild worktree; old entrypoints below now have a `legacy/` prefix there. The following foundation owners are implemented; the older planning table retains historical targets, not claims of completion. Current T19-T31 owners are indexed below; no T32+ implementation is authorized by this phase.
 
@@ -64,3 +64,5 @@ Evidence: [recovered practitioner phase](tasks/practitioner-phase-evidence.md), 
 | T18 care | features/appointments/server.ts, features/messaging/server.ts, features/patient/care/{server,care-view}; /api/care; appointments/inbox/requests routes. |
 
 Patient migration sequence follows the three foundation migrations; every filename is unique and active migrations are under supabase/migrations. The legacy table above is historical navigation only. Current implementation and remaining acceptance gates: [patient evidence](tasks/patient-phase-evidence.md). Tests use real isolated native PostgreSQL and provider integrations, never the unrelated connected hosted project.
+
+Current PKCE callback: `app/auth/callback/route.ts`; `lib/auth/flow-cookie.ts` owns encrypted HttpOnly cookies using dedicated AUTH_FLOW_COOKIE_KEY. Browser JavaScript receives no provider token. /auth/confirm is invalid-link guidance; /recovery/update is the guarded password form.

@@ -10,6 +10,7 @@ const schema = z.object({
 });
 export function authenticationProvider(
   input: Record<string, string | undefined> = process.env,
+  verifier: string | null = null,
 ) {
   const parsed = schema.safeParse(input);
   if (!parsed.success) throw new DomainError("CONFIGURATION_REQUIRED");
@@ -21,5 +22,6 @@ export function authenticationProvider(
     c.NEXT_PUBLIC_SUPABASE_URL,
     key,
     c.SUPABASE_SERVICE_ROLE_KEY,
+    verifier,
   );
 }

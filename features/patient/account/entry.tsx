@@ -48,7 +48,6 @@ export function AccountEntry({
         }
         await api("/api/auth/signup", {
           displayName: values.get("displayName"),
-          birthDate: values.get("birthDate") || null,
           email: values.get("email"),
           password: values.get("password"),
           requestKey: enrollment.current,
@@ -133,12 +132,6 @@ export function AccountEntry({
                 autoComplete="name"
                 maxLength={200}
                 required
-              />
-              <AuthField
-                label="Date of birth (optional)"
-                name="birthDate"
-                type="date"
-                autoComplete="bday"
               />
               <p className="muted">
                 Already received care with Mhistree? Use your setup code to keep

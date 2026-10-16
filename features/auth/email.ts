@@ -89,7 +89,7 @@ export async function signupEmail(
     const subject = await provider.signup(
       data.email,
       data.password,
-      `${origin()}/auth/confirm`,
+      `${origin()}/auth/callback?flow=signup`,
     );
     if (!subject) return { verificationRequired: true };
     await transaction(async (tx) => {
@@ -382,7 +382,7 @@ export async function requestEmailReset(
   const address = z.email().max(254).parse(email).toLowerCase();
   await consumeAttempt(pool, "email.reset.network", network, 10, 3600);
   await consumeAttempt(pool, "email.reset.address", digest(address), 3, 3600);
-  await provider.resetEmail(address, `${origin()}/recovery/update`);
+  await provider.resetEmail(address, `${origin()}/auth/callback?flow=recovery`);
   return {
     message: "If this email has an account, a reset link will arrive shortly.",
   };
@@ -402,7 +402,10 @@ export async function resendVerification(
     3,
     3600,
   );
-  await provider.resendVerification(address, `${origin()}/auth/confirm`);
+  await provider.resendVerification(
+    address,
+    `${origin()}/auth/callback?flow=signup`,
+  );
   await pool.query(
     "update mhistree.email_enrollments set expires_at=clock_timestamp()+interval '1 hour' where email=$1 and completed_at is null",
     [address],

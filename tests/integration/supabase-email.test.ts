@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, expect, it } from "vitest";
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { createClient } from "@supabase/supabase-js";
 import { SupabaseProvider } from "@/lib/auth/supabase";
@@ -15,6 +15,7 @@ import { testDatabase } from "../helpers/postgres";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/auth/[operation]/route";
 import { database } from "@/lib/db/client";
+import { sealFlow, recoveryCookie } from "@/lib/auth/flow-cookie";
 import { removeContact } from "@/features/patient/account/server";
 
 let db: Awaited<ReturnType<typeof testDatabase>>;
@@ -297,11 +298,13 @@ it.runIf(process.env.MHISTREE_LIVE_AUTH_TEST === "1")(
       DATABASE_URL: `postgresql://${db.pool.options.user}:${encodeURIComponent(String(db.pool.options.password))}@127.0.0.1:${db.pool.options.port}/${db.pool.options.database}`,
       DATABASE_SSL: "local",
       APP_ORIGIN: "http://127.0.0.1:3101",
+      AUTH_FLOW_COOKIE_KEY: randomBytes(32).toString("hex"),
     });
     const post = async (
       operation: string,
       input: unknown,
       requestOrigin = "http://127.0.0.1:3101",
+      cookie = "",
     ) =>
       POST(
         new NextRequest(`http://127.0.0.1:3101/api/auth/${operation}`, {
@@ -309,6 +312,7 @@ it.runIf(process.env.MHISTREE_LIVE_AUTH_TEST === "1")(
           headers: {
             origin: requestOrigin,
             "content-type": "application/json",
+            cookie,
           },
           body: JSON.stringify(input),
         }),
@@ -351,10 +355,12 @@ it.runIf(process.env.MHISTREE_LIVE_AUTH_TEST === "1")(
       const signed = { token: recovered.data.session.access_token };
       expect(
         (
-          await post("reset-password", {
-            token: signed.token,
-            password: newPassword,
-          })
+          await post(
+            "reset-password",
+            { password: newPassword },
+            "http://127.0.0.1:3101",
+            `${recoveryCookie}=${await sealFlow(signed.token, "recovery")}`,
+          )
         ).status,
       ).toBe(200);
       await expect(

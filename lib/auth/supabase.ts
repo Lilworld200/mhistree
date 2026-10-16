@@ -6,7 +6,7 @@ import { DomainError } from "@/lib/errors";
 
 const options = {
   auth: {
-    flowType: "implicit" as const,
+    flowType: "pkce" as const,
     persistSession: false,
     autoRefreshToken: false,
     detectSessionInUrl: false,
@@ -16,12 +16,48 @@ export class SupabaseProvider {
   readonly name = "supabase";
   readonly publicClient: SupabaseClient;
   private adminClient: SupabaseClient;
-  constructor(url: string, publishableKey: string, serverKey: string) {
+  verifier: string | null;
+  constructor(
+    url: string,
+    publishableKey: string,
+    serverKey: string,
+    verifier: string | null = null,
+  ) {
+    this.verifier = verifier;
     const host = new URL(url);
     if (host.protocol !== "https:" && host.hostname !== "127.0.0.1")
       throw new DomainError("CONFIGURATION_REQUIRED");
-    this.publicClient = createClient(url, publishableKey, options);
+    this.publicClient = createClient(url, publishableKey, {
+      ...options,
+      auth: {
+        ...options.auth,
+        persistSession: true,
+        storage: {
+          getItem: (key: string) =>
+            key.endsWith("-code-verifier") && this.verifier
+              ? JSON.stringify(this.verifier)
+              : null,
+          setItem: (key: string, value: string) => {
+            if (key.endsWith("-code-verifier"))
+              this.verifier = JSON.parse(value);
+          },
+          removeItem: (key: string) => {
+            if (key.endsWith("-code-verifier")) this.verifier = null;
+          },
+        },
+      },
+    });
     this.adminClient = createClient(url, serverKey, options);
+  }
+  async exchange(code: string) {
+    const recovery = this.verifier?.endsWith("/recovery");
+    const { data, error } =
+      await this.publicClient.auth.exchangeCodeForSession(code);
+    if (error || !data.session) throw new DomainError("AUTH_REQUIRED");
+    return {
+      token: data.session.access_token,
+      redirectType: recovery ? "PASSWORD_RECOVERY" : null,
+    };
   }
   async signup(email: string, password: string, redirectTo: string) {
     const { data, error } = await this.publicClient.auth.signUp({

@@ -6,7 +6,6 @@ import {
   signupEmail,
   setupEmail,
   loginEmail,
-  confirmEmail,
   requestEmailReset,
   resetEmailPassword,
   resendVerification,
@@ -23,6 +22,13 @@ import {
   success,
   failure,
 } from "@/lib/http";
+import {
+  recoveryCookie,
+  verifierCookie,
+  flowCookieOptions,
+  sealFlow,
+  openFlow,
+} from "@/lib/auth/flow-cookie";
 import { DomainError } from "@/lib/errors";
 export async function POST(
   request: NextRequest,
@@ -34,48 +40,80 @@ export async function POST(
     const input = await jsonBody(request);
     const pool = database();
     const rate = requestRateKey();
-    if(operation === "resend-verification") {
-      const {email}=z.object({email:z.email().max(254)}).strict().parse(input);
-      return success(await resendVerification(pool,authProvider(),email,rate));
+    const flow = operation === "reset-email" ? "recovery" : "signup";
+    let verifier: string | null = null;
+    const previous = request.cookies.get(verifierCookie(flow))?.value;
+    if (previous) {
+      try {
+        verifier = await openFlow(previous, `pkce-${flow}`);
+      } catch {
+        /* expired flow starts anew */
+      }
+    }
+    if (
+      ["signup", "setup", "reset-email", "resend-verification"].includes(
+        operation,
+      )
+    )
+      await sealFlow("configuration-check", `pkce-${flow}`);
+    const provider = authProvider(process.env, verifier);
+    async function emailResponse(data: unknown) {
+      const response = success(data);
+      if (provider.verifier)
+        response.cookies.set(
+          verifierCookie(flow),
+          await sealFlow(provider.verifier, `pkce-${flow}`),
+          { ...flowCookieOptions(), maxAge: 3600 },
+        );
+      return response;
+    }
+    if (operation === "resend-verification") {
+      if (!verifier) throw new DomainError("AUTH_REQUIRED");
+      const { email } = z
+        .object({ email: z.email().max(254) })
+        .strict()
+        .parse(input);
+      return emailResponse(
+        await resendVerification(pool, provider, email, rate),
+      );
     }
     if (operation === "signup")
-      return success(await signupEmail(pool, authProvider(), input, rate));
+      return emailResponse(await signupEmail(pool, provider, input, rate));
     if (operation === "reset-email") {
       const { email } = z
         .object({ email: z.email().max(254) })
         .strict()
         .parse(input);
-      return success(
-        await requestEmailReset(pool, authProvider(), email, rate),
+      return emailResponse(
+        await requestEmailReset(pool, provider, email, rate),
       );
     }
     if (operation === "reset-password") {
-      const { token, password } = z
+      const { password } = z
         .object({
-          token: z.string().min(1).max(8192),
           password: z.string().min(12).max(128),
         })
         .strict()
         .parse(input);
       const response = success(
-        await resetEmailPassword(pool, authProvider(), token, password, rate),
+        await resetEmailPassword(
+          pool,
+          provider,
+          await openFlow(
+            request.cookies.get(recoveryCookie)?.value,
+            "recovery",
+          ),
+          password,
+          rate,
+        ),
       );
       response.cookies.set(sessionCookie, "", {
         ...cookieOptions(),
         maxAge: 0,
       });
-      return response;
-    }
-    if (operation === "confirm") {
-      const { token } = z
-        .object({ token: z.string().min(1).max(8192) })
-        .strict()
-        .parse(input);
-      const result = await confirmEmail(pool, authProvider(), token, rate);
-      const response = success({ next: "/chat" });
-      response.cookies.set(sessionCookie, result.session, {
-        ...cookieOptions(),
-        expires: result.expiresAt,
+      response.cookies.set(recoveryCookie, "", {
+        ...flowCookieOptions(),
+        maxAge: 0,
       });
       return response;
     }
@@ -98,12 +136,12 @@ export async function POST(
     if (operation === "setup") {
       const result = await setupEmail(
         pool,
-        authProvider(),
+        provider,
         input,
         request.cookies.get(setupCookie)?.value ?? "",
         rate,
       );
-      const response = success(result);
+      const response = await emailResponse(result);
       response.cookies.set(setupCookie, "", { ...cookieOptions(), maxAge: 0 });
       return response;
     }

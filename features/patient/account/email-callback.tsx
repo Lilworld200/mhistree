@@ -1,49 +1,18 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { api, errorMessage } from "@/lib/client-api";
 import { AuthField } from "./auth-field";
 import { Btn } from "@/components/ui/button";
 
 export function EmailCallback({ recovery = false }: { recovery?: boolean }) {
-  const router = useRouter();
-  const token = useRef("");
-  const started = useRef(false),
-    busy = useRef(false);
-  const [ready, setReady] = useState(false),
-    [pending, setPending] = useState(false),
-    [error, setError] = useState(""),
+  const busy = useRef(false);
+  const ready = recovery;
+  const [pending, setPending] = useState(false),
+    [error, setError] = useState(
+      recovery ? "" : "This link is invalid or expired. Request a new link.",
+    ),
     [done, setDone] = useState(false);
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    async function initialize() {
-      // Hydration cannot read URL fragments. Capture and clear them after mount.
-      await Promise.resolve();
-      const params = new URLSearchParams(window.location.hash.slice(1));
-      token.current = params.get("access_token") ?? "";
-      window.history.replaceState(null, "", window.location.pathname);
-      if (!token.current || params.has("error")) {
-        setError("This link is invalid or expired. Request a new link.");
-        return;
-      }
-      if (recovery) {
-        setReady(true);
-        return;
-      }
-      api("/api/auth/confirm", { token: token.current })
-        .then(() => {
-          token.current = "";
-          router.replace("/chat");
-          router.refresh();
-        })
-        .catch((caught) => {
-          setError(errorMessage(caught));
-        });
-    }
-    void initialize();
-  }, [recovery, router]);
   return (
     <main className="account-stage">
       <section className="account-card">
@@ -65,10 +34,8 @@ export function EmailCallback({ recovery = false }: { recovery?: boolean }) {
               setError("");
               try {
                 await api("/api/auth/reset-password", {
-                  token: token.current,
                   password: data.get("password"),
                 });
-                token.current = "";
                 setDone(true);
               } catch (caught) {
                 setError(errorMessage(caught));
