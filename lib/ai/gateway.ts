@@ -2,6 +2,7 @@ import "server-only";
 import { z } from "zod";
 import { requestGemini } from "./request";
 import { DomainError } from "@/lib/errors";
+import { aiDebug, withAIDebug } from "./debug";
 export type AIMessage = { role: "user" | "assistant"; content: string };
 export interface AIGateway {
   generate(
@@ -33,12 +34,29 @@ export class GeminiGateway implements AIGateway {
       purpose?: "chat" | "extraction" | "clinician";
     } = {},
   ) {
+    return withAIDebug(
+      { operation: `provider.${options.purpose ?? "chat"}` },
+      () => this.generateLogged(system, messages, options),
+    );
+  }
+  private async generateLogged(
+    system: string,
+    messages: AIMessage[],
+    options: NonNullable<Parameters<AIGateway["generate"]>[2]>,
+  ) {
     const model =
       options.purpose === "extraction"
         ? this.config.extractionModel
         : options.purpose === "clinician"
           ? (this.config.clinicianModel ?? this.config.chatModel)
           : this.config.chatModel;
+    aiDebug("provider.request", {
+      model,
+      purpose: options.purpose ?? "chat",
+      messageCount: messages.length,
+      inputCharacters:
+        system.length + messages.reduce((n, m) => n + m.content.length, 0),
+    });
     let response: Response;
     try {
       response = await requestGemini(
@@ -71,6 +89,35 @@ export class GeminiGateway implements AIGateway {
       if (error instanceof DomainError) throw error;
       throw new DomainError("PROVIDER_UNAVAILABLE");
     }
+    const payload: unknown = await response.json();
+    const metadata = z
+      .object({
+        usageMetadata: z
+          .object({
+            promptTokenCount: z.number().int().nonnegative().optional(),
+            candidatesTokenCount: z.number().int().nonnegative().optional(),
+            totalTokenCount: z.number().int().nonnegative().optional(),
+            cachedContentTokenCount: z.number().int().nonnegative().optional(),
+            thoughtsTokenCount: z.number().int().nonnegative().optional(),
+          })
+          .optional(),
+        candidates: z
+          .array(z.object({ finishReason: z.string().optional() }))
+          .optional(),
+        promptFeedback: z
+          .object({ blockReason: z.string().optional() })
+          .optional(),
+      })
+      .safeParse(payload);
+    if (metadata.success)
+      aiDebug("provider.response", {
+        model,
+        finishReason:
+          metadata.data.candidates?.[0]?.finishReason ??
+          metadata.data.promptFeedback?.blockReason ??
+          "UNKNOWN",
+        ...metadata.data.usageMetadata,
+      });
     const result = z
       .object({
         candidates: z
@@ -89,7 +136,7 @@ export class GeminiGateway implements AIGateway {
           )
           .min(1),
       })
-      .safeParse(await response.json());
+      .safeParse(payload);
     if (!result.success || result.data.candidates[0].finishReason !== "STOP")
       throw new DomainError("PROVIDER_UNAVAILABLE");
     const text = result.data.candidates[0].content.parts
@@ -98,6 +145,7 @@ export class GeminiGateway implements AIGateway {
       .join("");
     if (!text.trim() || text.length > 20000)
       throw new DomainError("PROVIDER_UNAVAILABLE");
+    aiDebug("provider.output.ready", { model, outputCharacters: text.length });
     return text;
   }
 }

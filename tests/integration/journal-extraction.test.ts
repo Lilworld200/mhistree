@@ -484,6 +484,66 @@ describe("contextual patient journal extraction", () => {
     );
   });
 
+  it("regenerates an empty partial extraction on authorized retry instead of replaying a permanently empty cache", async () => {
+    const id = await conversation();
+    const text = "I went jogging and found the run stressful.";
+    const sent = await send(id, text);
+    let calls = 0;
+    const adapter: AIGateway = {
+      generate: async () => {
+        calls++;
+        return envelope([
+          item(
+            text,
+            calls === 1
+              ? "jogging"
+              : "went jogging and found the run stressful.",
+            { reportStyle: undefined },
+          ),
+        ]);
+      },
+    };
+    expect(
+      (await processExtraction(db.pool, patient.session, sent.job, adapter))
+        .state,
+    ).toBe("partial");
+    expect(await heads(id)).toHaveLength(0);
+    expect(
+      (await processExtraction(db.pool, patient.session, sent.job, adapter))
+        .state,
+    ).toBe("succeeded");
+    expect(calls).toBe(2);
+    expect(await heads(id)).toHaveLength(1);
+    expect((await heads(id))[0].body.reportStyle).toBe("reported-predicate");
+    await db.pool.query(
+      "update mhistree.extraction_jobs set state='partial' where id=$1",
+      [sent.job],
+    );
+    await processExtraction(db.pool, patient.session, sent.job, adapter);
+    expect(calls).toBe(2);
+    expect(await heads(id)).toHaveLength(1);
+  });
+
+  it("preserves a contextual first-person statement instead of rejecting it for presentation grammar", async () => {
+    const id = await conversation();
+    const text = "I went jogging and felt tired afterwards.";
+    const sent = await send(id, text);
+    expect(
+      (
+        await processExtraction(
+          db.pool,
+          patient.session,
+          sent.job,
+          gateway([item(text, text)]),
+        )
+      ).state,
+    ).toBe("succeeded");
+    const saved = (await heads(id))[0];
+    expect(saved.body.text).toBe(text);
+    expect(saved.body.reportStyle).toBeUndefined();
+    expect(recordNarrative(saved, "patient")).toBe(`You reported: ${text}`);
+  });
+
   it.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
     "real model connects a follow-up to the original run without repeating the activity",
     async () => {

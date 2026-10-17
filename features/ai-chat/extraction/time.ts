@@ -49,6 +49,16 @@ export function resolveTime(
   let y = +p.year,
     m = +p.month,
     d = +p.day;
+  if (["last night", "this morning"].includes(value)) {
+    // Natural parts of a day are approximate, not fabricated clock times.
+    // "Last night" may cross midnight: retain a conservative two-day envelope.
+    return {
+      precision: "approximate",
+      from: midnight(y, m, d - (value === "last night" ? 1 : 0), zone),
+      to: midnight(y, m, d + 1, zone),
+      originalPhrase,
+    };
+  }
   if (value === "yesterday" || value === "today") {
     const date = new Date(
       Date.UTC(y, m - 1, d - (value === "yesterday" ? 1 : 0)),

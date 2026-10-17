@@ -3,6 +3,7 @@ import type { Pool } from "pg";
 import { withAccess, type ActingContext } from "@/features/access/server";
 import { z } from "zod";
 import { recordNarrative } from "@/features/health-records/narrative";
+import { aiDebug } from "@/lib/ai/debug";
 export type Evidence = {
   id: string;
   sourceId: string;
@@ -95,7 +96,7 @@ export async function retrieveEvidence(
             )
           ).rows
         : [];
-    return {
+    const result = {
       evidence,
       gaps,
       bounded:
@@ -104,5 +105,13 @@ export async function retrieveEvidence(
         evidence.some((e) => e.excerpted || e.historyBounded),
       asOf: new Date().toISOString(),
     };
+    aiDebug("retrieval.complete", {
+      evidenceCount: evidence.length,
+      contextCharacters: contextSize,
+      bounded: result.bounded,
+      embeddingUsed: false,
+      reason: "sql-ranking",
+    });
+    return result;
   });
 }

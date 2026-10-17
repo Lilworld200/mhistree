@@ -17,6 +17,7 @@ import {
   cancelReply,
 } from "@/features/ai-chat/server";
 import { retryPatientReply } from "@/features/ai-chat/assessment";
+import { aiDebug, aiDebugError, withAIDebug } from "@/lib/ai/debug";
 export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get("id");
@@ -35,6 +36,9 @@ export async function GET(request: NextRequest) {
   }
 }
 export async function POST(request: NextRequest) {
+  return withAIDebug({ operation: "chat.http" }, () => chatRequest(request));
+}
+async function chatRequest(request: NextRequest) {
   try {
     mutationGuard(request);
     const input = z
@@ -46,6 +50,7 @@ export async function POST(request: NextRequest) {
       .parse(await jsonBody(request));
     const pool = database(),
       session = sessionFrom(request);
+    aiDebug("chat.http.action", { reason: input.action });
     if (input.action === "send")
       return success(await sendMessage(pool, session, input.data));
     const { id } = z.object({ id: z.uuid() }).strict().parse(input.data);
@@ -57,6 +62,7 @@ export async function POST(request: NextRequest) {
       await retryPatientReply(pool, session, id, aiGateway(), request.signal),
     );
   } catch (error) {
+    aiDebugError("chat.http.failed", error);
     return failure(error);
   }
 }

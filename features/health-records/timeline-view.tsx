@@ -1,11 +1,12 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api, errorMessage } from "@/lib/client-api";
 import { Btn } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { category } from "./schema";
 import { CorrectionForm } from "./correction-form";
 import { recordNarrative } from "./narrative";
+import { RECORDS_CHANGED } from "./record-updates";
 export type DisplayRecord = {
   id: string;
   logical_id: string;
@@ -202,31 +203,88 @@ export function TimelineView() {
     [source, setSource] = useState(""),
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
-    [loading, setLoading] = useState(true);
+    [loading, setLoading] = useState(true),
+    [updates, setUpdates] = useState(false);
+  const revision = useRef(0),
+    paged = useRef(false),
+    head = useRef(""),
+    current = useRef<DisplayRecord[]>([]),
+    refresh = useRef<(force?: boolean) => void>(() => {});
   useEffect(() => {
     let active = true;
+    let fetching = false;
+    let queued: boolean | null = null;
+    revision.current++;
+    paged.current = false;
+    current.current = [];
+    const invalidate = () => {
+      revision.current++;
+    };
     const q = new URLSearchParams();
     if (filter) q.set("category", filter);
     if (source) q.set("source", source);
-    void api<{ items: DisplayRecord[]; nextCursor: string | null }>(
-      `/api/records?${q}`,
-    )
-      .then((r) => {
+    const load = async (force = false) => {
+      if (fetching) {
+        queued = force || queued === true;
+        return;
+      }
+      fetching = true;
+      try {
+        const r = await api<{
+          items: DisplayRecord[];
+          nextCursor: string | null;
+        }>(`/api/records?${q}`);
         if (active) {
-          setRecords(r.items);
-          setCursor(r.nextCursor);
+          if (paged.current && !force) {
+            if (JSON.stringify(r.items) !== head.current) setUpdates(true);
+          } else {
+            revision.current++;
+            paged.current = false;
+            current.current = r.items;
+            head.current = JSON.stringify(r.items);
+            setRecords(r.items);
+            setCursor(r.nextCursor);
+            setUpdates(false);
+          }
           setError("");
           setLoading(false);
         }
-      })
-      .catch((e) => {
+      } catch (e) {
         if (active) {
+          revision.current++;
+          current.current = [];
+          setRecords([]);
+          setCursor(null);
           setError(errorMessage(e));
           setLoading(false);
         }
-      });
+      } finally {
+        fetching = false;
+        if (active && queued !== null) {
+          const forceNext = queued;
+          queued = null;
+          void load(forceNext);
+        }
+      }
+    };
+    refresh.current = (force = false) => {
+      void load(force);
+    };
+    const visibleRefresh = () => {
+      if (document.visibilityState === "visible") void load();
+    };
+    window.addEventListener("focus", visibleRefresh);
+    document.addEventListener("visibilitychange", visibleRefresh);
+    window.addEventListener(RECORDS_CHANGED, visibleRefresh);
+    const timer = window.setInterval(visibleRefresh, 15000);
+    void load(true);
     return () => {
       active = false;
+      invalidate();
+      window.clearInterval(timer);
+      window.removeEventListener("focus", visibleRefresh);
+      document.removeEventListener("visibilitychange", visibleRefresh);
+      window.removeEventListener(RECORDS_CHANGED, visibleRefresh);
     };
   }, [filter, source]);
   return (
@@ -256,6 +314,10 @@ export function TimelineView() {
             aria-pressed={filter === c}
             onClick={() => {
               if (filter !== c) {
+                revision.current++;
+                setRecords([]);
+                setCursor(null);
+                setUpdates(false);
                 setLoading(true);
                 setFilter(c);
               }
@@ -283,6 +345,10 @@ export function TimelineView() {
             aria-pressed={source === s}
             onClick={() => {
               if (source !== s) {
+                revision.current++;
+                setRecords([]);
+                setCursor(null);
+                setUpdates(false);
                 setLoading(true);
                 setSource(s);
               }
@@ -296,6 +362,11 @@ export function TimelineView() {
         Unknown event dates are listed after dated events.
       </p>
       <div className="mlabel timeline-records-label">Timeline records</div>
+      <Btn onClick={() => refresh.current(true)}>
+        {updates
+          ? "New or updated records available · Refresh timeline"
+          : "Refresh timeline"}
+      </Btn>
       {loading && (
         <p className="card ui-empty" role="status">
           Loading your timeline…
@@ -325,6 +396,7 @@ export function TimelineView() {
           disabled={busy}
           onClick={async () => {
             setBusy(true);
+            const requestedRevision = revision.current;
             try {
               const q = new URLSearchParams({ cursor });
               if (filter) q.set("category", filter);
@@ -333,9 +405,17 @@ export function TimelineView() {
                 items: DisplayRecord[];
                 nextCursor: string | null;
               }>(`/api/records?${q}`);
-              setRecords([...records, ...page.items]);
+              if (revision.current !== requestedRevision) return;
+              paged.current = true;
+              current.current = [...current.current, ...page.items];
+              setRecords(current.current);
               setCursor(page.nextCursor);
             } catch (e) {
+              if (revision.current !== requestedRevision) return;
+              revision.current++;
+              current.current = [];
+              setRecords([]);
+              setCursor(null);
               setError(errorMessage(e));
             } finally {
               setBusy(false);

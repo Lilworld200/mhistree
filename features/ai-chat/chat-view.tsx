@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Btn, IconBtn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import { ExtractionStatus } from "./extraction/status-view";
+import { notifyRecordsChanged } from "@/features/health-records/record-updates";
 import { Icon, Logo } from "@/components/ui/icons";
 import { useChatNavigation } from "@/components/layout/chat-navigation";
 
@@ -105,10 +106,12 @@ export function ChatView() {
     setProcessing((count) => count + 1);
     setProcessingError("");
     try {
-      const jobs =
-        await api<{ id: string; message_id: string }[]>("/api/extraction");
-      const job = jobs.find((item) => item.message_id === messageId);
-      if (job) await api("/api/extraction", { id: job.id });
+      const result = await api<{ state: string }>("/api/extraction", { messageId });
+      if (["succeeded", "partial", "held"].includes(result.state)) notifyRecordsChanged();
+      if (["partial", "held", "failed"].includes(result.state))
+        setProcessingError(result.state === "held"
+          ? "Your message is saved. Some report details need clarification or review before they can appear in your timeline. Open Report processing below."
+          : "Your message is saved, but timeline processing is incomplete. Some details may already be recorded. Open Report processing below to review or retry.");
     } catch {
       setProcessingError(
         "Your message is saved, but record processing needs a retry. Open Report processing below.",

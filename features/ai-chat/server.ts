@@ -10,6 +10,7 @@ import { DomainError } from "@/lib/errors";
 import type { AIGateway, AIMessage } from "@/lib/ai/gateway";
 import { retrieveEvidence } from "./retrieval";
 import { patientChatPolicy } from "./patient-prompt";
+import { aiDebug, debugMessage, debugRef, withAIDebug } from "@/lib/ai/debug";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -95,6 +96,14 @@ export async function conversationHistory(
   });
 }
 export async function sendMessage(pool: Pool, session: string, input: unknown) {
+  return withAIDebug({ operation: "chat.send" }, async () => {
+    const result = await saveMessage(pool, session, input);
+    debugMessage(result.messageId);
+    aiDebug("chat.message.saved", { state: "queued" });
+    return result;
+  });
+}
+async function saveMessage(pool: Pool, session: string, input: unknown) {
   const data = sendInput.parse(input);
   await consumeAttempt(pool, "chat.send", digest(session), 30);
   return withAccess(pool, session, { kind: "patient" }, async (a) => {
@@ -161,6 +170,18 @@ export async function generateReply(
   gateway: AIGateway,
   signal?: AbortSignal,
 ) {
+  return withAIDebug(
+    { operation: "chat.reply", messageRef: debugRef(messageId) },
+    () => generatePatientReply(pool, session, messageId, gateway, signal),
+  );
+}
+async function generatePatientReply(
+  pool: Pool,
+  session: string,
+  messageId: string,
+  gateway: AIGateway,
+  signal?: AbortSignal,
+) {
   z.uuid().parse(messageId);
   const lease = randomUUID();
   const prepared = await withAccess(
@@ -189,7 +210,11 @@ export async function generateReply(
       return { message, history, personId: a.actor.personId };
     },
   );
-  if (!prepared) return { state: "unchanged" };
+  if (!prepared) {
+    aiDebug("chat.reply.unchanged", { reason: "not-claimable" });
+    return { state: "unchanged" };
+  }
+  aiDebug("chat.reply.claimed", { messageCount: prepared.history.length });
   try {
     const messages: AIMessage[] = prepared.history.map((m) => ({
       role: m.role === "patient" ? "user" : "assistant",
@@ -218,26 +243,36 @@ export async function generateReply(
     if (evidence.evidence.some((e) => !currentIds.has(e.id)))
       throw new DomainError("ACCESS_REVOKED");
     if (signal?.aborted) throw new DomainError("PROVIDER_UNAVAILABLE");
-    return await withAccess(pool, session, { kind: "patient" }, async (a) => {
-      const done = await a.tx.query(
-        "update mhistree.chat_generations set state='succeeded',lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running' returning message_id",
-        [messageId, lease],
-      );
-      if (!done.rowCount) return { state: "cancelled" };
-      await a.tx.query(
-        "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to) values($1,$2,$3,$4,'assistant',$5,$6,$7)",
-        [
-          randomUUID(),
-          prepared.message.conversation_id,
-          a.actor.personId,
-          a.actor.accountId,
-          reply,
-          prepared.message.timezone,
-          messageId,
-        ],
-      );
-      return { state: "succeeded" };
+    const result = await withAccess(
+      pool,
+      session,
+      { kind: "patient" },
+      async (a) => {
+        const done = await a.tx.query(
+          "update mhistree.chat_generations set state='succeeded',lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running' returning message_id",
+          [messageId, lease],
+        );
+        if (!done.rowCount) return { state: "cancelled" };
+        await a.tx.query(
+          "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to) values($1,$2,$3,$4,'assistant',$5,$6,$7)",
+          [
+            randomUUID(),
+            prepared.message.conversation_id,
+            a.actor.personId,
+            a.actor.accountId,
+            reply,
+            prepared.message.timezone,
+            messageId,
+          ],
+        );
+        return { state: "succeeded" };
+      },
+    );
+    aiDebug("chat.reply.published", {
+      state: result.state,
+      outputCharacters: reply.length,
     });
+    return result;
   } catch (error) {
     // No generated content is published after session retirement. Expired leases permit later authorized retry.
     try {

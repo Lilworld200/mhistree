@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { api, errorMessage } from "@/lib/client-api";
 import { Btn } from "@/components/ui/button";
+import { notifyRecordsChanged } from "@/features/health-records/record-updates";
 type Job = {
   id: string;
   message_id: string | null;
@@ -38,6 +39,7 @@ export function ExtractionStatus({ revision = 0 }: { revision?: number }) {
                   setBusy(job.id);
                   try {
                     await api("/api/extraction", { id: job.id });
+                    notifyRecordsChanged();
                     setJobs(await api("/api/extraction"));
                   } catch (e) {
                     setError(errorMessage(e));
