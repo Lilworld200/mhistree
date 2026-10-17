@@ -15,6 +15,26 @@ it("anchors parts of day to the patient's calendar across UTC midnight without i
     to: "2026-11-01T23:00:00.000Z",
     originalPhrase: "last night",
   });
+  expect(resolveTime("now", captured, "Africa/Lagos")).toEqual({
+    precision: "exact",
+    at: "2026-10-31T23:30:00.000Z",
+  });
+  expect(resolveTime("currently", captured, "Africa/Lagos")).toEqual({
+    precision: "exact",
+    at: "2026-10-31T23:30:00.000Z",
+  });
+  expect(resolveTime("this afternoon", captured, "Africa/Lagos")).toEqual({
+    precision: "approximate",
+    from: "2026-10-31T23:00:00.000Z",
+    to: "2026-11-01T23:00:00.000Z",
+    originalPhrase: "this afternoon",
+  });
+  expect(resolveTime("tonight", captured, "Africa/Lagos")).toEqual({
+    precision: "approximate",
+    from: "2026-10-31T23:00:00.000Z",
+    to: "2026-11-02T23:00:00.000Z",
+    originalPhrase: "tonight",
+  });
   expect(resolveTime("last night", captured, "unknown").precision).toBe(
     "unknown",
   );

@@ -60,8 +60,8 @@ export async function timeline(
         `with latest as (
    select distinct on(e.logical_id) e.* from mhistree.contributions e where e.recorded_at<=$1::timestamptz order by e.logical_id,e.version desc
   ), dated as(select e.*,s.captured_at,s.chat_message_id,s.parent_source_id,
-   case when e.occurred_at->>'precision'='unknown' then 1 else 0 end bucket,
-   coalesce((e.occurred_at->>'at')::timestamptz,(e.occurred_at->>'from')::timestamptz,e.recorded_at) sort_time
+   case when e.occurred_at->>'precision'='unknown' and s.chat_message_id is null then 1 else 0 end bucket,
+   coalesce((e.occurred_at->>'at')::timestamptz,(e.occurred_at->>'from')::timestamptz,s.captured_at,e.recorded_at) sort_time
    from latest e join mhistree.sources s on s.id=e.source_id where ($2::text is null or e.category=$2) and ($3::text is null or e.source_status=$3))
    select *,to_char(sort_time at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') sort_key from dated where $4::int is null or bucket>$4 or(bucket=$4 and(sort_time<$5::timestamptz or(sort_time=$5::timestamptz and id<$6::uuid))) order by bucket,sort_time desc,id desc limit $7`,
         [

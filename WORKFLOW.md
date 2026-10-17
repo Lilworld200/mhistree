@@ -1,3 +1,16 @@
+## Present-tense chat timeline ordering — 2026-10-17
+
+Owner reported an issue where every newly sent chat message resulted in an older "You reported: jogging" event remaining displayed at the top of the timeline. Investigation confirmed that the AI extraction was not recreating duplicate jogging entries; rather, the jogging entry had an approximate full-day date from an earlier morning test (placing it in primary Bucket 0), whereas present-tense chat messages ("i am sad", "stomach pain now", "excessive coffee") without explicit past-tense date phrases were assigned precision: "unknown" and sorted into secondary Bucket 1 (which orders below all dated Bucket 0 entries).
+
+Fixed with a two-part targeted change:
+1. `features/ai-chat/extraction/time.ts`: Added present-tense relative time resolution ("now", "right now", "currently", "at the moment", "presently") anchoring to the message's exact `capturedAt` timestamp (precision: "exact"). Also added "this afternoon", "this evening", and "tonight" relative phrases. Prompt in `features/ai-chat/extraction/server.ts` updated to explicitly guide extraction to anchor present reports ("now", "today").
+2. `features/health-records/timeline.ts`: In the timeline CTE query, chat-originated contributions (`s.chat_message_id is not null`) now remain in primary Bucket 0 and order by `coalesce((e.occurred_at->>'at')::timestamptz, (e.occurred_at->>'from')::timestamptz, s.captured_at, e.recorded_at)`. Uploaded documents lacking an explicit event date (`s.chat_message_id is null`) strictly retain Bucket 1 placement at the end of history, preserving AGENTS.md Section 5.3 ("recent upload does not mean recent occurrence").
+
+Verification:
+- Focused test suite: `tests/extraction-relative-time.test.ts`, `tests/integration/timeline.test.ts`, `tests/timeline-refresh.test.ts` passed 8/8.
+- Regression suite: `tests/integration/journal-extraction.test.ts`, `tests/integration/extraction-http.test.ts`, `tests/journal-presentation.test.ts`, `tests/chat-send-flow.test.ts` passed 24/24 (1 skipped).
+- Lint (`pnpm lint`), TypeScript (`pnpm typecheck`), client-secret scan (`pnpm check:client`), and whitespace check (`git diff --check`) all passed with zero errors.
+
 ## Timeline freshness and live meal pipeline — 2026-10-17
 
 Owner explicitly approved Google Gemini testing of the exact meal/swollen-belly sentence with a synthetic patient/isolated database. Baseline real extraction saved two items but left last night/this morning unknown and omitted context linking. Timeline also fetched only on mount/filter changes; deterministic reproduction failed four assertions. Fixed approximate timezone-anchored part-of-day envelopes/original phrases, explicit source-quote activity/symptom linking instructions, processing notifications, visible15-second/focus/visibility refetch and manual refresh. Paginated snapshots remain stable until explicit refresh; stale pagination responses are discarded and failed reads clear displayed evidence. No embedding implementation exists in this workflow: trace correctly reports SQL ranking/embeddingUsed=false.

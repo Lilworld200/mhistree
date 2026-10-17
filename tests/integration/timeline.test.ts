@@ -97,4 +97,95 @@ describe("timeline snapshot and source access", () => {
       ),
     ).rejects.toThrow("ACCESS_DENIED");
   });
+
+  it("orders chat contributions by capture time above earlier dated activities when precision is unknown", async () => {
+    const morningSource = await recordSource(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      {
+        patientPersonId: patient.personId,
+        category: "activity",
+        sourceTimezone: "UTC",
+        content: "I went jogging today",
+        clientKey: randomUUID(),
+      },
+    );
+    await acceptContribution(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      {
+        sourceId: morningSource.sourceId,
+        sourceVersion: 1,
+        sourceItemId: "jogging",
+        operationKey: randomUUID(),
+        body: { text: "jogging" },
+        occurredAt: {
+          precision: "range",
+          from: "2026-10-17T00:00:00.000Z",
+          to: "2026-10-18T00:00:00.000Z",
+        },
+        status: "active",
+        sourceSpans: ["jogging"],
+      },
+    );
+
+    const convId = randomUUID(),
+      msgId = randomUUID();
+    await db.pool.query(
+      "insert into mhistree.conversations(id,person_id,account_id) values($1,$2,$3)",
+      [convId, patient.personId, patient.accountId],
+    );
+    await db.pool.query(
+      "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key,captured_at) values($1,$2,$3,$4,'patient','i am sad','UTC',$5,'2026-10-17T15:30:00.000Z')",
+      [msgId, convId, patient.personId, patient.accountId, randomUUID()],
+    );
+    const chatSource = await recordSource(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      {
+        patientPersonId: patient.personId,
+        category: "symptom",
+        sourceTimezone: "UTC",
+        content: "i am sad",
+        clientKey: randomUUID(),
+        messageId: msgId,
+      },
+    );
+    await acceptContribution(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      {
+        sourceId: chatSource.sourceId,
+        sourceVersion: 1,
+        sourceItemId: "sad",
+        operationKey: randomUUID(),
+        body: {
+          text: "experienced feelings of sadness",
+          reportStyle: "reported-predicate",
+        },
+        occurredAt: { precision: "unknown" },
+        status: "active",
+        sourceSpans: ["i am sad"],
+      },
+    );
+
+    const result = await timeline(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      { limit: 10 },
+    );
+
+    const sadIndex = result.items.findIndex(
+      (e) => e.body.text === "experienced feelings of sadness",
+    );
+    const jogIndex = result.items.findIndex((e) => e.body.text === "jogging");
+    expect(sadIndex).toBeGreaterThanOrEqual(0);
+    expect(jogIndex).toBeGreaterThanOrEqual(0);
+    expect(sadIndex).toBeLessThan(jogIndex);
+  });
 });

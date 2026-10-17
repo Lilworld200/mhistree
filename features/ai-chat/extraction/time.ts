@@ -49,13 +49,35 @@ export function resolveTime(
   let y = +p.year,
     m = +p.month,
     d = +p.day;
-  if (["last night", "this morning"].includes(value)) {
+  if (
+    [
+      "now",
+      "right now",
+      "currently",
+      "at the moment",
+      "presently",
+    ].includes(value)
+  ) {
+    return {
+      precision: "exact",
+      at: capturedAt.toISOString(),
+    };
+  }
+  if (
+    [
+      "last night",
+      "this morning",
+      "this afternoon",
+      "this evening",
+      "tonight",
+    ].includes(value)
+  ) {
     // Natural parts of a day are approximate, not fabricated clock times.
     // "Last night" may cross midnight: retain a conservative two-day envelope.
     return {
       precision: "approximate",
       from: midnight(y, m, d - (value === "last night" ? 1 : 0), zone),
-      to: midnight(y, m, d + 1, zone),
+      to: midnight(y, m, d + (value === "tonight" ? 2 : 1), zone),
       originalPhrase,
     };
   }
