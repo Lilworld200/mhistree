@@ -5,6 +5,7 @@ import { Btn } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { category } from "./schema";
 import { CorrectionForm } from "./correction-form";
+import { recordNarrative } from "./narrative";
 export type DisplayRecord = {
   id: string;
   logical_id: string;
@@ -18,6 +19,7 @@ export type DisplayRecord = {
   original_organization_id: string | null;
   body: {
     text: string;
+    reportStyle?: "reported-predicate";
     bodySite: string | null;
     contextLinks: string[];
     medication?: {
@@ -81,7 +83,13 @@ export function RecordCard({ record }: { record: DisplayRecord }) {
       originalDocumentId: string | null;
     } | null>(null),
     [versions, setVersions] = useState<
-      { id: string; version: number; body: { text: string } }[]
+      {
+        id: string;
+        version: number;
+        source_status: string;
+        source_spans: string[];
+        body: DisplayRecord["body"];
+      }[]
     >([]),
     [error, setError] = useState("");
   return (
@@ -95,7 +103,9 @@ export function RecordCard({ record }: { record: DisplayRecord }) {
           <span className="evwhen">
             <EventTime time={record.occurred_at} />
           </span>
-          <span className="evdesc ell2">{record.body.text}</span>
+          <span className="evdesc ell2">
+            {recordNarrative(record, "patient")}
+          </span>
           <span className="evbadges">
             <span className="badge">
               {sourceLabels[record.source_status] ?? record.source_status}
@@ -106,7 +116,7 @@ export function RecordCard({ record }: { record: DisplayRecord }) {
         <Icon n="chev" s={16} />
       </summary>
       <div className="record-evidence-body">
-        <p>{record.body.text}</p>
+        <p>{recordNarrative(record, "patient")}</p>
         {record.body.bodySite && <p>Body site: {record.body.bodySite}</p>}
         <p>
           <EventTime time={record.occurred_at} />
@@ -174,7 +184,7 @@ export function RecordCard({ record }: { record: DisplayRecord }) {
               <li key={v.id}>
                 Version {v.version}
                 {v.version < record.version ? " · superseded" : ""}:{" "}
-                {v.body.text}
+                {recordNarrative(v, "patient")}
               </li>
             ))}
           </ol>

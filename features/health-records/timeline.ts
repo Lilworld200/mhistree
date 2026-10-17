@@ -159,7 +159,7 @@ export async function recordVersions(
     async (a) =>
       (
         await a.tx.query(
-          "select id,version,body,source_id,source_status,recorded_at,supersedes_id from mhistree.contributions where logical_id=$1 order by version desc limit 50",
+          "select id,version,body,source_id,source_status,source_spans,recorded_at,supersedes_id from mhistree.contributions where logical_id=$1 order by version desc limit 50",
           [logicalId],
         )
       ).rows,

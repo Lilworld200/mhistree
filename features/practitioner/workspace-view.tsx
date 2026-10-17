@@ -3,16 +3,20 @@ import { useCallback, useEffect, useState } from "react";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import type { ActingContext } from "@/features/access/server";
+import { recordNarrative, type NarrativeBody } from "@/features/health-records/narrative";
+import { EventTime, type DisplayRecord } from "@/features/health-records/timeline-view";
 type Entry = {
   id: string;
   logical_id: string;
   version: number;
   category: string;
-  body: { text: string };
+  body: NarrativeBody;
+  source_spans?: string[];
   status: string;
   source_status: string;
   author_account_id: string;
   recorded_at: string;
+  occurred_at?: DisplayRecord["occurred_at"];
 };
 type Work = {
   id: string;
@@ -129,10 +133,11 @@ export function WorkspaceView({ connectionId, organizationContext }: { connectio
         <strong>
           {e.category} · {e.source_status} · {e.status}
         </strong>
-        <p>{e.body.text}</p>
+        <p>{recordNarrative(e)}</p>
+        {e.occurred_at && <p><EventTime time={e.occurred_at} /></p>}
         <p>
           Author {e.author_account_id} ·{" "}
-          {new Date(e.recorded_at).toLocaleString()} · version {e.version}
+          Recorded: {new Date(e.recorded_at).toLocaleString()} · version {e.version}
         </p>
         <small>
           Record {e.id}; logical entry {e.logical_id}

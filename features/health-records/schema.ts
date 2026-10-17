@@ -75,6 +75,7 @@ export const contributionInput = z
     body: z
       .object({
         text: z.string().min(1).max(10000),
+        reportStyle: z.literal("reported-predicate").optional(),
         bodySite: z.string().nullable().default(null),
         contextLinks: z.array(z.uuid()).default([]),
         medication: z

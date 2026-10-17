@@ -68,3 +68,7 @@ Patient migration sequence follows the three foundation migrations; every filena
 Current PKCE callback: `app/auth/callback/route.ts`; `lib/auth/flow-cookie.ts` owns encrypted HttpOnly cookies using dedicated AUTH_FLOW_COOKIE_KEY. Browser JavaScript receives no provider token. /auth/confirm is invalid-link guidance; /recovery/update is the guarded password form.
 
 Patient UI reference (2026-10-16): docs/design/snapshot-71121bd.md. Current components/layout/chat-navigation.tsx connects shell recent conversations to features/ai-chat/chat-view.tsx; current API/authorization owners are retained.
+
+Patient default voice (2026-10-17): features/ai-chat/patient-prompt.ts -> server.ts/generateReply -> configured Gemini gateway. Opt-in live examples/rubric: tests/patient-chat-voice.test.ts. Automatic extraction remains owned by features/ai-chat/extraction/server.ts; structured assessment keeps its separate prompt.
+
+Contextual journal (2026-10-17): ai-chat/extraction/{server,context}.ts -> health-records/{schema,server}.ts retained atomic records; health-records/narrative.ts -> patient RecordCard, practitioner/organization WorkspaceView and ai-chat/retrieval.ts. Evidence: tasks/contextual-journal-2026-10-17.md. Tests: integration/journal-extraction.test.ts, journal-presentation.test.ts; existing extraction live test uses .env and MHISTREE_LIVE_AI_TEST opt-in. No table migration/backfill or category/consent expansion.

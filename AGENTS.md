@@ -172,6 +172,8 @@ AI assessment is interpretation in chat. It never automatically becomes a diagno
 
 ### 5.2 Natural report extraction
 
+Owner journal decision (2026-10-17): timeline descriptions must be short, contextual journal statements, not isolated tags such as “jogging,” “ankle” or “stressed.” Keep the patient subject separate from descriptive content so patient views say “You reported that you…” and practitioner/organization views say “The patient reported that they…”. Preserve reported-versus-confirmed meaning, relevant circumstances, event time/precision and original submission time. Use bounded prior patient evidence to relate follow-ups by time AND context. Repetition/enrichment of the same fact and occurrence updates its retained logical record; a distinct new fact in that incident is linked without duplicating the earlier activity. Different occurrences remain separate even with identical words or the same date. Neither matching keywords nor proximity alone establishes sameness. Preserve originals and versions, hold consequential ambiguity/conflicts, and keep retrieval compact with source lineage. Never fill missing context with invented clinical conclusions.
+
 - Persist patient messages with stable IDs, exact capture time, and timezone before extraction. Store AI replies separately from patient evidence.
 - Automatically save clear reports with source spans and timing. Ask about consequential ambiguity naturally; do not turn chat into a questionnaire.
 - Exclude general questions, hypotheticals, third-party stories, and prior AI output from patient facts.
@@ -218,6 +220,8 @@ Accepting/finalizing/correcting contributions writes the event and affected curr
 ## 7. AI chat, retrieval, and assistance
 
 ### 7.1 Durable conversations
+
+Owner default-voice decision (2026-10-17): Mhistree is a warm, informal conversational/gist partner by default in MVP. Use natural, moderate-length replies (usually a short paragraph), respond to the person's story and gently explore relevant wellbeing with a useful follow-up when appropriate. Avoid a formal doctor/intake voice, repeated "tell me more," stacked questions, forced slang and routine capture announcements. Clear self-reported health information continues through automatic background extraction, without converting casual conversation, assistant suggestions or guessed causes into clinical facts. Do not claim successful storage without evidence. Keep diagnostic uncertainty and urgent-help boundaries even in casual conversation. User-selectable chat vibes are future scope, not part of this change.
 
 Patient AI chat is separate from care messaging. Input survives generation failure. Send/reconnect/retry uses idempotency. Preserve ordering, capture time, timezone, and elapsed gaps. Cancellation, outage, rate limits, and retry have truthful visible states; never fabricate an answer to make a flow appear successful.
 

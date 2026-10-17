@@ -2,6 +2,7 @@ import "server-only";
 import type { Pool } from "pg";
 import { withAccess, type ActingContext } from "@/features/access/server";
 import { z } from "zod";
+import { recordNarrative } from "@/features/health-records/narrative";
 export type Evidence = {
   id: string;
   sourceId: string;
@@ -15,6 +16,9 @@ export type Evidence = {
   spans: string[];
   contextLinks: string[];
   version: number;
+  priorSources: { sourceId: string; version: number; spans: string[] }[];
+  historyBounded: boolean;
+  excerpted: boolean;
 };
 /** No cached index: current RLS and latest heads filter every retrieval before ranking. */
 export async function retrieveEvidence(
@@ -39,20 +43,50 @@ export async function retrieveEvidence(
         [patientPersonId, words],
       )
     ).rows;
-    const evidence: Evidence[] = rows.map((row) => ({
+    const priorSources = rows.length
+      ? (
+          await a.tx.query(
+            `select current.id current_id,prior.source_id,prior.version,prior.source_spans
+       from mhistree.contributions current
+       cross join lateral (select source_id,version,source_spans from mhistree.contributions
+         where logical_id=current.logical_id and version<current.version order by version desc limit 5) prior
+       where current.id=any($1::uuid[])`,
+            [rows.map((r) => r.id)],
+          )
+        ).rows
+      : [];
+    const allEvidence: Evidence[] = rows.map((row) => ({
       id: row.id,
       sourceId: row.source_id,
       group: row.chat_message_id ?? row.parent_source_id ?? row.source_id,
-      text: row.body.text,
+      text: recordNarrative(row).slice(0, 1200),
       category: row.category,
       sourceStatus: row.source_status,
       status: row.status,
       eventTime: row.occurred_at,
       capturedAt: row.captured_at.toISOString(),
-      spans: row.source_spans,
+      spans: row.source_spans.slice(0, 3),
       contextLinks: row.body.contextLinks,
       version: row.version,
+      priorSources: priorSources
+        .filter((p) => p.current_id === row.id)
+        .map((p) => ({
+          sourceId: p.source_id,
+          version: p.version,
+          spans: p.source_spans.slice(0, 3),
+        })),
+      historyBounded: row.version > 6,
+      excerpted:
+        recordNarrative(row).length > 1200 || row.source_spans.length > 3,
     }));
+    const evidence: Evidence[] = [];
+    let contextSize = 2;
+    for (const item of allEvidence) {
+      const size = JSON.stringify(item).length + 1;
+      if (contextSize + size > 24000) break;
+      evidence.push(item);
+      contextSize += size;
+    }
     const gaps =
       context.kind === "patient"
         ? (
@@ -64,7 +98,10 @@ export async function retrieveEvidence(
     return {
       evidence,
       gaps,
-      bounded: rows.length === 40,
+      bounded:
+        rows.length === 40 ||
+        evidence.length < rows.length ||
+        evidence.some((e) => e.excerpted || e.historyBounded),
       asOf: new Date().toISOString(),
     };
   });
