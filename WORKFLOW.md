@@ -1,3 +1,11 @@
+## Auth navigation horizontal alignment — 2026-10-17
+
+Owner requested a simple UI fix for the `/auth` page where "Forgot password?" and the account switch ("Don’t have an account? Sign up" / "Have an account? Sign in") were stacked vertically. Placed "Forgot password?" on the left and the account switch on the right on the same horizontal row (`.account-row`) directly below the submit button.
+
+Verification:
+- Added unit test `tests/unit/account-entry.test.ts` testing both Sign In and Sign Up modes and verifying presence, positioning, and mode-switching. Passed (1/1).
+- Full lint (`pnpm lint`), typecheck (`pnpm typecheck`), client-secret scan (`pnpm check:client`), and whitespace check (`git diff --check`) passed with 0 errors and 0 warnings.
+
 ## Present-tense chat timeline ordering — 2026-10-17
 
 Owner reported an issue where every newly sent chat message resulted in an older "You reported: jogging" event remaining displayed at the top of the timeline. Investigation confirmed that the AI extraction was not recreating duplicate jogging entries; rather, the jogging entry had an approximate full-day date from an earlier morning test (placing it in primary Bucket 0), whereas present-tense chat messages ("i am sad", "stomach pain now", "excessive coffee") without explicit past-tense date phrases were assigned precision: "unknown" and sorted into secondary Bucket 1 (which orders below all dated Bucket 0 entries).

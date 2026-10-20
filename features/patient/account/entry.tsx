@@ -238,26 +238,30 @@ export function AccountEntry({
                     : "Continue"}
           </Btn>
           {(mode === "login" || mode === "signup") && (
-            <Link className="account-recovery-link" href="/recovery">
-              Forgot password?
-            </Link>
+            <div className="account-row">
+              <Link className="account-recovery-link" href="/recovery">
+                Forgot password?
+              </Link>
+              <p className="account-switch">
+                <span>
+                  {mode === "login"
+                    ? "Don’t have an account? "
+                    : "Have an account? "}
+                </span>
+                <button
+                  type="button"
+                  className="account-link"
+                  onClick={() => change(mode === "login" ? "signup" : "login")}
+                  disabled={pending}
+                >
+                  {mode === "login" ? "Sign up" : "Sign in"}
+                </button>
+              </p>
+            </div>
           )}
         </form>
         {(mode === "login" || mode === "signup") && (
           <div className="account-navigation">
-            <p>
-              {mode === "login"
-                ? "Don’t have an account? "
-                : "Already have an account? "}
-              <button
-                type="button"
-                className="account-link"
-                onClick={() => change(mode === "login" ? "signup" : "login")}
-                disabled={pending}
-              >
-                {mode === "login" ? "Sign up" : "Sign in"}
-              </button>
-            </p>
             <div className="account-other-methods">
               <p className="account-divider">Other options</p>
               <button
