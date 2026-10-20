@@ -1,5 +1,7 @@
 # Feature ownership and bounded navigation
 
+2026-10-20 recall presentation correction: patient-prompt.ts plus server.ts context wrapper keep retrieved IDs internal and express ordinary history recall naturally. Updated integration/timeline-search assertions supersede earlier visible-citation expectations; retrieval/extraction owners remain unchanged.
+
 2026-10-20 mandatory timeline search: `features/ai-chat/timeline-search.ts` -> authorized `searchTimeline`/`searchTimelineInAccess` -> shared retrieval for replies/assessment/practitioner assistance and read-only wider extraction candidates. `patient-prompt.ts` requests dated uncertainty/clarification rather than automatic episode assumptions. Tests: integration/timeline-search. No new route/model tool loop or embedding producer. [Evidence](tasks/timeline-search-2026-10-20.md).
 
 2026-10-17 AI debugging/recovery: `lib/ai/debug.ts` -> gateway/request/chat/extraction/retrieval metadata in the server terminal; AI_DEBUG flag. Extraction HTTP accepts id or owned messageId; ChatView shows partial/held state. Tests: ai-debug, integration/extraction-http, chat-send-flow and journal-extraction. Evidence: [AI terminal debugger](tasks/ai-terminal-debug-2026-10-17.md). No embedding producer, hosted recovery or schema change implied.

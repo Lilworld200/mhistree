@@ -166,7 +166,11 @@ describe("timeline search throughout chat", () => {
         expect(system).toContain("2026-10-12");
         expect(system).toContain("before treating it as the same episode");
         expect(system).toContain("topic-match");
-        return `Glad it's easing. Do you mean the stomach ache you reported on 12 October? [${stomach}]`;
+        expect(system).toContain(
+          "identifiers/source lineage are internal only",
+        );
+        expect(system).not.toContain("cite event IDs if used");
+        return "Glad it's easing. Do you mean the stomach ache you mentioned on 12 October?";
       },
     };
     expect(
@@ -177,7 +181,7 @@ describe("timeline search throughout chat", () => {
       (await conversationHistory(db.pool, patient.session, sent.id)).items.at(
         -1,
       )?.content,
-    ).toContain(stomach);
+    ).not.toContain(stomach);
   });
   it("does not promote an old activity as a recent possible cause", async () => {
     const oldRun = await add(
@@ -378,7 +382,17 @@ describe("timeline search throughout chat", () => {
         chatModel: env.AI_PATIENT_MODEL!,
         extractionModel: env.AI_EXTRACTION_MODEL!,
       });
+      const recalled = await add(
+        "had serious stomach pain on October 17",
+        "symptom",
+        "2026-10-17T10:00:00Z",
+      );
       for (const [text, topic, id] of [
+        [
+          "Do you remember what I told you about my belly pain?",
+          /17|seventeen/i,
+          recalled,
+        ],
         ["My belly is getting better", /stomach|belly|abdom/i, stomach],
         [
           "My legs are paining me",
@@ -393,7 +407,13 @@ describe("timeline search throughout chat", () => {
         ).items.at(-1)!.content;
         expect(reply).toMatch(topic);
         expect(reply).toContain("?");
-        expect(reply).toContain(id);
+        expect(reply).not.toContain(id);
+        expect(reply).not.toMatch(
+          /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+        );
+        expect(reply).not.toMatch(
+          /\b(?:note|entry|database|timeline|record ID)\b/i,
+        );
         expect(reply).not.toMatch(
           /(?:jogging|running) (?:caused|is why)|you have recovered/i,
         );

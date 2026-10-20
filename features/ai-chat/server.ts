@@ -228,7 +228,7 @@ async function generatePatientReply(
       prepared.message.content,
     );
     const reply = await gateway.generate(
-      `${patientChatPolicy}\nCurrent authorized record context (bounded; cite event IDs if used): ${JSON.stringify(evidence)}`,
+      `${patientChatPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify(evidence)}`,
       messages,
       { signal },
     );
