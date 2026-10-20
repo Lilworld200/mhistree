@@ -1,5 +1,5 @@
 import { requirePatient } from "@/lib/auth/patient";
-import { AppShell } from "@/components/layout/app-shell";
+import { AuthenticatedShell } from "@/components/layout/authenticated-shell";
 import Link from "next/link";
 export default async function Layout({
   children,
@@ -8,7 +8,7 @@ export default async function Layout({
 }) {
   await requirePatient();
   return (
-    <AppShell>
+    <AuthenticatedShell>
       <nav aria-label="Restricted review">
         <Link href="/review">Professional review</Link>
         {" | "}
@@ -19,6 +19,6 @@ export default async function Layout({
         <Link href="/review/duplicates">Duplicate review</Link>
       </nav>
       {children}
-    </AppShell>
+    </AuthenticatedShell>
   );
 }

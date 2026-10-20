@@ -1,10 +1,10 @@
-import { requirePatient } from "@/lib/auth/patient";
-import { AppShell } from "@/components/layout/app-shell";
+import { AuthenticatedShell } from "@/components/layout/authenticated-shell";
 export default async function Layout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  await requirePatient();
-  return <AppShell>{children}</AppShell>;
+  return (
+    <AuthenticatedShell area="organization">{children}</AuthenticatedShell>
+  );
 }

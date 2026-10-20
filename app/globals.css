@@ -2152,6 +2152,13 @@
   font-size: 24px;
   text-align: center;
 }
+.account-card.professional-enrollment {
+  max-width: 720px;
+}
+.professional-enrollment .patient-page {
+  padding: 0;
+  overflow: visible;
+}
 .account-card > .muted {
   text-align: center;
 }

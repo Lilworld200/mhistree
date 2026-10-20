@@ -1,5 +1,7 @@
 # Organizations: T26-T28
 
+2026-10-20 entry: /auth/professional/organization supplies distinct organization login/signup, then reuses OrganizationView/myOrganizations for applications and status. AuthenticatedShell hides organization navigation from patient-only accounts and returns direct unenrolled visits to explicit professional entry. Own applicants, active members and unexpired targeted invitations are eligible for organization/status navigation; invitation acceptance/approval/privilege checks remain server-owned. Entry intent is a return path only, not membership or administration authority.
+
 2026-10-13 closeout: My patients and organizational assigned lists include explicit direct, organization and valid initial-care links. Initial-care records remain reachable while their original basis is valid; activation or canonical retirement removes that path. Follow-up migration 20261013121002 guards merged identities. Invitation role presets only initialize visible privilege checkboxes. Controlled search supports exact alias or bounded name prefix; duplicate flags never reveal candidate history.
 
 Owns organizational status and operational authority, not a second clinical engine. All modules are server-only except named views. Routes validate transport; services independently verify current sessions, organization approval and privilege. Private SQL tables use RLS with no browser grants.

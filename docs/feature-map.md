@@ -1,5 +1,7 @@
 # Feature ownership and bounded navigation
 
+Professional entry2026-10-20: app/(auth)/auth/professional and [entry] -> shared AccountEntry -> existing email auth -> allowlisted return path -> reviewed ProfessionalProfile/OrganizationView. features/auth/{entry-path,workspace-access} own intent/navigation; components/layout/authenticated-shell derives server flags for AppShell across patient/clinical/organization/review/identity routes. Patient-only accounts get no clinical/org links; entry type is not authority. Tests: professional-entry-ui, professional-auth-routing, professional-layout-guard, professional-enrollment-route and integration/workspace-access. Evidence: tasks/professional-entry-2026-10-20.md.
+
 2026-10-20 recall presentation correction: patient-prompt.ts plus server.ts context wrapper keep retrieved IDs internal and express ordinary history recall naturally. Updated integration/timeline-search assertions supersede earlier visible-citation expectations; retrieval/extraction owners remain unchanged.
 
 2026-10-20 mandatory timeline search: `features/ai-chat/timeline-search.ts` -> authorized `searchTimeline`/`searchTimelineInAccess` -> shared retrieval for replies/assessment/practitioner assistance and read-only wider extraction candidates. `patient-prompt.ts` requests dated uncertainty/clarification rather than automatic episode assumptions. Tests: integration/timeline-search. No new route/model tool loop or embedding producer. [Evidence](tasks/timeline-search-2026-10-20.md).

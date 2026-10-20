@@ -7,11 +7,17 @@ import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import { AuthField } from "./auth-field";
+import {
+  professionalEntryPath,
+  type ProfessionalEntry,
+} from "@/features/auth/entry-path";
 type Mode = "login" | "signup" | "redeem" | "setup";
 export function AccountEntry({
   initialMode = "login",
+  entry,
 }: {
   initialMode?: Mode;
+  entry?: ProfessionalEntry;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode),
@@ -51,6 +57,7 @@ export function AccountEntry({
           email: values.get("email"),
           password: values.get("password"),
           requestKey: enrollment.current,
+          ...(entry ? { entry } : {}),
         });
         setIdentifier(String(values.get("email")));
         setMode("login");
@@ -92,8 +99,9 @@ export function AccountEntry({
         await api("/api/auth/login", {
           identifier,
           password: values.get("password"),
+          ...(entry ? { entry } : {}),
         });
-        router.replace("/chat");
+        router.replace(professionalEntryPath(entry));
         router.refresh();
       }
     } catch (caught) {
@@ -115,14 +123,24 @@ export function AccountEntry({
         />
         <h1>
           {mode === "login"
-            ? "Sign in"
+            ? entry
+              ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} sign in`
+              : "Sign in"
             : mode === "signup"
-              ? "Create your account"
+              ? entry
+                ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} registration`
+                : "Create your account"
               : mode === "redeem"
                 ? "Use your setup or recovery code"
                 : "Choose your password"}
         </h1>
-        <p className="muted">Your health story, kept together.</p>
+        <p className="muted">
+          {entry
+            ? entry === "practitioner"
+              ? "Sign in or create an account to submit your professional credentials for review."
+              : "Sign in or create an account to register your organization or join your team."
+            : "Your health story, kept together."}
+        </p>
         <form key={mode} onSubmit={submit} className="account-form">
           {mode === "signup" && (
             <>
@@ -264,6 +282,16 @@ export function AccountEntry({
           <div className="account-navigation">
             <div className="account-other-methods">
               <p className="account-divider">Other options</p>
+              <Link className="account-link" href="/auth/professional">
+                {entry
+                  ? "Choose another professional option"
+                  : "Healthcare professionals and organizations"}
+              </Link>
+              {entry && (
+                <Link className="account-link" href="/auth">
+                  Patient sign in
+                </Link>
+              )}
               <button
                 type="button"
                 className="account-link"

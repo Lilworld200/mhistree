@@ -1,5 +1,7 @@
 # Patient account entry
 
+Professional entry2026-10-20: “Other options” now links to /auth/professional, a separate Healthcare professional/Organization chooser. Shared AccountEntry accepts a typed entry intent for distinct headings/login return paths while preserving patient defaults. Professional signup returns to the selected application after verified callback; it never grants a role. Signed-in patients can explicitly apply through this route using the same account. AuthenticatedShell hides clinical/organization links from patient-only accounts. Application forms and approval remain owned by practitioner/organizations. See docs/tasks/professional-entry-2026-10-20.md.
+
 Implemented owner decision, 2026-10-14: self-signup requires email/password and verified Supabase email; no-email login is deferred. Organizations/practitioners still register unactivated patient records without credentials. Reviewed setup binds the verified Supabase subject to that existing person, not another record. Active authentication is Supabase; no Keycloak process is needed for these routes.
 
 Auth inputs and floating-label backgrounds use pill radii (999px), with horizontal padding around the raised text.

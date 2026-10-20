@@ -1,11 +1,11 @@
 import { requirePatient } from "@/lib/auth/patient";
 import { DuplicateFlagView } from "@/features/identity/duplicates-view";
-import { AppShell } from "@/components/layout/app-shell";
+import { AuthenticatedShell } from "@/components/layout/authenticated-shell";
 export default async function Page() {
   const { actor } = await requirePatient();
   return (
-    <AppShell>
+    <AuthenticatedShell>
       <DuplicateFlagView personId={actor.personId} />
-    </AppShell>
+    </AuthenticatedShell>
   );
 }

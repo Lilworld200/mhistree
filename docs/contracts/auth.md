@@ -1,5 +1,7 @@
 # Authentication contract v1 — T08
 
+Professional entry extension2026-10-20: shared email signup/login transport accepts optional entry enum practitioner|organization, which selects only a fixed /auth/professional destination. Signup strips this navigation field before identity enrollment, then retains intent in a one-hour HttpOnly/SameSite cookie matching the existing PKCE window. Verified signup callback validates the enum, redirects to the selected application and consumes intent; missing/invalid values fall back to /chat. Login consumes stale intent and returns the fixed next route. This field/cookie is never trusted for roles, membership, qualification or record access. Current verified local session plus server-owned profile/application/membership/invitation records determine navigation; services retain their own authorization. Patient signup/login defaults remain unchanged. No schema/provider change or second identity is introduced.
+
 ## Current MVP provider - 2026-10-14
 
 Owner switched to Supabase Auth, requiring email/password for self-signup and activation; no-email authentication is explicitly deferred. Staff may still create an unactivated Person without credentials. `lib/auth/config.ts` selects Supabase; Keycloak code/tests below are retained historical foundation evidence and are not the production route provider.

@@ -35,6 +35,11 @@ import {
   openFlow,
 } from "@/lib/auth/flow-cookie";
 import { DomainError } from "@/lib/errors";
+import {
+  professionalEntry,
+  professionalEntryPath,
+  entryCookie,
+} from "@/features/auth/entry-path";
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ operation: string }> },
@@ -90,8 +95,20 @@ export async function POST(
           await resendVerification(pool, provider, email, rate),
         );
       }
-      if (operation === "signup")
-        return emailResponse(await signupEmail(pool, provider, input, rate));
+      if (operation === "signup") {
+        const { entry, ...credentials } = z
+          .object({ entry: professionalEntry.optional() })
+          .passthrough()
+          .parse(input);
+        const response = await emailResponse(
+          await signupEmail(pool, provider, credentials, rate),
+        );
+        response.cookies.set(entryCookie, entry ?? "", {
+          ...flowCookieOptions(),
+          maxAge: entry ? 3600 : 0,
+        });
+        return response;
+      }
       if (operation === "reset-email") {
         const { email } = z
           .object({ email: z.email().max(254) })
@@ -166,6 +183,7 @@ export async function POST(
           .object({
             identifier: z.string().min(1).max(254),
             password: z.string().min(1).max(128),
+            entry: professionalEntry.optional(),
           })
           .strict()
           .parse(input);
@@ -176,7 +194,11 @@ export async function POST(
           data.password,
           rate,
         );
-        const response = success({ next: "/chat" });
+        const response = success({ next: professionalEntryPath(data.entry) });
+        response.cookies.set(entryCookie, "", {
+          ...flowCookieOptions(),
+          maxAge: 0,
+        });
         response.cookies.set(sessionCookie, result.session, {
           ...cookieOptions(),
           expires: result.expiresAt,

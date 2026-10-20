@@ -5,9 +5,9 @@ import { database, transaction } from "@/lib/db/client";
 import { verifySession } from "@/features/auth/sessions";
 import { sessionCookie } from "@/lib/http";
 import { DomainError } from "@/lib/errors";
-export async function requirePatient() {
+export async function currentPatient() {
   const session = (await cookies()).get(sessionCookie)?.value ?? "";
-  if (!session) redirect("/auth");
+  if (!session) return null;
   try {
     const actor = await transaction(
       (tx) => verifySession(tx, session),
@@ -19,7 +19,12 @@ export async function requirePatient() {
       error instanceof DomainError &&
       ["AUTH_REQUIRED", "SESSION_RETIRED"].includes(error.code)
     )
-      redirect("/auth");
+      return null;
     throw error;
   }
+}
+export async function requirePatient(loginPath = "/auth") {
+  const patient = await currentPatient();
+  if (!patient) redirect(loginPath);
+  return patient;
 }

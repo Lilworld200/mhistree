@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 
 import { ChatNavigationProvider, useChatNavigation } from "./chat-navigation";
+import type { WorkspaceAccess } from "@/features/auth/workspace-access";
 
 const navigation: { href: string; label: string; icon: IconName }[] = [
   { href: "/chat", label: "AI", icon: "chat" },
@@ -22,7 +23,13 @@ const navigation: { href: string; label: string; icon: IconName }[] = [
   { href: "/requests", label: "Requests and results", icon: "doc" },
 ];
 
-function Navigation({ close }: { close?: () => void }) {
+function Navigation({
+  close,
+  workspaces,
+}: {
+  close?: () => void;
+  workspaces: WorkspaceAccess;
+}) {
   const pathname = usePathname();
   const router = useRouter();
   const chat = useChatNavigation();
@@ -132,14 +139,28 @@ function Navigation({ close }: { close?: () => void }) {
         </details>
       </nav>
       <div className="sidefoot">
-        <Link href="/clinician/dashboard" onClick={close} className="nav-item">
-          <Icon n="steth" s={17} />
-          Clinician workspace
-        </Link>
-        <Link href="/organizations" onClick={close} className="nav-item">
-          <Icon n="share" s={17} />
-          Organizations
-        </Link>
+        {workspaces.professionalProfile && (
+          <Link
+            href={
+              workspaces.practitioner
+                ? "/clinician/dashboard"
+                : "/clinician/profile"
+            }
+            onClick={close}
+            className="nav-item"
+          >
+            <Icon n="steth" s={17} />
+            {workspaces.practitioner
+              ? "Clinical workspace"
+              : "Professional application"}
+          </Link>
+        )}
+        {workspaces.organizations && (
+          <Link href="/organizations" onClick={close} className="nav-item">
+            <Icon n="share" s={17} />
+            Organizations
+          </Link>
+        )}
         <Link href="/profile" onClick={close} className="prow">
           <span className="profile-avatar">
             <Icon n="user" s={18} />
@@ -155,14 +176,30 @@ function Navigation({ close }: { close?: () => void }) {
   );
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  workspaces = {
+    practitioner: false,
+    professionalProfile: false,
+    organizations: false,
+  },
+}: {
+  children?: React.ReactNode;
+  workspaces?: WorkspaceAccess;
+}) {
   return (
     <ChatNavigationProvider>
-      <Shell>{children}</Shell>
+      <Shell workspaces={workspaces}>{children}</Shell>
     </ChatNavigationProvider>
   );
 }
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  children,
+  workspaces,
+}: {
+  children: React.ReactNode;
+  workspaces: WorkspaceAccess;
+}) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
   const title =
@@ -185,7 +222,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <span style={{ width: 44 }} />
           </div>
           <aside className="side">
-            <Navigation />
+            <Navigation workspaces={workspaces} />
           </aside>
           <main className="main-shell" id="main-content" tabIndex={-1}>
             <div className="page">{children}</div>
@@ -198,7 +235,7 @@ function Shell({ children }: { children: React.ReactNode }) {
             <Dialog.Description className="sr-only">
               Choose a Mhistree section.
             </Dialog.Description>
-            <Navigation close={() => setOpen(false)} />
+            <Navigation workspaces={workspaces} close={() => setOpen(false)} />
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>

@@ -1,5 +1,7 @@
 # Practitioner: T19-T25
 
+2026-10-20 entry: /auth/professional/practitioner supplies distinct Healthcare professional login/signup or the existing ProfessionalProfile application for a signed-in applicant. Approved accounts continue to /clinician/dashboard. Unenrolled patients opening /clinician directly are returned to this explicit application entry; pending/suspended profiles get application navigation and existing clinical service guards remain. Shared server workspace-access owns navigation flags; no new qualification/credential identity is created.
+
 One account extends its patient identity with an independently reviewed professional profile. Profile submission and qualification evidence live in profile.ts; review-view.tsx is restricted review UI. Status is rechecked server-side, including suspended practitioners and direct service calls.
 
 patients.ts owns controlled registration/lookup, independent direct consent and authorized patient lists. patients-view.tsx and workspace-view.tsx use those APIs; workspace-view also accepts an explicit organization/initial-care context from the organizations owner. It never silently retries in another context. Existing changes in these views and workspace transport were preserved when T26 began.

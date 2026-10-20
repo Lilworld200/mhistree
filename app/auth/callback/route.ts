@@ -11,6 +11,7 @@ import { confirmEmail } from "@/features/auth/email";
 import { database } from "@/lib/db/client";
 import { cookieOptions, sessionCookie, requestRateKey } from "@/lib/http";
 import { DomainError } from "@/lib/errors";
+import { entryCookie, professionalEntryPath } from "@/features/auth/entry-path";
 
 export async function GET(request: NextRequest) {
   const origin = process.env.APP_ORIGIN;
@@ -60,7 +61,13 @@ export async function GET(request: NextRequest) {
         token,
         requestRateKey(),
       );
-      response = NextResponse.redirect(new URL("/chat", origin), 303);
+      response = NextResponse.redirect(
+        new URL(
+          professionalEntryPath(request.cookies.get(entryCookie)?.value),
+          origin,
+        ),
+        303,
+      );
       response.cookies.set(sessionCookie, result.session, {
         ...cookieOptions(),
         // Email-link navigation originates on the mail provider's site.
@@ -77,6 +84,11 @@ export async function GET(request: NextRequest) {
       maxAge: 0,
     });
   response.headers.set("Cache-Control", "private, no-store");
+  if (flow === "signup")
+    response.cookies.set(entryCookie, "", {
+      ...flowCookieOptions(),
+      maxAge: 0,
+    });
   response.headers.set("Referrer-Policy", "no-referrer");
   return response;
 }
