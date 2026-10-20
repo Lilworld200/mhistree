@@ -4,6 +4,7 @@ import { withAccess, type ActingContext } from "@/features/access/server";
 import { z } from "zod";
 import { recordNarrative } from "@/features/health-records/narrative";
 import { aiDebug } from "@/lib/ai/debug";
+import { searchTimelineInAccess } from "./timeline-search";
 export type Evidence = {
   id: string;
   sourceId: string;
@@ -20,6 +21,8 @@ export type Evidence = {
   priorSources: { sourceId: string; version: number; spans: string[] }[];
   historyBounded: boolean;
   excerpted: boolean;
+  relevance:
+    "topic-match" | "possible-context" | "persistent-state" | "recent-context";
 };
 /** No cached index: current RLS and latest heads filter every retrieval before ranking. */
 export async function retrieveEvidence(
@@ -31,19 +34,8 @@ export async function retrieveEvidence(
 ) {
   z.uuid().parse(patientPersonId);
   z.string().max(10000).parse(question);
-  const words = [...new Set(question.toLowerCase().match(/[a-z]{4,}/g) ?? [])]
-    .slice(0, 8)
-    .map((w) => `%${w}%`);
   return withAccess(pool, session, context, async (a) => {
-    const rows = (
-      await a.tx.query(
-        `select e.*,s.captured_at,s.chat_message_id,s.parent_source_id from mhistree.record_heads h join mhistree.contributions e on e.id=h.current_id join mhistree.sources s on s.id=e.source_id
-   where mhistree.canonical_person(e.patient_person_id)=mhistree.canonical_person($1) and e.visibility='finalized' order by
-   case when e.category in ('medication-use','allergy','baseline','ongoing') then 0 when e.body->>'text' ilike any($2::text[]) then 1 else 2 end,
-   e.recorded_at desc,e.id desc limit 40`,
-        [patientPersonId, words],
-      )
-    ).rows;
+    const rows = await searchTimelineInAccess(a, patientPersonId, question);
     const priorSources = rows.length
       ? (
           await a.tx.query(
@@ -58,6 +50,14 @@ export async function retrieveEvidence(
       : [];
     const allEvidence: Evidence[] = rows.map((row) => ({
       id: row.id,
+      relevance:
+        row.match_score >= 2
+          ? "topic-match"
+          : row.match_score === 1
+            ? "possible-context"
+            : row.search_lane === 1
+              ? "persistent-state"
+              : "recent-context",
       sourceId: row.source_id,
       group: row.chat_message_id ?? row.parent_source_id ?? row.source_id,
       text: recordNarrative(row).slice(0, 1200),
@@ -100,7 +100,7 @@ export async function retrieveEvidence(
       evidence,
       gaps,
       bounded:
-        rows.length === 40 ||
+        rows.length >= 8 ||
         evidence.length < rows.length ||
         evidence.some((e) => e.excerpted || e.historyBounded),
       asOf: new Date().toISOString(),
@@ -110,7 +110,7 @@ export async function retrieveEvidence(
       contextCharacters: contextSize,
       bounded: result.bounded,
       embeddingUsed: false,
-      reason: "sql-ranking",
+      reason: "expanded-text-and-recent",
     });
     return result;
   });

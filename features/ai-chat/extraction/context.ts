@@ -7,6 +7,7 @@ import {
 } from "@/features/health-records/narrative";
 import type { z } from "zod";
 import type { eventTime } from "@/features/health-records/schema";
+import { searchTimelineInAccess } from "../timeline-search";
 
 export type PriorReport = {
   id: string;
@@ -22,6 +23,14 @@ export type ExtractionContext = {
   reports: PriorReport[];
   messages: { content: string; capturedAt: string; timezone: string }[];
   fingerprint: string;
+  timelineCandidates?: {
+    eventId: string;
+    text: string;
+    eventTime: unknown;
+    capturedAt: string;
+    sourceStatus: string;
+    status: string;
+  }[];
 };
 
 /** Patient evidence only, same author/person/conversation, before the target message.
@@ -58,7 +67,33 @@ export async function extractionContext(
       [messageId, a.actor.accountId],
     )
   ).rows;
+  const target = (
+    await a.tx.query(
+      "select content,captured_at,person_id from mhistree.chat_messages where id=$1 and role='patient'",
+      [messageId],
+    )
+  ).rows[0];
+  const candidates = target
+    ? await searchTimelineInAccess(
+        a,
+        target.person_id,
+        target.content,
+        target.captured_at,
+      )
+    : [];
+  const timelineCandidates = candidates
+    .filter((e) => !reports.some((r) => r.id === e.id))
+    .slice(0, 8)
+    .map((e) => ({
+      eventId: e.id,
+      text: recordNarrative(e).slice(0, 600),
+      eventTime: e.occurred_at,
+      capturedAt: e.captured_at.toISOString(),
+      sourceStatus: e.source_status,
+      status: e.status,
+    }));
   return {
+    timelineCandidates,
     reports: reports.map((e) => ({
       id: e.id,
       logicalId: e.logical_id,
@@ -82,6 +117,7 @@ export function modelExtractionContext(context: ExtractionContext | undefined) {
   if (!context) return null;
   const projection = {
     previousPatientMessages: [...context.messages],
+    possibleTimelineContext: [...(context.timelineCandidates ?? [])],
     previousReports: context.reports.map((r) => ({
       eventId: r.id,
       category: r.category,
@@ -106,6 +142,8 @@ export function modelExtractionContext(context: ExtractionContext | undefined) {
   while (JSON.stringify(projection).length > 16000) {
     if (projection.previousPatientMessages.length)
       projection.previousPatientMessages.shift();
+    else if (projection.possibleTimelineContext.length)
+      projection.possibleTimelineContext.pop();
     else projection.previousReports.pop();
   }
   return projection;

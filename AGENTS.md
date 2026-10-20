@@ -229,6 +229,8 @@ Patient AI chat is separate from care messaging. Input survives generation failu
 
 ### 7.2 Authorized evidence
 
+Owner timeline-search decision (2026-10-20): ordinary patient replies must always consult the authorized timeline, across conversations, using reusable server search functions. Retrieve relevant wording/synonyms and potentially related recent activity with capture/event times, latest versions, status uncertainty and source lineage. Candidate similarity is not proof of the same occurrence, a new unrelated episode, continuing illness, recovery or causation. Acknowledge a follow-up naturally and clarify plausible connections (earlier stomach ache versus improving belly; recent jogging versus new leg pain). Respect denied connections. Clear new observations may be preserved while their relationship remains unresolved; never automatically merge, resolve or create confirmed links from search similarity. Keep context bounded and authority checked before retrieval/delivery.
+
 Use compact authorized persistent context plus relevant timeline events, originals, and time-aware conversation. Combine exact filters with semantic retrieval only where useful. Source links, event age, uncertainty, corrections, gaps, and contradictions travel with context.
 
 Filter before retrieval and recheck before sensitive delivery. Isolate patient, direct, organization, and private-author contexts. Summaries/embeddings/indexes are derived and rebuildable; invalidate on source or permission changes. Repeated reports, duplicate accounts, and old AI guesses are not independent evidence.
