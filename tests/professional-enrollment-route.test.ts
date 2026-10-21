@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import Page from "@/app/(auth)/auth/professional/[entry]/page";
-import { AccountEntry } from "@/features/patient/account/entry";
+import { ApplicationFlow } from "@/features/professional-onboarding/application";
+import { professionalAuthPath } from "@/features/auth/entry-path";
 const { current, profile, organizations } = vi.hoisted(() => ({
   current: vi.fn(),
   profile: vi.fn(),
@@ -27,9 +28,9 @@ it.each(["practitioner", "organization"])(
   "unauthenticated %s entry renders the distinct account form",
   async (entry) => {
     current.mockResolvedValue(null);
-    const result = await Page({ params: Promise.resolve({ entry }) });
-    expect(result.type).toBe(AccountEntry);
-    expect(result.props.entry).toBe(entry);
+    await expect(Page({ params: Promise.resolve({ entry }) })).rejects.toThrow(
+      `redirect:${professionalAuthPath(entry as "practitioner" | "organization", "signup")}`,
+    );
     expect(profile).not.toHaveBeenCalled();
   },
 );
@@ -48,7 +49,7 @@ it("an authenticated patient can explicitly enter professional application witho
   profile.mockResolvedValue({ profile: null, applications: [] });
   expect(
     (await Page({ params: Promise.resolve({ entry: "practitioner" }) })).type,
-  ).toBe("main");
+  ).toBe(ApplicationFlow);
   expect(profile.mock.calls[0][1]).toBe("synthetic");
 });
 it("unrecognized entry types fail before checking an account", async () => {

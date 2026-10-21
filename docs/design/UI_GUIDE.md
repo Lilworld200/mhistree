@@ -2,6 +2,10 @@ Owner update, 2026-10-16: `71121bd` is the selected reference for restoring exis
 
 # Preserved interface guide — T03
 
+Owner spacing override2026-10-20: current account-card CSS uses32px equal padding rather than the earlier40px vertical/32px horizontal recipe. Final navigation removes its additional bottom margin; Other options uses4px grid gaps between divider and actions after feedback that12px was excessive. These are implemented CSS values, not newly measured screenshots.
+
+Owner override2026-10-20: patient /auth sign-in/sign-up now place title and health-story subtitle left, logo top right. Scoped account-auth-header flex CSS replaces the earlier centered header only for those modes. Professional/setup/code header layouts remain as before; original measurements below describe the earlier reference, not measured geometry of this update.
+
 2026-10-09, original application at commit `2c8c46c`. Read before every UI task. Visual authority is the inspected application, not the PDF. All dimensions below are CSS pixels at normal zoom. References contain guest/synthetic UI only. No authenticated patient content was captured.
 
 ## Verified foundation
@@ -75,3 +79,6 @@ Record each change and compare same viewport/state: mobile input14→16; robust 
 Original repo assets: `app/assets/images/logos/mhistree_black_logo.png` SHA256 E52CAE21E8BC1898F0B14063B1D79815FEFBD82F155A1C3D86B747DB6E538B53; `mhistree_white_logo.png` SHA256 9AF09F6CFA991AD7F8C339478B308FDCDD7CD1999C7870C69DAA0F233869EC3C. Ownership/license not independently documented; retain originals, resolve redistribution before handover. `components/ui/icons.tsx` is the code icon source; audit its provenance before distribution. Starter public SVGs are not Mhistree branding. External prototype imagery is not approved production imagery. No external media was downloaded.
 
 Comparison protocol: same synthetic state, same viewport/theme/font, settled motion; compare shell bounds, type wrapping, input/button sizes, focus/error/empty states and overflow. Record intentional accessibility differences. T06 compares its new shell/components to these references; add authenticated synthetic provider references when a safe test environment exists.
+## Practitioner and organization registration — owner revision, 2026-10-21
+
+Use the existing Mhistree auth visual language for both account registration and staged applications: centered account card (600px maximum for the additional application fields), 32px radius/padding, heading and subtitle left/original logo right, neutral shared tokens, floating-label pill fields via AuthField, dark gradient pill actions and soft secondary pills. Registration-type pills and five compact progress markers live inside the card; no marketing column or navy palette. At480px and below use24px card padding, wrap headings/step names and preserve16px inputs. Everyone signs in through /auth; registration links appear only on signup. This supersedes the independent professional layout from2026-10-20. Scoped .pro-* CSS remains imported by app/layout.tsx.

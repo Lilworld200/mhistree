@@ -2143,7 +2143,7 @@
 .account-card {
   width: 100%;
   max-width: 440px;
-  padding: 40px 32px;
+  padding: 32px;
   border-radius: 32px;
   background: linear-gradient(white, #fafafa);
   box-shadow: 0 24px 48px #0004;
@@ -2161,6 +2161,91 @@
 }
 .account-card > .muted {
   text-align: center;
+}
+.account-auth-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.account-auth-heading {
+  flex: 1;
+  min-width: 0;
+}
+.account-auth-header h1,
+.account-auth-header .muted {
+  text-align: left;
+}
+.account-auth-logo {
+  flex-shrink: 0;
+  width: clamp(88px, 30vw, 120px);
+  max-width: 40%;
+  height: auto;
+}
+.account-card.professional-access-card {
+  max-width: 640px;
+}
+.professional-access-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.professional-access-tabs {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 18px;
+  background: var(--shell);
+}
+.professional-access-tab {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  border-radius: 14px;
+  color: var(--ink2);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 700;
+}
+.professional-access-tab[aria-current="page"] {
+  background: var(--ink);
+  color: white;
+}
+.professional-access-heading {
+  margin-top: 24px;
+}
+.professional-enrollment > .professional-access-header {
+  margin-bottom: 24px;
+}
+.professional-access-tab[aria-disabled="true"] {
+  opacity: 0.55;
+  cursor: wait;
+}
+.professional-access-heading h1 {
+  text-align: left;
+}
+.professional-access-heading .muted {
+  margin-top: 4px;
+}
+@media (max-width: 480px) {
+  .professional-access-header {
+    gap: 10px;
+  }
+  .professional-access-header .account-auth-logo {
+    width: 72px;
+  }
+  .professional-access-tab {
+    padding-inline: 4px;
+    font-size: 12px;
+  }
 }
 .account-form {
   display: grid;
@@ -2190,6 +2275,9 @@
   text-align: center;
   font-size: 14px;
   margin: 20px 0;
+}
+.account-card > .account-navigation:last-child {
+  margin-bottom: 0;
 }
 .account-form .auth-field {
   position: relative;
@@ -2296,6 +2384,8 @@
   padding: 8px 0;
 }
 .account-other-methods {
+  display: grid;
+  gap: 4px;
   margin-top: 4px;
 }
 .account-divider {

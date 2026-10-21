@@ -1,5 +1,7 @@
 # Practitioner: T19-T25
 
+Professional redesign 2026-10-20: the authenticated entry route now uses `features/professional-onboarding/application.tsx` for staged registration → credential PDF → review/edit → pending status. Profile/status data still comes from `professionalProfile`; submissions still use `submitProfessional` via `/api/practitioner`. Legacy `profile-view.tsx` remains the workspace profile owner. Approved applicants continue to the dashboard; manual qualification/privilege review is unchanged.
+
 2026-10-20 entry: /auth/professional/practitioner supplies distinct Healthcare professional login/signup or the existing ProfessionalProfile application for a signed-in applicant. Approved accounts continue to /clinician/dashboard. Unenrolled patients opening /clinician directly are returned to this explicit application entry; pending/suspended profiles get application navigation and existing clinical service guards remain. Shared server workspace-access owns navigation flags; no new qualification/credential identity is created.
 
 One account extends its patient identity with an independently reviewed professional profile. Profile submission and qualification evidence live in profile.ts; review-view.tsx is restricted review UI. Status is rechecked server-side, including suspended practitioners and direct service calls.

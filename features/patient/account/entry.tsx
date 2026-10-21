@@ -9,23 +9,32 @@ import { api, errorMessage } from "@/lib/client-api";
 import { AuthField } from "./auth-field";
 import {
   professionalEntryPath,
+  professionalAuthPath,
   type ProfessionalEntry,
 } from "@/features/auth/entry-path";
+import { ProfessionalHeader } from "./professional-header";
 type Mode = "login" | "signup" | "redeem" | "setup";
 export function AccountEntry({
   initialMode = "login",
   entry,
+  verificationPending = false,
 }: {
   initialMode?: Mode;
   entry?: ProfessionalEntry;
+  verificationPending?: boolean;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>(initialMode),
     [pending, setPending] = useState(false),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
+    [notice, setNotice] = useState(
+      verificationPending
+        ? "Check your email for a verification link, then sign in."
+        : "",
+    ),
     [identifier, setIdentifier] = useState(""),
-    [awaitingVerification, setAwaitingVerification] = useState(false);
+    [awaitingVerification, setAwaitingVerification] =
+      useState(verificationPending);
   const enrollment = useRef("");
   const busy = useRef(false);
   function change(next: Mode) {
@@ -59,6 +68,11 @@ export function AccountEntry({
           requestKey: enrollment.current,
           ...(entry ? { entry } : {}),
         });
+        if (entry) {
+          router.replace(`${professionalAuthPath(entry)}&verification=pending`);
+          router.refresh();
+          return;
+        }
         setIdentifier(String(values.get("email")));
         setMode("login");
         enrollment.current = "";
@@ -111,36 +125,73 @@ export function AccountEntry({
       setPending(false);
     }
   }
+  const heading =
+    mode === "login"
+      ? entry
+        ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} sign in`
+        : "Sign in"
+      : mode === "signup"
+        ? entry
+          ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} registration`
+          : "Create your account"
+        : mode === "redeem"
+          ? "Use your setup or recovery code"
+          : "Choose your password";
+  const splitHeader = !entry && (mode === "login" || mode === "signup");
   return (
     <main className="account-stage">
-      <section className="account-card">
-        <Image
-          src={logo}
-          alt="Mhistree"
-          height={54}
-          style={{ width: "auto", height: 54, margin: "0 auto 16px" }}
-          priority
-        />
-        <h1>
-          {mode === "login"
-            ? entry
-              ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} sign in`
-              : "Sign in"
-            : mode === "signup"
-              ? entry
-                ? `${entry === "practitioner" ? "Healthcare professional" : "Organization"} registration`
-                : "Create your account"
-              : mode === "redeem"
-                ? "Use your setup or recovery code"
-                : "Choose your password"}
-        </h1>
-        <p className="muted">
-          {entry
-            ? entry === "practitioner"
-              ? "Sign in or create an account to submit your professional credentials for review."
-              : "Sign in or create an account to register your organization or join your team."
-            : "Your health story, kept together."}
-        </p>
+      <section
+        className={`account-card${entry ? " professional-access-card" : ""}`}
+      >
+        {entry && (mode === "login" || mode === "signup") ? (
+          <>
+            <ProfessionalHeader entry={entry} mode={mode} disabled={pending} />
+            <div className="professional-access-heading">
+              <h1>{mode === "login" ? "Sign in" : "Create your account"}</h1>
+              <p className="muted">
+                {entry === "practitioner"
+                  ? mode === "login"
+                    ? "Welcome back to your professional workspace."
+                    : "Create an account to register your professional profile."
+                  : mode === "login"
+                    ? "Sign in to manage your organization or join your team."
+                    : "Create an account to register your organization."}
+              </p>
+            </div>
+          </>
+        ) : splitHeader ? (
+          <header className="account-auth-header">
+            <div className="account-auth-heading">
+              <h1>{heading}</h1>
+              <p className="muted">Your health story, kept together.</p>
+            </div>
+            <Image
+              src={logo}
+              alt="Mhistree"
+              height={54}
+              className="account-auth-logo"
+              priority
+            />
+          </header>
+        ) : (
+          <>
+            <Image
+              src={logo}
+              alt="Mhistree"
+              height={54}
+              style={{ width: "auto", height: 54, margin: "0 auto 16px" }}
+              priority
+            />
+            <h1>{heading}</h1>
+            <p className="muted">
+              {entry
+                ? entry === "practitioner"
+                  ? "Sign in or create an account to submit your professional credentials for review."
+                  : "Sign in or create an account to register your organization or join your team."
+                : "Your health story, kept together."}
+            </p>
+          </>
+        )}
         <form key={mode} onSubmit={submit} className="account-form">
           {mode === "signup" && (
             <>
@@ -266,14 +317,32 @@ export function AccountEntry({
                     ? "Don’t have an account? "
                     : "Have an account? "}
                 </span>
-                <button
-                  type="button"
-                  className="account-link"
-                  onClick={() => change(mode === "login" ? "signup" : "login")}
-                  disabled={pending}
-                >
-                  {mode === "login" ? "Sign up" : "Sign in"}
-                </button>
+                {entry ? (
+                  <Link
+                    className="account-link"
+                    href={professionalAuthPath(
+                      entry,
+                      mode === "login" ? "signup" : "login",
+                    )}
+                    aria-disabled={pending}
+                    onClick={(event) => {
+                      if (pending) event.preventDefault();
+                    }}
+                  >
+                    {mode === "login" ? "Sign up" : "Sign in"}
+                  </Link>
+                ) : (
+                  <button
+                    type="button"
+                    className="account-link"
+                    onClick={() =>
+                      change(mode === "login" ? "signup" : "login")
+                    }
+                    disabled={pending}
+                  >
+                    {mode === "login" ? "Sign up" : "Sign in"}
+                  </button>
+                )}
               </p>
             </div>
           )}
@@ -282,24 +351,37 @@ export function AccountEntry({
           <div className="account-navigation">
             <div className="account-other-methods">
               <p className="account-divider">Other options</p>
-              <Link className="account-link" href="/auth/professional">
-                {entry
-                  ? "Choose another professional option"
-                  : "Healthcare professionals and organizations"}
-              </Link>
+              {!entry && mode === "signup" && (
+                <>
+                  <Link
+                    className="account-link"
+                    href={professionalAuthPath("practitioner", "signup")}
+                  >
+                    Register as a healthcare practitioner
+                  </Link>
+                  <Link
+                    className="account-link"
+                    href={professionalAuthPath("organization", "signup")}
+                  >
+                    Register an organization
+                  </Link>
+                </>
+              )}
               {entry && (
                 <Link className="account-link" href="/auth">
                   Patient sign in
                 </Link>
               )}
-              <button
-                type="button"
-                className="account-link"
-                onClick={() => change("redeem")}
-                disabled={pending}
-              >
-                Use a setup or recovery code
-              </button>
+              {mode === "login" && (
+                <button
+                  type="button"
+                  className="account-link"
+                  onClick={() => change("redeem")}
+                  disabled={pending}
+                >
+                  Use a setup or recovery code
+                </button>
+              )}
             </div>
           </div>
         )}

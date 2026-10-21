@@ -3,6 +3,12 @@ import { z } from "zod";
 export const professionalEntry = z.enum(["practitioner", "organization"]);
 export type ProfessionalEntry = z.infer<typeof professionalEntry>;
 export const entryCookie = "mhistree-entry";
+export function professionalAuthPath(
+  entry: ProfessionalEntry,
+  mode: "login" | "signup" = "login",
+) {
+  return `/auth/professional${mode === "signup" ? "/signup" : ""}?entry=${entry}`;
+}
 /** Navigation intent only. Never a role, permission or arbitrary redirect URL. */
 export function professionalEntryPath(value: unknown) {
   const parsed = professionalEntry.safeParse(value);

@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { AppShell } from "@/components/layout/app-shell";
 import { AccountEntry } from "@/features/patient/account/entry";
-import ProfessionalChoice from "@/app/(auth)/auth/professional/page";
+import { ProfessionalAuthForm } from "@/features/professional-onboarding/auth-form";
 vi.mock("next/navigation", () => ({
   usePathname: () => "/chat",
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
@@ -12,25 +12,46 @@ vi.mock("next/navigation", () => ({
 vi.mock("next/image", () => ({
   default: () => createElement("img", { alt: "Mhistree" }),
 }));
-it("patient other options links to a distinct chooser with both professional paths", () => {
+it("registration options appear only on signup and lead to each registration", () => {
   const patient = renderToStaticMarkup(createElement(AccountEntry));
-  expect(patient).toContain('href="/auth/professional"');
+  expect(patient).not.toContain('href="/auth/professional');
+  const signup = renderToStaticMarkup(
+    createElement(AccountEntry, { initialMode: "signup" }),
+  );
+  expect(signup).toContain(
+    'href="/auth/professional/signup?entry=practitioner"',
+  );
+  expect(signup).toContain(
+    'href="/auth/professional/signup?entry=organization"',
+  );
   expect(patient).toContain("Other options");
-  const chooser = renderToStaticMarkup(createElement(ProfessionalChoice));
-  expect(chooser).toContain('href="/auth/professional/practitioner"');
-  expect(chooser).toContain('href="/auth/professional/organization"');
-  expect(chooser).toContain("Healthcare professional");
+  const chooser = renderToStaticMarkup(
+    createElement(ProfessionalAuthForm, {
+      entry: "practitioner",
+    }),
+  );
+  expect(chooser).toContain(
+    'href="/auth/professional/signup?entry=practitioner"',
+  );
+  expect(chooser).toContain(
+    'href="/auth/professional/signup?entry=organization"',
+  );
+  expect(chooser).toContain("account-card");
+  expect(chooser).toContain("Practitioner registration");
 });
 it.each(["practitioner", "organization"] as const)(
-  "%s entry has its own heading and patient-return link",
+  "%s registration uses the shared sign-in link",
   (entry) => {
-    const markup = renderToStaticMarkup(createElement(AccountEntry, { entry }));
+    const markup = renderToStaticMarkup(
+      createElement(ProfessionalAuthForm, { entry }),
+    );
     expect(markup).toContain(
       entry === "practitioner"
-        ? "Healthcare professional sign in"
-        : "Organization sign in",
+        ? "Practitioner registration"
+        : "Organization registration",
     );
-    expect(markup).toContain("Patient sign in");
+    expect(markup).toContain('href="/auth"');
+    expect(markup).not.toContain("pro-mode-nav");
   },
 );
 it("patient-only shell exposes neither clinical nor organization navigation", () => {
