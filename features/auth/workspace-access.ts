@@ -8,6 +8,13 @@ export type WorkspaceAccess = {
   professionalProfile: boolean;
   organizations: boolean;
 };
+
+/** Default after authentication, independent of which workspace was last visited. */
+export async function defaultAccountPath(pool: Pool, session: string) {
+  return (await workspaceAccess(pool, session)).practitioner
+    ? "/clinician/dashboard"
+    : "/chat";
+}
 /** Own-account navigation projection; clinical authority is still checked by services. */
 export function workspaceAccess(
   pool: Pool,

@@ -2,7 +2,10 @@ import { afterAll, beforeAll, expect, it } from "vitest";
 import { randomUUID } from "node:crypto";
 import { testDatabase } from "../helpers/postgres";
 import { staffFixture } from "../helpers/fixtures";
-import { workspaceAccess } from "@/features/auth/workspace-access";
+import {
+  defaultAccountPath,
+  workspaceAccess,
+} from "@/features/auth/workspace-access";
 import { registerOrganization } from "@/features/organizations/server";
 import { digest } from "@/features/auth/sessions";
 let db: Awaited<ReturnType<typeof testDatabase>>;
@@ -18,6 +21,7 @@ it("patient-only accounts have no professional or organization navigation", asyn
     "delete from mhistree.professionals where account_id=$1",
     [patient.accountId],
   );
+  expect(await defaultAccountPath(db.pool, patient.session)).toBe("/chat");
   expect(await workspaceAccess(db.pool, patient.session)).toEqual({
     practitioner: false,
     professionalProfile: false,
@@ -26,6 +30,9 @@ it("patient-only accounts have no professional or organization navigation", asyn
 });
 it("current professional status controls workspace versus application navigation", async () => {
   const professional = await staffFixture(db.pool);
+  expect(await defaultAccountPath(db.pool, professional.session)).toBe(
+    "/clinician/dashboard",
+  );
   expect(
     (await workspaceAccess(db.pool, professional.session)).practitioner,
   ).toBe(true);
@@ -33,6 +40,7 @@ it("current professional status controls workspace versus application navigation
     "update mhistree.professionals set status='suspended' where account_id=$1",
     [professional.accountId],
   );
+  expect(await defaultAccountPath(db.pool, professional.session)).toBe("/chat");
   expect(await workspaceAccess(db.pool, professional.session)).toEqual({
     practitioner: false,
     professionalProfile: true,

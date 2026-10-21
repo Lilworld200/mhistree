@@ -4,10 +4,14 @@ import { POST } from "@/app/api/auth/[operation]/route";
 import { GET } from "@/app/auth/callback/route";
 import { entryCookie, professionalEntryPath } from "@/features/auth/entry-path";
 import { sealFlow, verifierCookie } from "@/lib/auth/flow-cookie";
-const { login, signup, confirm } = vi.hoisted(() => ({
+const { login, signup, confirm, home } = vi.hoisted(() => ({
   login: vi.fn(),
   signup: vi.fn(),
   confirm: vi.fn(),
+  home: vi.fn(),
+}));
+vi.mock("@/features/auth/workspace-access", () => ({
+  defaultAccountPath: home,
 }));
 vi.mock("@/lib/db/client", () => ({ database: () => ({}) }));
 vi.mock("@/lib/auth/config", () => ({
@@ -29,6 +33,7 @@ vi.mock("@/features/auth/email", () => ({
   resendVerification: vi.fn(),
 }));
 function environment() {
+  home.mockResolvedValue("/chat");
   vi.stubEnv("APP_ORIGIN", "http://127.0.0.1:3101");
   vi.stubEnv("AUTH_FLOW_COOKIE_KEY", "ab".repeat(32));
   login.mockResolvedValue({
@@ -133,3 +138,29 @@ it.each(["practitioner", "organization", "https://example.com"])(
     expect(confirm).toHaveBeenCalledOnce();
   },
 );
+
+it("shared login sends an approved practitioner to the server-selected dashboard", async () => {
+  environment();
+  home.mockResolvedValue("/clinician/dashboard");
+  const response = await post("login", {
+    identifier: "synthetic@example.com",
+    password: "test-password",
+  });
+  expect(response.status).toBe(200);
+  expect((await response.json()).data.next).toBe("/clinician/dashboard");
+  expect(home).toHaveBeenCalledWith({}, "synthetic");
+});
+it("callback without registration intent uses the current account destination", async () => {
+  environment();
+  home.mockResolvedValue("/clinician/dashboard");
+  const verifier = await sealFlow("synthetic-pkce", "pkce-signup");
+  const response = await GET(
+    new NextRequest(
+      "http://127.0.0.1:3101/auth/callback?flow=signup&code=synthetic",
+      { headers: { cookie: `${verifierCookie("signup")}=${verifier}` } },
+    ),
+  );
+  expect(response.headers.get("location")).toBe(
+    "http://127.0.0.1:3101/clinician/dashboard",
+  );
+});

@@ -12,6 +12,7 @@ import { database } from "@/lib/db/client";
 import { cookieOptions, sessionCookie, requestRateKey } from "@/lib/http";
 import { DomainError } from "@/lib/errors";
 import { entryCookie, professionalEntryPath } from "@/features/auth/entry-path";
+import { defaultAccountPath } from "@/features/auth/workspace-access";
 
 export async function GET(request: NextRequest) {
   const origin = process.env.APP_ORIGIN;
@@ -61,9 +62,14 @@ export async function GET(request: NextRequest) {
         token,
         requestRateKey(),
       );
+      const entryPath = professionalEntryPath(
+        request.cookies.get(entryCookie)?.value,
+      );
       response = NextResponse.redirect(
         new URL(
-          professionalEntryPath(request.cookies.get(entryCookie)?.value),
+          entryPath === "/chat"
+            ? await defaultAccountPath(database(), result.session)
+            : entryPath,
           origin,
         ),
         303,

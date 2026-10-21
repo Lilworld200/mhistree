@@ -196,8 +196,8 @@ it("shared sign-in retries normally for a registered practitioner or administrat
   call.mockRejectedValueOnce(Error("PROVIDER_UNAVAILABLE"));
   await submit();
   expect(replace).not.toHaveBeenCalled();
-  call.mockResolvedValueOnce({ next: "/auth/professional/practitioner" });
+  call.mockResolvedValueOnce({ next: "/clinician/dashboard" });
   await submit();
-  expect(replace).toHaveBeenCalledWith("/chat");
+  expect(replace).toHaveBeenCalledWith("/clinician/dashboard");
   expect(call.mock.calls[1][1]).not.toHaveProperty("entry");
 });

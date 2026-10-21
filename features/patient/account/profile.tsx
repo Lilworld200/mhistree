@@ -17,7 +17,15 @@ type Profile = {
     verified_at: string | null;
   }[];
 };
-export function ProfileView({ initial }: { initial: Profile }) {
+export function ProfileView({
+  initial,
+  canSwitchWorkspace = false,
+  currentWorkspace = "personal",
+}: {
+  initial: Profile;
+  canSwitchWorkspace?: boolean;
+  currentWorkspace?: "personal" | "practitioner";
+}) {
   const router = useRouter();
   const [profile, setProfile] = useState(initial),
     [pending, setPending] = useState(false),
@@ -52,6 +60,30 @@ export function ProfileView({ initial }: { initial: Profile }) {
           <span className="hsub">Personal details and account controls</span>
         </div>
       </header>
+      {canSwitchWorkspace && (
+        <section className="record-card" aria-label="Workspace settings">
+          <h2>Workspace</h2>
+          <p>
+            Current workspace:{" "}
+            {currentWorkspace === "practitioner"
+              ? "Practitioner"
+              : "Personal health"}
+          </p>
+          <Btn kind="soft" asChild>
+            <Link
+              href={
+                currentWorkspace === "practitioner"
+                  ? "/chat"
+                  : "/clinician/dashboard"
+              }
+            >
+              {currentWorkspace === "practitioner"
+                ? "Switch to personal health"
+                : "Switch to practitioner workspace"}
+            </Link>
+          </Btn>
+        </section>
+      )}
       <p>Organization invitation identifier: {profile.accountId}</p>
       <Link href="/identity/duplicates">
         Report a possible duplicate identity

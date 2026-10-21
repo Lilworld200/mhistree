@@ -1,5 +1,8 @@
 # Feature ownership and bounded navigation
 
+Practitioner default2026-10-21: normal login returns a server-selected destination via defaultAccountPath in features/auth/workspace-access.ts. Approved professionals default to /clinician/dashboard; ordinary/pending/suspended accounts default to /chat. AccountEntry follows the returned next path. Signup callbacks without explicit application intent use the same default; explicit enrollment destinations remain. AppShell renders practitioner navigation on professional routes and patient navigation on personal routes, with workspace switching available only in /profile for approved practitioners. The ordinary profile link carries workspace=practitioner when entered from professional mode to preserve navigation; this hint never grants eligibility. No mode cookie/local role assertion and no change to patient access/qualification grants.
+
+
 Owner revision 2026-10-21: all account types use the normal `/auth` email/password sign-in. Only signup shows separate practitioner and organization registration links under Other options. Professional public routes now render registration only; existing accounts continue to reviewed applications. Registration/application screens use the existing Mhistree auth card, original logo, shared floating-label fields, soft neutral tokens and pill controls. Email verification, fixed callback intent, qualification/organization approval and server-derived navigation remain in force. This supersedes the separate professional sign-in and independent visual design described in the 2026-10-20 historical entries.
 
 

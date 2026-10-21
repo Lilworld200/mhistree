@@ -8,7 +8,6 @@ import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import { AuthField } from "./auth-field";
 import {
-  professionalEntryPath,
   professionalAuthPath,
   type ProfessionalEntry,
 } from "@/features/auth/entry-path";
@@ -110,12 +109,12 @@ export function AccountEntry({
         setMode("login");
         form.reset();
       } else {
-        await api("/api/auth/login", {
+        const result = await api<{ next: string }>("/api/auth/login", {
           identifier,
           password: values.get("password"),
           ...(entry ? { entry } : {}),
         });
-        router.replace(professionalEntryPath(entry));
+        router.replace(result.next);
         router.refresh();
       }
     } catch (caught) {

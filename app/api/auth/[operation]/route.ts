@@ -35,6 +35,7 @@ import {
   openFlow,
 } from "@/lib/auth/flow-cookie";
 import { DomainError } from "@/lib/errors";
+import { defaultAccountPath } from "@/features/auth/workspace-access";
 import {
   professionalEntry,
   professionalEntryPath,
@@ -194,7 +195,11 @@ export async function POST(
           data.password,
           rate,
         );
-        const response = success({ next: professionalEntryPath(data.entry) });
+        const response = success({
+          next: data.entry
+            ? professionalEntryPath(data.entry)
+            : await defaultAccountPath(pool, result.session),
+        });
         response.cookies.set(entryCookie, "", {
           ...flowCookieOptions(),
           maxAge: 0,
