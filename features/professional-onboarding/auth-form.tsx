@@ -61,7 +61,6 @@ export function ProfessionalAuthForm({
     <OnboardingFrame entry={entry} stage={verifying ? 1 : 0}>
       {verifying ? (
         <>
-          <span className="pro-kicker">STEP 02 · EMAIL VERIFICATION</span>
           <h2>Check your inbox</h2>
           <p className="pro-lead">
             Open the verification link{" "}
@@ -127,17 +126,6 @@ export function ProfessionalAuthForm({
         </>
       ) : (
         <>
-          <span className="pro-kicker">Step 1 of 5 · Your account</span>
-          <h2>
-            {entry === "practitioner"
-              ? "Create your professional profile"
-              : "Register your organization"}
-          </h2>
-          <p className="pro-lead">
-            Start with your own account, then verify your email and complete
-            your application. You’ll use the main Mhistree sign-in whenever you
-            return.
-          </p>
           <form className="pro-form" onSubmit={submit}>
             {
               <ProfessionalField

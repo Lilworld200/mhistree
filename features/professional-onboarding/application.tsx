@@ -163,13 +163,15 @@ export function ApplicationFlow({
     [creating, setCreating] = useState(initialOrganizations.length === 0);
   const requestKey = useRef<string | null>(null),
     lock = useRef(false);
-  const heading = useRef<HTMLHeadingElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   function go(next: number) {
     setStep(next);
     setError("");
     requestAnimationFrame(() => {
-      heading.current?.focus();
-      heading.current?.scrollIntoView?.({ block: "nearest" });
+      formRef.current
+        ?.querySelector<HTMLElement>("input, textarea, button")
+        ?.focus();
+      formRef.current?.scrollIntoView?.({ block: "nearest" });
     });
   }
   const field = (
@@ -329,35 +331,7 @@ export function ApplicationFlow({
         </>
       ) : (
         <>
-          <span className="pro-kicker">
-            STEP {String(step + 3).padStart(2, "0")} ·{" "}
-            {professional
-              ? "PROFESSIONAL APPLICATION"
-              : "ORGANIZATION APPLICATION"}
-          </span>
-          <h2 ref={heading} tabIndex={-1}>
-            {step === 0
-              ? professional
-                ? "Tell us about your practice"
-                : "Introduce your organization"
-              : step === 1
-                ? professional
-                  ? "Add your registration evidence"
-                  : "Location & administrator authority"
-                : "Review your application"}
-          </h2>
-          <p className="pro-lead">
-            {step === 0
-              ? professional
-                ? "Use the details shown on your professional registration. Your profession does not assign permissions automatically."
-                : "Use the organization’s registered details. Healthcare organizations may include clinics, hospitals, pharmacies and diagnostic providers."
-              : step === 1
-                ? professional
-                  ? "Upload a legible document that supports your registration or current practising licence."
-                  : "Tell us where the organization operates and why you are authorized to apply on its behalf."
-                : "Check these details before sending them to the Mhistree review team."}
-          </p>
-          <form className="pro-form" onSubmit={submit}>
+          <form ref={formRef} className="pro-form" onSubmit={submit}>
             {step === 0 && (
               <>
                 {field(

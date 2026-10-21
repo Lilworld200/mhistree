@@ -34,6 +34,20 @@ describe("account entry navigation layout", () => {
       root.render(createElement(AccountEntry, { initialMode: "login" })),
     );
 
+    const password = host.querySelector(
+      '[name="password"]',
+    ) as HTMLInputElement;
+    const toggle = host.querySelector(
+      ".auth-password > button",
+    ) as HTMLButtonElement;
+    expect(password.type).toBe("password");
+    expect(toggle.type).toBe("button");
+    flushSync(() => toggle.click());
+    expect(password.type).toBe("text");
+    expect(toggle.getAttribute("aria-label")).toBe("Hide password");
+    flushSync(() => toggle.click());
+    expect(password.type).toBe("password");
+
     const row = host.querySelector(".account-row");
     expect(row).not.toBeNull();
 
@@ -54,6 +68,17 @@ describe("account entry navigation layout", () => {
       (switchBtn as HTMLButtonElement).click();
     });
 
+    const signupPassword = host.querySelector(
+      '[name="password"]',
+    ) as HTMLInputElement;
+    expect(signupPassword.type).toBe("password");
+    flushSync(() =>
+      (
+        host.querySelector(".auth-password > button") as HTMLButtonElement
+      ).click(),
+    );
+    expect(signupPassword.type).toBe("text");
+
     const signupRow = host.querySelector(".account-row");
     expect(signupRow).not.toBeNull();
 
@@ -73,9 +98,9 @@ describe("account entry navigation layout", () => {
       (signInBtn as HTMLButtonElement).click();
     });
 
-    expect(
-      host.querySelector(".account-switch")?.textContent,
-    ).toContain("Don’t have an account?");
+    expect(host.querySelector(".account-switch")?.textContent).toContain(
+      "Don’t have an account?",
+    );
 
     flushSync(() => root.unmount());
     host.remove();

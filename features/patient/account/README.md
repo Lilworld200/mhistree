@@ -13,6 +13,8 @@ Implemented owner decision, 2026-10-14: self-signup requires email/password and 
 
 Auth inputs and floating-label backgrounds use pill radii (999px), with horizontal padding around the raised text.
 
+`auth-field.tsx` owns password Show/Hide controls shared by sign-in, signup, setup and professional registration. Passwords start concealed; each non-submit toggle has an accessible label, controlled input and pressed state. Mode changes remount fields and reset visibility.
+
 `auth-field.tsx` supplies accessible nested labels that appear inside empty /auth inputs and animate onto the top outline on focus. Filled/autofilled fields keep the label raised; clearing and blurring returns it inside. Native date inputs track whether a date is present and hide their empty date template while idle. Shared CSS preserves rounded inputs, 16px input text, Manrope and the existing blue focus token; global reduced-motion rules disable animation. Input names, autocomplete, validation and original password handling remain intact.
 
 `/auth` defaults to sign in. The submit button is followed by a horizontal row with “Forgot password?” on the left and conventional “Don’t have an account? Sign up” / “Have an account? Sign in” controls on the right on the same axis. Beneath them, a line–“Other options”–line divider exposes “Use a setup or recovery code”; redemption returns through restricted password setup, and the code form offers “Back to sign in.” Form fields remount on mode changes so passwords/codes do not carry into another form. Navigation is disabled during submission. The existing API operations and cookie-based setup resume remain unchanged.

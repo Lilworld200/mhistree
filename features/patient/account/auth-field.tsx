@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type InputHTMLAttributes } from "react";
+import { useId, useState, type InputHTMLAttributes } from "react";
 
 export function AuthField({
   label,
@@ -10,10 +10,16 @@ export function AuthField({
   const [dateFilled, setDateFilled] = useState(
     Boolean(input.value ?? input.defaultValue),
   );
-  return (
+  const [visible, setVisible] = useState(false);
+  const generatedId = useId();
+  const id = input.id ?? generatedId;
+  const password = input.type === "password";
+  const field = (
     <label className="auth-field">
       <input
         {...input}
+        id={id}
+        type={password && visible ? "text" : input.type}
         placeholder=" "
         data-filled={input.type === "date" ? dateFilled : undefined}
         onChange={(event) => {
@@ -23,5 +29,22 @@ export function AuthField({
       />
       <span className="auth-field-label">{label}</span>
     </label>
+  );
+  return password ? (
+    <div className="auth-password">
+      {field}
+      <button
+        type="button"
+        aria-label={`${visible ? "Hide" : "Show"} ${label.toLowerCase()}`}
+        aria-controls={id}
+        aria-pressed={visible}
+        disabled={input.disabled}
+        onClick={() => setVisible(!visible)}
+      >
+        {visible ? "Hide" : "Show"}
+      </button>
+    </div>
+  ) : (
+    field
   );
 }

@@ -65,7 +65,7 @@ it("organization application preserves details across stages and submits only af
   await fill("jurisdiction", "Synthetic jurisdiction");
   await submit();
   expect(call).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("Location & administrator authority");
+  expect(host.querySelector('[name="address"]')).not.toBeNull();
   await fill("address", "Synthetic operating address");
   await fill(
     "administratorCapacity",
@@ -109,7 +109,7 @@ it("professional flow requires credential evidence and never creates clinical pr
   await fill("registrationNumber", "TEST-LICENCE");
   await fill("jurisdiction", "Synthetic jurisdiction");
   await submit();
-  expect(host.textContent).toContain("Add your registration evidence");
+  expect(host.querySelector('[name="credential"]')).not.toBeNull();
   await submit();
   expect(host.textContent).toContain("Choose a credential PDF");
   expect(call).not.toHaveBeenCalled();

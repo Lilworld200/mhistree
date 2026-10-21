@@ -1,3 +1,21 @@
+## Show/hide passwords on shared sign-in and signup — 2026-10-21
+
+Owner requested password visibility controls for the normal account forms. AuthField now owns an accessible non-submit Show/Hide button for password inputs, retaining values/autocomplete/validation and resetting visibility on remount. Shared CSS reserves button space in the pill; email/text fields remain unchanged. ProfessionalField reuses this owner rather than rendering duplicate controls; removed its old password state/button/CSS. Existing navigation test now exercises show/hide on sign-in and signup; three affected test files12/12 passed, targeted ESLint and TypeScript passed. AGENTS/account/onboarding READMEs updated. No browser/build, provider/database changes, credentials entered or deployment.
+
+## Fields directly after registration header — 2026-10-21
+
+Owner requested removing redundant headings and introductory explanations between the main title/logo and form fields for both registration types. Removed account creation heading/lead and application-stage heading/lead across details, evidence/location and review. Kept main header/subtitle, external progress, field-specific guidance and required verification/status feedback. Application stage transitions now focus the first form control rather than the removed heading. Updated existing stage assertions to check actual address/credential controls. Existing UI/application tests11/11, targeted ESLint and TypeScript passed. AGENTS/onboarding README updated. No new tests, browser/build, backend/provider operations or deployment.
+
+## Remove repeated in-card step labels — 2026-10-21
+
+Owner requested removal of numbered step labels inside practitioner/organization forms. Removed the account Step1of5 kicker, verification Step02 kicker and computed application Step03–05 kicker from auth-form.tsx/application.tsx. External progress and descriptive form headings remain. Updated AGENTS/onboarding README. Existing UI/application tests11/11 and targeted ESLint passed. No new tests, browser/build, backend or deployment work for this text-only removal.
+
+## Registration progress outside the card — 2026-10-21
+
+Owner requested external progress for both practitioner and organization registration. Shared OnboardingFrame now renders the ordered progress list before/as a sibling of the account card, preserving labels, completion/current-step semantics and all application behavior. At widths above800px, pro-registration-layout uses a200px vertical rail left of the600px card with32px gap; at800px and below, progress becomes a horizontal row above the card. Existing Mhistree colors, typography and form controls retained. Updated AGENTS, onboarding README and UI guide.
+
+Verification:11 existing UI/application tests passed, targeted frame ESLint passed, production build including TypeScript passed, and whitespace check passed. Browser visually checked both registration types at desktop1280px and in390px mobile iframes; desktop organization DOM confirmed200px progress rail ends before the600px card, within viewport. Mobile progress visibly sits above the card horizontally. Guest-only local production preview3106 and static iframe wrapper3107; no credentials/forms submitted or provider/database operations. Organization captures saved under docs/tasks/evidence/registration-2026-10-21/progress-{desktop,mobile}-organization.png. No new tests, schema changes or deployment.
+
 ## Remove registration-type toggle — 2026-10-21
 
 Owner requested removal of only the practitioner/organization toggle and its switching functionality. Removed the shared OnboardingFrame navigation, its route-helper/Link imports and unused desktop/mobile pro-type-nav styles. Each registration route retains its selected type and is entered through the two existing patient-signup links. Kept24px header-to-progress spacing after removing the toggle. Updated existing UI assertions for absence on both entry types;11 existing UI/application tests and targeted ESLint passed. AGENTS, onboarding README and UI guide reflect the owner refinement. No backend, authentication protocol, application field/stage, schema, build, browser or deployment changes.

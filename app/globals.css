@@ -2908,3 +2908,38 @@ textarea:focus-visible {
 .sidebar-care > a {
   padding-left: 28px;
 }
+
+.auth-password {
+  position: relative;
+  min-width: 0;
+}
+.auth-password .auth-field input {
+  padding-right: 72px;
+}
+.auth-password .auth-field-label {
+  max-width: calc(100% - 90px);
+}
+.auth-password > button {
+  position: absolute;
+  bottom: 4px;
+  right: 8px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink2);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auth-password > button:focus-visible {
+  outline: 2px solid var(--hero2);
+  outline-offset: 2px;
+}
+.auth-password > button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
