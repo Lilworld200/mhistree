@@ -1,3 +1,7 @@
+## Remove registration-type toggle — 2026-10-21
+
+Owner requested removal of only the practitioner/organization toggle and its switching functionality. Removed the shared OnboardingFrame navigation, its route-helper/Link imports and unused desktop/mobile pro-type-nav styles. Each registration route retains its selected type and is entered through the two existing patient-signup links. Kept24px header-to-progress spacing after removing the toggle. Updated existing UI assertions for absence on both entry types;11 existing UI/application tests and targeted ESLint passed. AGENTS, onboarding README and UI guide reflect the owner refinement. No backend, authentication protocol, application field/stage, schema, build, browser or deployment changes.
+
 ## Setup/recovery option only on sign-in — 2026-10-21
 
 Owner requested a tiny navigation refinement: AccountEntry now renders “Use a setup or recovery code” only when mode is login. Signup retains the practitioner/organization registration options. Code redemption and restricted setup behavior are unchanged. Updated the enduring AGENTS rule and account README. Existing account-navigation/professional-entry UI checks passed7/7; targeted entry ESLint passed. Source inspection confirmed the code button is gated by login mode. No new tests, browser run, build, provider/database operations or deployment for this conditional visibility edit.

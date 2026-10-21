@@ -1,8 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 import type { ProfessionalEntry } from "@/features/auth/entry-path";
-import { professionalAuthPath } from "@/features/auth/entry-path";
 import { Icon } from "@/components/ui/icons";
 export const professionalStages = [
   "Your account",
@@ -58,20 +56,6 @@ export function OnboardingFrame({
             priority
           />
         </header>
-        <nav className="pro-type-nav" aria-label="Registration type">
-          <Link
-            href={professionalAuthPath("practitioner", "signup")}
-            aria-current={professional ? "page" : undefined}
-          >
-            Practitioner
-          </Link>
-          <Link
-            href={professionalAuthPath("organization", "signup")}
-            aria-current={!professional ? "page" : undefined}
-          >
-            Organization
-          </Link>
-        </nav>
         <ol className="pro-steps" aria-label="Registration progress">
           {steps.map((label, i) => (
             <li

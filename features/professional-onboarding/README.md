@@ -7,7 +7,7 @@ Owner revision, 2026-10-21: registration only. All users sign in at `/auth`. Pub
 - `/auth/professional?entry=practitioner|organization`: registration entry alias; `ProfessionalAccess` redirects existing accounts to their own application. No separate sign-in UI. `auth-form.tsx` owns account creation, matching passwords, verification guidance and resend.
 - `/auth/professional/signup?entry=...`: individual or administrator account creation, then email verification. `features/auth/entry-path.ts` and existing callback own allowlisted return intent; it never grants a role.
 - `/auth/professional/{practitioner,organization}`: authenticated server route reads own profile/applications or organizations, then `application.tsx` stages the application. Approved professionals continue to the clinical dashboard.
-- `frame.tsx`: shared account-card header, registration-type pills, compact progress and review note. `fields.tsx` reuses patient `AuthField`, retaining associated hints and password visibility. `styles.css` uses global Soft-Float tokens and is imported directly by `app/layout.tsx` (avoid the previously failing Tailwind CSS import).
+- `frame.tsx`: shared account-card header, compact progress and review note. Registration type comes from the separate links on patient signup; there is no practitioner/organization toggle. `fields.tsx` reuses patient `AuthField`, retaining associated hints and password visibility. `styles.css` uses global Soft-Float tokens and is imported directly by `app/layout.tsx` (avoid the previously failing Tailwind CSS import).
 
 ## Stages and retained data
 

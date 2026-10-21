@@ -30,12 +30,7 @@ it("registration options appear only on signup and lead to each registration", (
       entry: "practitioner",
     }),
   );
-  expect(chooser).toContain(
-    'href="/auth/professional/signup?entry=practitioner"',
-  );
-  expect(chooser).toContain(
-    'href="/auth/professional/signup?entry=organization"',
-  );
+  expect(chooser).not.toContain("pro-type-nav");
   expect(chooser).toContain("account-card");
   expect(chooser).toContain("Practitioner registration");
 });
@@ -52,6 +47,7 @@ it.each(["practitioner", "organization"] as const)(
     );
     expect(markup).toContain('href="/auth"');
     expect(markup).not.toContain("pro-mode-nav");
+    expect(markup).not.toContain("pro-type-nav");
   },
 );
 it("patient-only shell exposes neither clinical nor organization navigation", () => {
