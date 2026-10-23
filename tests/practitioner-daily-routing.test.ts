@@ -2,7 +2,6 @@ import { beforeEach, it, expect, vi } from "vitest";
 const state = vi.hoisted(() => ({
   profile: vi.fn(),
   today: vi.fn(),
-  assigned: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   redirect: (path: string) => {
@@ -19,9 +18,6 @@ vi.mock("@/features/practitioner/profile", () => ({
 vi.mock("@/features/practitioner/daily", () => ({
   practitionerToday: state.today,
 }));
-vi.mock("@/features/organizations/assignments", () => ({
-  assignedPatients: state.assigned,
-}));
 import { PractitionerDailyPage } from "@/features/practitioner/daily-page";
 beforeEach(() => {
   vi.clearAllMocks();
@@ -34,7 +30,6 @@ beforeEach(() => {
     notifications: [],
     limited: false,
   });
-  state.assigned.mockResolvedValue([]);
 });
 it.each(["dashboard", "schedule", "inbox", "requests"] as const)(
   "%s uses current approval and server-owned care projections",
@@ -55,6 +50,5 @@ it.each(["pending", "rejected", "suspended"])(
       "redirect:/clinician/profile",
     );
     expect(state.today).not.toHaveBeenCalled();
-    expect(state.assigned).not.toHaveBeenCalled();
   },
 );

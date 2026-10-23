@@ -6,7 +6,7 @@ import { Btn } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { api, errorMessage } from "@/lib/client-api";
-import { dateLabel } from "@/features/access/sharing-types";
+import { TodayDashboard } from "./today-dashboard";
 import { AvailabilityPanel, AppointmentPanel } from "./schedule-panels";
 import {
   careState,
@@ -17,7 +17,6 @@ import {
   type DailyView,
   type Appointment,
 } from "./daily-types";
-import type { AssignedPatient } from "./patient-types";
 
 function Empty({
   icon = "cal",
@@ -37,10 +36,7 @@ function Empty({
   );
 }
 const viewTitles = {
-  dashboard: [
-    "Today",
-    "Appointments, conversations and work that needs your attention.",
-  ],
+  dashboard: ["Today", "Recent care updates and your private reminders."],
   schedule: [
     "Schedule",
     "Manage direct-care appointments and your availability.",
@@ -107,48 +103,13 @@ function AppointmentRows({
     </div>
   );
 }
-function OrganizationLinks({ assigned }: { assigned: AssignedPatient[] }) {
-  return (
-    <section className="card daily-section">
-      <div className="sharing-section-head">
-        <h2>Organization care</h2>
-        <Icon n="cross" />
-      </div>
-      {assigned.length === 0 ? (
-        <p className="sharing-help">
-          Organization-assigned patients appear in My patients when an
-          organization assigns care to you.
-        </p>
-      ) : (
-        <div className="daily-list">
-          {assigned.map((row) => (
-            <Link
-              className="daily-row daily-link"
-              key={`${row.assignment_id}:${row.connection_id ?? row.basis_id}`}
-              href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
-            >
-              <div className="daily-row-main">
-                <h3>{row.display_name}</h3>
-                <p>{row.organization_name}</p>
-              </div>
-              <Icon n="chev" />
-            </Link>
-          ))}
-        </div>
-      )}
-      <Link href="/clinician/patients">View patient assignments</Link>
-    </section>
-  );
-}
 export function TodayView({
   initial,
   view = "dashboard",
-  assigned = [],
   canManageAppointments = false,
 }: {
   initial: Today;
   view?: DailyView;
-  assigned?: AssignedPatient[];
   canManageAppointments?: boolean;
 }) {
   const [data, setData] = useState<Today | null>(initial),
@@ -227,13 +188,6 @@ export function TodayView({
       patientName: item.patientName,
     })),
   );
-  const reminders = items.flatMap((item) =>
-    item.reminders.map((r) => ({
-      ...r,
-      connectionId: item.connectionId,
-      patientName: item.patientName,
-    })),
-  );
   const inbox = items.filter(
     (item) =>
       matches(item.patientName) && (filter !== "unread" || item.unread > 0),
@@ -277,22 +231,24 @@ export function TodayView({
           </Btn>
         )}
       </MobileTopbarActions>
-      <header className="phead sharing-desktop-header">
-        <div>
-          <h1 className="ptitle">{title[0]}</h1>
-          <p className="psub">{title[1]}</p>
-        </div>
-        <div className="sharing-card-actions">
-          <Btn sm icon="clock" disabled={busy} onClick={() => void refresh()}>
-            {busy ? "Refreshing…" : "Refresh"}
-          </Btn>
-          {view === "schedule" && canManageAppointments && (
-            <Btn kind="dark" icon="plus" onClick={addSlot}>
-              Add availability
+      {view !== "dashboard" && (
+        <header className="phead sharing-desktop-header">
+          <div>
+            <h1 className="ptitle">{title[0]}</h1>
+            <p className="psub">{title[1]}</p>
+          </div>
+          <div className="sharing-card-actions">
+            <Btn sm icon="clock" disabled={busy} onClick={() => void refresh()}>
+              {busy ? "Refreshing…" : "Refresh"}
             </Btn>
-          )}
-        </div>
-      </header>
+            {view === "schedule" && canManageAppointments && (
+              <Btn kind="dark" icon="plus" onClick={addSlot}>
+                Add availability
+              </Btn>
+            )}
+          </div>
+        </header>
+      )}
       {error && (
         <div className="card daily-section" role="alert">
           <p>{error}</p>
@@ -304,222 +260,11 @@ export function TodayView({
       {data && (
         <>
           {view === "dashboard" ? (
-            <>
-              <div className="daily-shortcuts">
-                {(
-                  [
-                    ["/clinician/schedule", "Schedule", "cal"],
-                    ["/clinician/inbox", "Care inbox", "chat"],
-                    ["/clinician/requests", "Requests & results", "doc"],
-                  ] as const
-                ).map(([href, label, icon]) => (
-                  <Btn asChild key={href} icon={icon}>
-                    <Link href={href}>{label}</Link>
-                  </Btn>
-                ))}
-              </div>
-              <div className="daily-dashboard-grid">
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Upcoming appointments</h2>
-                    <Link href="/clinician/schedule">View schedule</Link>
-                  </div>
-                  {upcoming.length ? (
-                    <AppointmentRows
-                      canManageAppointments={canManageAppointments}
-                      onManage={manageAppointment}
-                      rows={upcoming.slice(0, 5)}
-                    />
-                  ) : (
-                    <Empty title="No upcoming appointments">
-                      Your requested and accepted appointments will appear here.
-                    </Empty>
-                  )}
-                </section>
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Unread conversations</h2>
-                    <Link href="/clinician/inbox">Open inbox</Link>
-                  </div>
-                  {items.some((item) => item.unread > 0) ? (
-                    items
-                      .filter((item) => item.unread > 0)
-                      .slice(0, 5)
-                      .map((item) => (
-                        <Link
-                          className="daily-row daily-link"
-                          key={item.connectionId}
-                          href={patientWorkspace(
-                            item.connectionId,
-                            "care-text-inbox",
-                          )}
-                        >
-                          <span className="daily-row-icon">
-                            <Icon n="chat" />
-                          </span>
-                          <div className="daily-row-main">
-                            <h3>{item.patientName}</h3>
-                            <p>Direct care conversation</p>
-                          </div>
-                          <span className="badge">{item.unread} unread</span>
-                        </Link>
-                      ))
-                  ) : (
-                    <Empty icon="chat" title="No unread conversations">
-                      New patient messages will appear here.
-                    </Empty>
-                  )}
-                </section>
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Outstanding requests</h2>
-                    <Link href="/clinician/requests">View requests</Link>
-                  </div>
-                  {requests.some(
-                    (r) => !["finalized", "cancelled"].includes(r.state),
-                  ) ? (
-                    requests
-                      .filter(
-                        (r) => !["finalized", "cancelled"].includes(r.state),
-                      )
-                      .slice(0, 5)
-                      .map((r) => (
-                        <Link
-                          className="daily-row daily-link"
-                          key={`${r.connectionId}:${r.id}`}
-                          href={patientWorkspace(
-                            r.connectionId,
-                            "requests-results",
-                          )}
-                        >
-                          <div className="daily-row-main">
-                            <h3>{r.service_name}</h3>
-                            <p>{r.patientName}</p>
-                          </div>
-                          <span className="badge">{careState(r.state)}</span>
-                        </Link>
-                      ))
-                  ) : (
-                    <Empty icon="doc" title="No outstanding requests">
-                      Active service requests will appear here.
-                    </Empty>
-                  )}
-                </section>
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Finalized results</h2>
-                    <Link href="/clinician/requests">View results</Link>
-                  </div>
-                  {requests.some(
-                    (r) => r.state === "finalized" && r.result_event_id,
-                  ) ? (
-                    requests
-                      .filter(
-                        (r) => r.state === "finalized" && r.result_event_id,
-                      )
-                      .slice(0, 5)
-                      .map((r) => (
-                        <Link
-                          className="daily-row daily-link"
-                          key={`${r.connectionId}:${r.id}`}
-                          href={patientWorkspace(
-                            r.connectionId,
-                            "requests-results",
-                          )}
-                        >
-                          <div className="daily-row-main">
-                            <h3>{r.service_name}</h3>
-                            <p>{r.patientName}</p>
-                          </div>
-                          <span className="badge">Finalized</span>
-                        </Link>
-                      ))
-                  ) : (
-                    <Empty icon="check" title="No finalized results to show">
-                      Results appear after deliberate professional finalization.
-                    </Empty>
-                  )}
-                </section>
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Private reminders</h2>
-                    <Icon n="lock" />
-                  </div>
-                  {reminders.length ? (
-                    reminders.map((r) => (
-                      <article className="daily-row" key={r.id}>
-                        <div className="daily-row-main">
-                          <h3>{r.patientName}</h3>
-                          <p>{r.body.text}</p>
-                          {r.due_at && (
-                            <time dateTime={r.due_at}>
-                              {dateLabel(r.due_at)}
-                            </time>
-                          )}
-                          <Link
-                            href={patientWorkspace(
-                              r.connectionId,
-                              "private-work",
-                            )}
-                          >
-                            Open private work
-                          </Link>
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <Empty icon="lock" title="No private reminders">
-                      Manage your author-only reminders in the patient
-                      workspace.
-                    </Empty>
-                  )}
-                </section>
-                <section className="card daily-section">
-                  <div className="sharing-section-head">
-                    <h2>Recent activity</h2>
-                    <Icon n="bell" />
-                  </div>
-                  {data.notifications.length ? (
-                    data.notifications.map((n) => (
-                      <article className="daily-row" key={n.id}>
-                        <div className="daily-row-main">
-                          <h3>
-                            {{
-                              message: "Care message update",
-                              appointment: "Appointment update",
-                              request: "Service request update",
-                            }[n.kind] ?? "Care activity"}
-                          </h3>
-                          <time dateTime={n.created_at}>
-                            {dateLabel(n.created_at)}
-                          </time>
-                          {n.connection_id && (
-                            <Link
-                              href={patientWorkspace(
-                                n.connection_id,
-                                n.kind === "message"
-                                  ? "care-text-inbox"
-                                  : n.kind === "request"
-                                    ? "requests-results"
-                                    : undefined,
-                              )}
-                            >
-                              Open care context
-                            </Link>
-                          )}
-                        </div>
-                      </article>
-                    ))
-                  ) : (
-                    <Empty icon="bell" title="No recent activity">
-                      Updates from your direct care connections will appear
-                      here.
-                    </Empty>
-                  )}
-                </section>
-              </div>
-              <OrganizationLinks assigned={assigned} />
-            </>
+            <TodayDashboard
+              data={data}
+              busy={busy}
+              onRefresh={() => void refresh()}
+            />
           ) : view === "schedule" ? (
             <>
               <section className="card daily-section">

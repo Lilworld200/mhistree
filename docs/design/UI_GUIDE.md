@@ -1,3 +1,23 @@
+## Today glass finish — 2026-10-23
+
+Keep monitor blue as the main surface; apply a restrained radial/diagonal white sheen, translucent inset edges, soft blue shadow and14px backdrop blur/saturation. Pulse line has a light glow. Closed reminder header is58px, preserving44px minimum target and expanded spacing. No extra inset content surface.
+
+## Today monitor surface — 2026-10-23
+
+Latest owner refinement removes white activity inset panels. Render white activity/empty text directly on the blue hero with a faint24px grid and a static decorative pulse line (aria-hidden; no vital values or live-monitor claim). Keep min-height360px even empty, left-aligned copy and original outer rounding/inset white drawer. Mobile Refresh belongs to the existing navbar, while desktop retains toolbar Refresh. Three workspace links stay above the card with44px mobile targets. Activities/reminders still disclose independently.
+
+## Today toolbar refinement — 2026-10-23
+
+Latest owner instruction moves Schedule/Care inbox/Requests & results and Refresh into a wrapping toolbar above the blue card. Today and its care-update/private-reminder subtitle stay inside blue with white text in light mode. Mobile keeps shell Today and hides the repeated card heading. Narrow overlapping reminder drawer stays unchanged. This supersedes inside-card action placement below.
+
+## Today wireframe refinement — 2026-10-23
+
+Latest owner wireframe supersedes the flush/full-width attachment below. The blue card is a complete rounded28px foreground surface (z-index1); the narrower white drawer is inset clamp(14px,2.2%,26px) on each side with28px overlap/padding behind it. Outer wrapper is transparent and isolated. Desktop Today/subtitle and refresh live inside blue; mobile hides that repeated heading and retains shell Today. Refresh is inside blue on both sizes. Remove Your workspace/Recent activity headings and bell. Internal feeds remain pending further owner-directed changes.
+
+## Practitioner Today connected card — 2026-10-23
+
+Owner revision supersedes the dashboard section grid below. Reuse the actual .hero blue linear gradient and white radial highlight from /health, joined without a gap to a white reminder drawer. today-dashboard.tsx applies28px outer corners, neutral readable inner activity rows and existing pill/icon language. Put the three daily links inside the blue area. Activities preview3/newest-first with Show all activity/Show less; reminders start closed with count/chevron/grip and expand independently. Native buttons expose aria-expanded/controls; collapsed content is inert, grid-row height transitions last.22s and are removed for reduced motion. Expanded lists cap at min(60dvh,520px). Mobile wraps shortcut pills with44px minimum hit areas. Preserve source limits and current access. Profile grids and other daily pages retain existing styles.
+
 Owner update, 2026-10-16: `71121bd` is the selected reference for restoring existing page UI. Read [snapshot-71121bd.md](snapshot-71121bd.md) alongside this earlier measured guide. Current product/auth/access contracts remain authoritative for behavior.
 
 # Preserved interface guide — T03
