@@ -130,6 +130,8 @@ it("dashboard puts workspace links and refresh above the blue card and keeps rem
     ).not.toBeNull();
   }
   const toggle = card.querySelector<HTMLButtonElement>(".daily-drawer-toggle")!;
+  expect(toggle.textContent).toBe("Reminders1");
+  expect(toggle.querySelectorAll("svg")).toHaveLength(1);
   expect(toggle.getAttribute("aria-expanded")).toBe("false");
   const content = document.getElementById(
     toggle.getAttribute("aria-controls")!,
@@ -284,8 +286,9 @@ it("empty reminder drawer has its own truthful empty state", async () => {
   expect(host.textContent).not.toContain("Show all activity");
   await act(async () => drawer.click());
   expect(host.querySelector(".daily-reminder-list")?.textContent).toContain(
-    "No private reminders",
+    "No reminders",
   );
+  expect(host.querySelector(".daily-reminder-list svg")).toBeNull();
 });
 it("a failed current-access refresh clears displayed sensitive work", async () => {
   await daily();

@@ -193,8 +193,7 @@ export function TodayDashboard({
               onClick={() => setRemindersOpen(!remindersOpen)}
             >
               <span className="daily-drawer-grip" aria-hidden="true" />
-              <Icon n="lock" />
-              <span>Private reminders</span>
+              <span>Reminders</span>
               <span className="daily-reminder-count">{reminders.length}</span>
               <Icon n="chev" />
             </button>
@@ -210,7 +209,7 @@ export function TodayDashboard({
               <div
                 className="daily-reminder-list"
                 role="region"
-                aria-label="Your private reminders"
+                aria-label="Your reminders"
                 tabIndex={0}
               >
                 {reminders.length ? (
@@ -242,8 +241,7 @@ export function TodayDashboard({
                   </ul>
                 ) : (
                   <div className="daily-empty">
-                    <Icon n="lock" s={24} />
-                    <h3>No private reminders</h3>
+                    <h3>No reminders</h3>
                     <p>
                       Manage your author-only reminders in the patient
                       workspace.

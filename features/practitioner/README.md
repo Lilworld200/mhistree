@@ -1,3 +1,5 @@
+Reminder label refinement2026-10-23: drawer title Reminders and empty state No reminders omit lock icons; closed toggle now48px via12px top/8px bottom padding. Author-private data boundaries remain unchanged.
+
 Glass refinement2026-10-23: scoped daily hero CSS adds subtle sheen/inset edge/shadow/blur and pulse glow; closed reminder toggle uses58px height (18px top/12px bottom padding) while expanded spacing stays unchanged.
 
 Monitor refinement2026-10-23: dashboard Refresh portals through MobileTopbarActions on mobile; daily-desktop-refresh hides at980px. Blue activity surface now uses a decorative grid/pulse SVG,360px minimum height and direct white text on transparent lists/empty state. Existing scopes/row ordering/disclosures and inset white reminders retained.

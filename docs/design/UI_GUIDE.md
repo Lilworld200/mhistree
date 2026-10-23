@@ -1,3 +1,11 @@
+## Today raised white rim — 2026-10-23
+
+Blue card uses a1px translucent white border and button-inspired directional inset highlights/lower shading, white lower edge and layered blue outer shadows. Preserve current geometry/content; no CRT-specific additions.
+
+## Compact Reminders label — 2026-10-23
+
+Drawer header is Reminders with count/chevron, no lock. Empty heading is No reminders without a lock. Closed toggle48px; expanded spacing unchanged. This supersedes58px closed header below.
+
 ## Today glass finish — 2026-10-23
 
 Keep monitor blue as the main surface; apply a restrained radial/diagonal white sheen, translucent inset edges, soft blue shadow and14px backdrop blur/saturation. Pulse line has a light glow. Closed reminder header is58px, preserving44px minimum target and expanded spacing. No extra inset content surface.

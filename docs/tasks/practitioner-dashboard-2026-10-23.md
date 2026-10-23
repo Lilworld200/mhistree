@@ -1,3 +1,11 @@
+## Today raised white rim — 2026-10-23
+
+CSS-only owner refinement translates the soft-button raised finish to blue:1px translucent white border, stronger top/left inner highlights, lower inner shading, a white lower edge and layered blue outer shadows. No CRT-specific styling added. Existing content, monitor motif, disclosures and48px reminder bar retained. Production build/TypeScript and diff check passed; no new behavioral tests needed for this visual-only change. Synthetic local mobile preview390x844 confirmed white rim and no horizontal overflow (document390px); evidence: docs/tasks/evidence/practitioner-dashboard-2026-10-23/raised-edge-mobile.png. Preview stopped/tab closed/viewport restored; no backend or hosted-data changes.
+
+## Reminder drawer labels and height — 2026-10-23
+
+Drawer title now Reminders and empty heading No reminders; removed both lock icons. Closed header reduced58px to48px (12px top/8px bottom), keeping44px minimum target and expanded spacing. Author-private filtering unchanged. Focused UI/routing21/21 passed, including label/icon assertions and independent disclosures. No new build/browser capture for this bounded text/icon/CSS refinement; prior screenshots are superseded for these details.
+
 ## Today subtle glass and compact drawer — 2026-10-23
 
 CSS-only owner refinement adds radial/diagonal glass sheen, inset translucent edges, soft blue shadow,14px backdrop blur/saturation and a restrained pulse glow. Closed reminder header reduced78px to58px via expanded-state selector; expanded spacing retained. No interaction/data/schema changes. Focused UI/routing21/21 and production build including TypeScript passed. Native synthetic local production preview390x844 measured360px blue card,58px reminder header and390px document width; screenshot docs/tasks/evidence/practitioner-dashboard-2026-10-23/glass-mobile.png. Preview stopped, tab closed and viewport reset.
