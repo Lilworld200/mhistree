@@ -1,175 +1,304 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Btn } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icons";
+import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { api, errorMessage } from "@/lib/client-api";
-import { category } from "@/features/health-records/schema";
-type Patient = {
-  id: string;
-  display_name: string;
-  patient_person_id: string;
-  status: string;
-};
-type AssignedPatient = {
-  assignment_id: string;
-  organization_id: string;
-  organization_name: string;
-  connection_id: string;
-  basis_id?: string;
-  display_name: string;
-};
+import { categoryLabels } from "@/features/access/sharing-types";
+import { PatientEntryPanel } from "./patient-entry-panel";
+import type {
+  DirectPatient,
+  AssignedPatient,
+  PatientCapabilities,
+} from "./patient-types";
+
+function PatientAvatar({ name }: { name: string }) {
+  return (
+    <span className="sharing-avatar" aria-hidden="true">
+      {name
+        .split(/\s+/)
+        .slice(0, 2)
+        .map((word) => word[0])
+        .join("")
+        .toUpperCase()}
+    </span>
+  );
+}
+function Scope({
+  categories,
+  exclusions = [],
+}: {
+  categories?: string[];
+  exclusions?: string[];
+}) {
+  const scope = categories?.filter((c) => !exclusions.includes(c)) ?? [];
+  return scope.length > 0 ? (
+    <div className="sharing-scope">
+      {scope.map((c) => (
+        <span key={c}>{categoryLabels[c] ?? c}</span>
+      ))}
+    </div>
+  ) : null;
+}
+
 export function PatientsView({
   initial,
   assigned = [],
+  capabilities = { lookup: false, register: false, connect: false },
 }: {
-  initial: Patient[];
+  initial: DirectPatient[];
   assigned?: AssignedPatient[];
+  capabilities?: PatientCapabilities;
 }) {
   const [rows, setRows] = useState(initial),
-    [candidates, setCandidates] = useState<
-      { personId: string; displayName: string; reviewRequired: boolean }[]
-    >([]),
-    [message, setMessage] = useState("");
-  async function action(action: string, data: unknown) {
-    try {
-      const result = await api<unknown>("/api/practitioner/patients", {
-        action,
-        data,
-      });
-      setRows(await api<Patient[]>("/api/practitioner/patients"));
-      return result;
-    } catch (e) {
-      setMessage(errorMessage(e));
-    }
+    [tab, setTab] = useState<"direct" | "organization" | "pending" | "ended">(
+      "direct",
+    ),
+    [query, setQuery] = useState(""),
+    [entry, setEntry] = useState(false),
+    [error, setError] = useState(""),
+    [refreshing, setRefreshing] = useState(false);
+  const trigger = useRef<HTMLElement | null>(null);
+  const router = useRouter();
+  const counts = {
+    direct: rows.filter((row) => row.status === "active").length,
+    organization: assigned.length,
+    pending: rows.filter((row) => row.status === "pending").length,
+    ended: rows.filter((row) => row.status === "revoked").length,
+  };
+  const matches = (name: string) =>
+    name.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  const direct = rows.filter(
+    (row) =>
+      row.status ===
+        (tab === "pending"
+          ? "pending"
+          : tab === "ended"
+            ? "revoked"
+            : "active") && matches(row.display_name),
+  );
+  const organization = assigned.filter((row) =>
+    matches(`${row.display_name} ${row.organization_name}`),
+  );
+  const hasRows =
+    tab === "organization" ? organization.length > 0 : direct.length > 0;
+  async function refresh() {
+    setError("");
+    const next = await api<DirectPatient[]>("/api/practitioner/patients");
+    setRows(next);
+    router.refresh();
   }
+  function addPatient(event: React.MouseEvent<HTMLElement>) {
+    trigger.current = event.currentTarget;
+    setEntry(true);
+  }
+  const canAdd = capabilities.lookup || capabilities.register;
   return (
-    <section className="patient-page">
-      <h1>My patients</h1>
-      <h2>Organization assignments</h2>
-      {assigned.length === 0 && <p>No active organization assignments.</p>}
-      {assigned.map((row) => (
-        <article className="record-card" key={row.assignment_id}>
-          <strong>{row.display_name}</strong>
-          <p>{row.organization_name}</p>
-          <Link
-            href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
-          >
-            Open organization record
-          </Link>
-        </article>
-      ))}
-      <h2>Direct connections</h2>
-      {rows.map((row) => (
-        <article className="record-card" key={row.id}>
-          <strong>{row.display_name}</strong>
-          <p>{row.status}</p>
-          {row.status === "active" && (
-            <Link href={`/clinician/patients/${row.id}`}>
-              Open authorized record
-            </Link>
-          )}
-        </article>
-      ))}
-      <h2>Controlled lookup</h2>
-      <form
-        className="account-form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          const result = await action("lookup", { exactAlias: f.get("alias") });
-          if (result) setCandidates(result as typeof candidates);
-        }}
-      >
-        <label>
-          Mhistree ID
-          <input name="alias" required />
+    <section className="patient-page sharing-page practitioner-patients">
+      {canAdd && (
+        <MobileTopbarActions>
+          <Btn sm icon="plus" onClick={addPatient}>
+            Add patient
+          </Btn>
+        </MobileTopbarActions>
+      )}
+      <header className="phead sharing-desktop-header">
+        <div>
+          <h1 className="ptitle">My patients</h1>
+          <p className="psub">
+            Your direct connections and organization-assigned care.
+          </p>
+        </div>
+        {canAdd && (
+          <Btn icon="plus" kind="dark" onClick={addPatient}>
+            Add patient
+          </Btn>
+        )}
+      </header>
+      <div className="practitioner-list-tools">
+        <label className="searchpill">
+          <Icon n="search" />
+          <span className="sr-only">Search your patients</span>
+          <input
+            type="search"
+            placeholder="Search your patients"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
         </label>
-        <Btn type="submit">Find person</Btn>
-      </form>
-      {candidates.map((p) => (
-        <article className="record-card" key={p.personId}>
-          <h3>{p.displayName}</h3>
-          {p.reviewRequired && (
-            <p>
-              Provisional identity: resolve uncertainty without opening another
-              person’s history.
-            </p>
-          )}
-          <form
-            className="account-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              const result = await action("connect", {
-                patientPersonId: p.personId,
-                requestKey: crypto.randomUUID(),
-                method: f.get("method"),
-                categories: f.getAll("category"),
-                exclusions: [],
-                ...(f.get("evidence") ? { evidence: f.get("evidence") } : {}),
-              });
-              if (result)
-                setMessage(
-                  "Connection recorded. Login approval stays pending until the patient approves.",
-                );
-            }}
+        <Btn
+          icon="clock"
+          sm
+          disabled={refreshing}
+          onClick={async () => {
+            setRefreshing(true);
+            try {
+              await refresh();
+            } catch (e) {
+              setError(errorMessage(e));
+            } finally {
+              setRefreshing(false);
+            }
+          }}
+        >
+          {refreshing ? "Refreshing…" : "Refresh connections"}
+        </Btn>
+      </div>
+      <nav className="sharing-tabs" aria-label="Patient views">
+        {(
+          [
+            ["direct", "Direct patients"],
+            ["organization", "Organization patients"],
+            ["pending", "Pending requests"],
+            ["ended", "Ended connections"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            className={`pill ${tab === value ? "on" : ""}`}
+            aria-pressed={tab === value}
+            onClick={() => setTab(value)}
           >
-            <label>
-              Consent method
-              <select name="method">
-                <option value="login">Request patient login approval</option>
-                <option value="in-person">
-                  Record identity-checked in-person consent
-                </option>
-              </select>
-            </label>
-            <fieldset>
-              <legend>
-                Requested categories (unchecked categories are excluded)
-              </legend>
-              {category.options.map((c) => (
-                <label key={c}>
-                  <input name="category" value={c} type="checkbox" />
-                  {c}
-                </label>
+            {label}
+            <span className="sharing-count">{counts[value]}</span>
+          </button>
+        ))}
+      </nav>
+      {error && <p role="alert">{error}</p>}
+      {tab === "pending" && (
+        <p className="sharing-help">
+          These requests are waiting for patient approval. Record access stays
+          closed until consent is active.
+        </p>
+      )}
+      {tab === "ended" && (
+        <p className="sharing-help">
+          Access through these connections has ended. A new request requires
+          fresh patient consent; paused care does not restart automatically.
+        </p>
+      )}
+      {tab === "organization" && (
+        <p className="sharing-help">
+          Each patient opens in their assigned organization context. Assignments
+          remain within that organization’s consent scope.
+        </p>
+      )}
+      {!hasRows ? (
+        <div className="card sharing-empty">
+          <Icon
+            n={query ? "search" : tab === "pending" ? "clock" : "steth"}
+            s={28}
+          />
+          <h2>
+            {query
+              ? "No matching patients"
+              : tab === "organization"
+                ? "No organization assignments"
+                : tab === "pending"
+                  ? "No pending requests"
+                  : tab === "ended"
+                    ? "No ended connections"
+                    : "Your patient connections start here"}
+          </h2>
+          <p>
+            {query
+              ? "Try another name or clear your search."
+              : tab === "organization"
+                ? "Patients assigned to you by an organization will appear here."
+                : tab === "pending"
+                  ? "Connection requests awaiting approval will appear here."
+                  : tab === "ended"
+                    ? "Past connections remain here for reference."
+                    : "Patients appear here after a connection is approved or in-person consent is recorded."}
+          </p>
+        </div>
+      ) : (
+        <div className="sharing-connection-grid">
+          {tab === "organization"
+            ? organization.map((row) => (
+                <article
+                  className="card sharing-connection"
+                  key={`${row.assignment_id}:${row.connection_id ?? row.basis_id}`}
+                >
+                  <div className="sharing-person">
+                    <PatientAvatar name={row.display_name} />
+                    <div>
+                      <h2>{row.display_name}</h2>
+                      <p>{row.organization_name}</p>
+                    </div>
+                    <span className="badge">Assigned</span>
+                  </div>
+                  <Scope categories={row.categories} />
+                  <p className="sharing-help">
+                    {row.basis_id
+                      ? "Initial care · registered without a login"
+                      : "Organization connection"}
+                  </p>
+                  <div className="sharing-card-actions">
+                    <Btn asChild sm>
+                      <Link
+                        href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
+                      >
+                        Open organization record
+                      </Link>
+                    </Btn>
+                  </div>
+                </article>
+              ))
+            : direct.map((row) => (
+                <article className="card sharing-connection" key={row.id}>
+                  <div className="sharing-person">
+                    <PatientAvatar name={row.display_name} />
+                    <div>
+                      <h2>{row.display_name}</h2>
+                      <p>Direct connection</p>
+                    </div>
+                    <span className={`badge sharing-status ${row.status}`}>
+                      {row.status === "active"
+                        ? "Connected"
+                        : row.status === "pending"
+                          ? "Awaiting approval"
+                          : "Access ended"}
+                    </span>
+                  </div>
+                  <Scope
+                    categories={row.categories}
+                    exclusions={row.exclusions}
+                  />
+                  {row.status === "active" ? (
+                    <div className="sharing-card-actions">
+                      <Btn asChild sm>
+                        <Link href={`/clinician/patients/${row.id}`}>
+                          Open patient record
+                        </Link>
+                      </Btn>
+                    </div>
+                  ) : (
+                    <p className="sharing-help">
+                      {row.status === "pending"
+                        ? "Waiting for the patient to confirm sharing."
+                        : "Fresh consent is needed before opening this record."}
+                    </p>
+                  )}
+                </article>
               ))}
-            </fieldset>
-            <label>
-              Identity check and consent evidence (required for in-person)
-              <textarea name="evidence" minLength={20} />
-            </label>
-            <Btn type="submit">Record connection</Btn>
-          </form>
-        </article>
-      ))}
-      <h2>Register a person without a login</h2>
-      <form
-        className="account-form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          const f = new FormData(e.currentTarget);
-          const result = (await action("register", {
-            displayName: f.get("name"),
-            birthDate: f.get("birthDate") || null,
-            contacts: [],
-          })) as { alias?: string } | undefined;
-          if (result?.alias)
-            setMessage(
-              `Registered provisional person: ${result.alias}. This ID does not grant record access.`,
-            );
-        }}
-      >
-        <label>
-          Known name
-          <input name="name" required />
-        </label>
-        <label>
-          Birth date, if known
-          <input name="birthDate" type="date" />
-        </label>
-        <Btn type="submit">Register person</Btn>
-      </form>
-      <p role="status">{message}</p>
+        </div>
+      )}
+      <p className="sharing-help">
+        Lists show up to 100 direct connections and 100 organization
+        assignments. Search filters the loaded list.
+      </p>
+      {entry && (
+        <PatientEntryPanel
+          capabilities={capabilities}
+          rows={rows}
+          onClose={() => setEntry(false)}
+          onConnected={refresh}
+          returnFocus={() => trigger.current}
+        />
+      )}
     </section>
   );
 }

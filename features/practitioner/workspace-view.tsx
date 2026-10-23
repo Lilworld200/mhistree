@@ -161,7 +161,7 @@ export function WorkspaceView({ connectionId, organizationContext }: { connectio
       {records(data.state)}
       <h2>Recent finalized history</h2>
       {records(data.recent)}
-      <h2>Private notes, reminders and clinical drafts</h2>
+      <h2 id="private-work">Private notes, reminders and clinical drafts</h2>
       <p>
         Private work is not patient-facing. Suspected findings must remain
         labeled suspected. Finalization requires deliberate human review.
@@ -446,7 +446,7 @@ export function WorkspaceView({ connectionId, organizationContext }: { connectio
           </p>
         </article>
       )}
-      <h2>Requests and results</h2>
+      <h2 id="requests-results">Requests and results</h2>
       <p>
         Request a named service from a separately authorized recipient. A note
         is never an order.
@@ -597,7 +597,7 @@ export function WorkspaceView({ connectionId, organizationContext }: { connectio
           )}
         </article>
       ))}
-      <h2>Care text inbox</h2>
+      <h2 id="care-text-inbox">Care text inbox</h2>
       <p>
         Separate from AI chat. Stored delivery does not mean the patient has
         read or acted on a message.

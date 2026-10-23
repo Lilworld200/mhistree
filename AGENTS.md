@@ -309,6 +309,10 @@ Organization patient lists/worklists extend shared services with context/assignm
 
 ### 8.7 Required screen responsibilities
 
+Owner practitioner-workspace revision (2026-10-22): dashboard/profile and additional daily-work surfaces must follow the current Markdown/PDF practitioner criteria and established Mhistree design. Today summarizes authorized appointments, unread conversations, outstanding requests, finalized results, author-private reminders and activity. Provide Schedule (availability and booking actions), Care inbox and Requests & results navigation. These daily worklists use supported direct-care projections; organization care remains explicitly selected through current assignments. Notes/drafts, clinical finalization and AI assistance stay inside the authorized patient/context workspace. Professional profile shows actual submitted credentials, current review status/capabilities and application history; pending/rejected applicants use the staged application flow rather than an independent duplicate form. Approval cannot be edited by applicants, and mode switching stays on /profile. Use desktop-only content headings, mobile topbar actions, responsive soft cards/pill controls and truthful empty/limited states.
+
+Owner practitioner-patient layout decision (2026-10-22): /clinician/patients follows the refined Sharing visual system: established neutral cards/pill controls, no redundant summary/count cards, direct and organization-assigned patient contexts kept separate, pending/ended views with no record-opening action, and clear lookup/registration panels. Keep the content title/subtitle on desktop only; mobile uses the existing My patients topbar with Add patient when permitted. Search existing authorized lists separately from controlled exact-ID identity lookup. Patient identification or registration never implies consent or record access.
+
 These are functional surfaces to map onto the inspected UI, not invented URLs, layouts, or navigation labels.
 
 | Area | Required surfaces |
@@ -347,6 +351,10 @@ Retire the losing login and invalidate sessions/unused tokens. Previous IDs rema
 Update authorized views/indexes and invalidate affected caches. Controlled reversal accounts for post-merge entries, corrections, and consent. Never automatically restore old credentials/sessions. If reversible mapping cannot be demonstrated, block merge completion and keep duplicate review operational.
 
 ## 10. Patient controls and operations
+
+Owner sharing refinement (2026-10-22): remove the “You’re in control,” active-connection count and pending-request count overview cards at all widths. Keep the page heading/subtitle on desktop, hide their repeated in-content header at the mobile shell breakpoint (980px), and place the mobile Access history action beside Sharing in the existing top bar. Connection/request filter tabs retain their counts.
+
+Owner sharing-page decision (2026-10-22): /sharing is the patient's connection hub. Preserve the existing Mhistree visual system while reorganizing layout/content into direct practitioner and organization connections, pending access requests, approved-practitioner search, and structured access history opened from an action or connection card. Let patients review and explicitly confirm scope before connecting, approve or decline requests, narrow/end access, and review ended connections. Keep export/account-review controls available as secondary content. Use responsive cards and accessible panels, not raw audit identifiers/plain event dumps. Finding a practitioner creates no access; server-owned approval, consent, provenance and organization-assignment boundaries still apply.
 
 Show direct/org connections separately with scope, exclusions, consent method, and meaningful access history. Support approval, narrowing, immediate revocation, and fresh reconnection. In-person consent recorded before activation is reviewable afterward.
 

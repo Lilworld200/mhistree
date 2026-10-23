@@ -1,14 +1,5 @@
-import { requirePatient } from "@/lib/auth/patient";
-import { database } from "@/lib/db/client";
-import { practitionerToday } from "@/features/practitioner/daily";
-import { TodayView } from "@/features/practitioner/today-view";
-export default async function Page() {
-  const { session } = await requirePatient();
-  return (
-    <TodayView
-      initial={JSON.parse(
-        JSON.stringify(await practitionerToday(database(), session)),
-      )}
-    />
-  );
+import { PractitionerDailyPage } from "@/features/practitioner/daily-page";
+export const metadata = { title: "Today" };
+export default function Page() {
+  return <PractitionerDailyPage />;
 }

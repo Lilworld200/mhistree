@@ -1,292 +1,484 @@
 "use client";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { api, errorMessage } from "@/lib/client-api";
+import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { Btn } from "@/components/ui/button";
-import { category } from "@/features/health-records/schema";
-type Connection = {
-  id: string;
-  kind: string;
-  status: string;
-  revision: number;
-  display_name: string;
-  categories: string[] | null;
-  exclusions: string[] | null;
-  method: string | null;
-  recorded_at: string | null;
-  origin_person_ids: string[] | null;
-};
-type Controls = {
-  connections: Connection[];
-  history: {
-    action: string;
-    actor_account_id: string | null;
-    context_id: string | null;
-    recorded_at: string;
-  }[];
-  requests: { id: string; kind: string; state: string; created_at: string }[];
-};
-function ConsentCard({
+import { Icon } from "@/components/ui/icons";
+import { api, errorMessage } from "@/lib/client-api";
+import { ConsentPanel, HistoryPanel } from "./sharing-panels";
+import {
+  categoryLabels,
+  dateLabel,
+  type Connection,
+  type Controls,
+  type Practitioner,
+} from "./sharing-types";
+
+function Identity({
+  name,
+  organization = false,
+}: {
+  name: string;
+  organization?: boolean;
+}) {
+  return (
+    <span className="sharing-avatar" aria-hidden="true">
+      {organization ? (
+        <Icon n="cross" s={22} />
+      ) : (
+        name
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((n) => n[0])
+          .join("")
+          .toUpperCase()
+      )}
+    </span>
+  );
+}
+function ConnectionCard({
   connection,
-  refresh,
+  onManage,
+  onHistory,
 }: {
   connection: Connection;
-  refresh: () => Promise<void>;
+  onManage: (event: React.MouseEvent<HTMLElement>) => void;
+  onHistory: (event: React.MouseEvent<HTMLElement>) => void;
 }) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
+  const permitted =
+    connection.categories?.filter((c) => !connection.exclusions?.includes(c)) ??
+    [];
   return (
-    <article className="record-card">
-      <h3>{connection.display_name}</h3>
-      <p>
-        {connection.status} · {connection.kind} connection
-      </p>
-      <p>
-        Consent method: {connection.method ?? "Awaiting your approval"}
-        {connection.recorded_at
-          ? ` · ${new Date(connection.recorded_at).toLocaleString()}`
-          : ""}
-      </p>
-      <p>Scope: {connection.categories?.join(", ") || "None yet"}</p>
-      <p>
-        Exclusions: {connection.exclusions?.join(", ") || "None specified"}.
-        Private notes and drafts are excluded.
-      </p>
-      <details>
-        <summary>
-          {connection.status === "active"
-            ? "Narrow scope"
-            : connection.status === "revoked"
-              ? "Review fresh consent"
-              : "Review and approve"}
-        </summary>
-        <form
-          onSubmit={async (e) => {
-            e.preventDefault();
-            setBusy(true);
-            setError("");
-            const form = new FormData(e.currentTarget);
-            try {
-              await api("/api/connections", {
-                action: "consent",
-                data: {
-                  connectionId: connection.id,
-                  version: connection.revision,
-                  mode:
-                    connection.status === "pending"
-                      ? "approve"
-                      : connection.status === "revoked"
-                        ? "reconnect"
-                        : "narrow",
-                  categories: form.getAll("category"),
-                  exclusions: form.getAll("exclusion"),
-                },
-              });
-              await refresh();
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <fieldset>
-            <legend>
-              Permitted categories, including future finalized records
-            </legend>
-            {category.options.map((c) => (
-              <label className="check-row" key={c}>
-                <input
-                  type="checkbox"
-                  name="category"
-                  value={c}
-                  defaultChecked={(
-                    connection.categories ?? category.options
-                  ).includes(c)}
-                  disabled={
-                    connection.status === "active" &&
-                    !connection.categories?.includes(c)
-                  }
-                />
-                {c}
-              </label>
-            ))}
-          </fieldset>
-          <fieldset>
-            <legend>Exclude categories</legend>
-            {category.options.map((c) => (
-              <label className="check-row" key={c}>
-                <input
-                  type="checkbox"
-                  name="exclusion"
-                  value={c}
-                  defaultChecked={connection.exclusions?.includes(c)}
-                />
-                {c}
-              </label>
-            ))}
-          </fieldset>
+    <article className="card sharing-connection">
+      <div className="sharing-person">
+        <Identity
+          name={connection.display_name}
+          organization={connection.kind === "organization"}
+        />
+        <div>
+          <h3>{connection.display_name}</h3>
           <p>
-            Consent stays within this connection’s existing identity boundaries.
-            Reconnection does not restart paused work; a permitted practitioner
-            must review it.
+            {connection.kind === "organization"
+              ? "Organization"
+              : "Direct practitioner"}
           </p>
-          <Btn type="submit" disabled={busy}>
-            {busy ? "Saving…" : "Confirm consent"}
-          </Btn>
-        </form>
-      </details>
-      {connection.status !== "revoked" && (
-        <Btn
-          disabled={busy}
-          onClick={async () => {
-            if (
-              !window.confirm(
-                "End access through this connection? Its history stays preserved, and previously downloaded copies cannot be recalled.",
-              )
-            )
-              return;
-            setBusy(true);
-            try {
-              await api("/api/connections", {
-                action: "revoke",
-                data: { id: connection.id },
-              });
-              await refresh();
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          Revoke connection
+        </div>
+        <span className={`badge sharing-status ${connection.status}`}>
+          {connection.status === "active"
+            ? "Connected"
+            : connection.status === "pending"
+              ? "Awaiting approval"
+              : "Access ended"}
+        </span>
+      </div>
+      <div className="sharing-scope">
+        {permitted.length ? (
+          permitted.map((c) => <span key={c}>{categoryLabels[c] ?? c}</span>)
+        ) : (
+          <span>No categories shared</span>
+        )}
+      </div>
+      <div className="sharing-card-actions">
+        <Btn sm onClick={onManage}>
+          {connection.status === "pending"
+            ? "Review request"
+            : connection.status === "revoked"
+              ? "Review reconnection"
+              : "Manage access"}
         </Btn>
-      )}
-      {error && <p role="alert">{error}</p>}
+        <button className="sharing-text-action" onClick={onHistory}>
+          <Icon n="clock" s={16} />
+          Access history
+        </button>
+      </div>
     </article>
   );
 }
+
 export function PatientControlsView() {
   const [data, setData] = useState<Controls | null>(null),
     [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [busy, setBusy] = useState(false);
+    [notice, setNotice] = useState("");
+  const [tab, setTab] = useState<"connections" | "requests" | "ended">(
+    "connections",
+  );
+  const [selection, setSelection] = useState<{
+    connection?: Connection;
+    practitioner?: Practitioner;
+  } | null>(null);
+  const [history, setHistory] = useState<{ connection?: Connection } | null>(
+    null,
+  );
+  const [search, setSearch] = useState<{
+      items: Practitioner[];
+      hasMore: boolean;
+    } | null>(null),
+    [searching, setSearching] = useState(false),
+    [searchError, setSearchError] = useState("");
+  const [query, setQuery] = useState(""),
+    [reviewBusy, setReviewBusy] = useState(false);
   async function refresh() {
-    setData(await api<Controls>("/api/connections"));
+    const next = await api<Controls>("/api/connections");
+    setData(next);
+    setError("");
   }
   useEffect(() => {
+    let current = true;
     void api<Controls>("/api/connections")
-      .then(setData)
-      .catch((e) => setError(errorMessage(e)));
+      .then((next) => {
+        if (current) setData(next);
+      })
+      .catch((e) => {
+        if (current) setError(errorMessage(e));
+      });
+    return () => {
+      current = false;
+    };
   }, []);
+  function markReturn(event: React.MouseEvent<HTMLElement>) {
+    document
+      .querySelector('[data-sharing-return="true"]')
+      ?.removeAttribute("data-sharing-return");
+    event.currentTarget.setAttribute("data-sharing-return", "true");
+  }
+  const pending = data?.connections.filter((c) => c.status === "pending") ?? [];
+  const active = data?.connections.filter((c) => c.status === "active") ?? [];
+  const shown =
+    data?.connections.filter(
+      (c) =>
+        c.status ===
+        (tab === "connections"
+          ? "active"
+          : tab === "requests"
+            ? "pending"
+            : "revoked"),
+    ) ?? [];
   return (
-    <section className="patient-page restored-sharing">
-      <header className="phead">
+    <section className="patient-page restored-sharing sharing-page">
+      <MobileTopbarActions>
+        <Btn
+          sm
+          icon="clock"
+          onClick={(event) => {
+            markReturn(event);
+            setHistory({});
+          }}
+        >
+          Access history
+        </Btn>
+      </MobileTopbarActions>
+      <header className="phead sharing-desktop-header">
         <div>
-          <h1 className="ptitle">Health Access</h1>
-          <p className="psub">Your connections, consent and record controls</p>
+          <h1 className="ptitle">Sharing</h1>
+          <p className="psub">
+            Your care connections. Your choice of what to share.
+          </p>
         </div>
+        <Btn
+          icon="clock"
+          onClick={(event) => {
+            markReturn(event);
+            setHistory({});
+          }}
+        >
+          Access history
+        </Btn>
       </header>
-      <p>
-        Direct practitioners and organizations have separate access. Revoking
-        one does not revoke the others. Prior downloads cannot be recalled.
-      </p>
-      <div className="grid2 connection-grid">
-        {["direct", "organization"].map((kind) => (
-          <section className="card connection-group" key={kind}>
-            <h2>
-              {kind === "direct" ? "Direct practitioners" : "Organizations"}
-            </h2>
-            {data && !data.connections.some((c) => c.kind === kind) && (
+      <section
+        className="card sharing-discovery"
+        aria-labelledby="find-practitioner"
+      >
+        <div className="sharing-section-head">
+          <div>
+            <h2 id="find-practitioner">Find a practitioner</h2>
+            <p>
+              Search by name or profession, then choose what you want to share.
+            </p>
+          </div>
+          <Icon n="steth" s={24} />
+        </div>
+        <form
+          className="sharing-search"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setSearching(true);
+            setSearchError("");
+            setSearch(null);
+            try {
+              setSearch(
+                await api("/api/connections", {
+                  action: "search",
+                  data: { query },
+                }),
+              );
+            } catch (e) {
+              setSearchError(errorMessage(e));
+            } finally {
+              setSearching(false);
+            }
+          }}
+        >
+          <label className="searchpill">
+            <Icon n="search" />
+            <span className="sr-only">Practitioner name or profession</span>
+            <input
+              type="search"
+              name="practitioner"
+              placeholder="Name or profession"
+              value={query}
+              disabled={searching}
+              onChange={(event) => {
+                setQuery(event.target.value);
+                setSearch(null);
+              }}
+              minLength={2}
+              maxLength={80}
+              required
+            />
+          </label>
+          <Btn kind="dark" disabled={searching}>
+            {searching ? "Searching…" : "Search practitioners"}
+          </Btn>
+        </form>
+        {searchError && <p role="alert">{searchError}</p>}
+        {search && (
+          <div className="sharing-search-results" aria-live="polite">
+            {search.items.length === 0 ? (
               <p>
-                No connections in this group. Provider invitation screens arrive
-                in later tasks; no live invitations are invented here.
+                No approved practitioners found. Try another name or profession.
+              </p>
+            ) : (
+              search.items.map((person) => {
+                const existing = data?.connections.find(
+                  (c) => c.practitioner_account_id === person.id,
+                );
+                return (
+                  <article className="sharing-search-result" key={person.id}>
+                    <Identity name={person.display_name} />
+                    <div>
+                      <h3>{person.display_name}</h3>
+                      <p>
+                        {person.profession}
+                        {person.jurisdiction ? ` · ${person.jurisdiction}` : ""}
+                      </p>
+                    </div>
+                    <Btn
+                      sm
+                      disabled={!data}
+                      onClick={(event) => {
+                        markReturn(event);
+                        setSelection(
+                          existing
+                            ? { connection: existing }
+                            : { practitioner: person },
+                        );
+                      }}
+                    >
+                      {existing ? "View connection" : "Review sharing"}
+                    </Btn>
+                  </article>
+                );
+              })
+            )}
+            {search.hasMore && (
+              <p className="sharing-help">
+                Showing the first 20 matches. Refine your search to find someone
+                specific.
               </p>
             )}
-            {data?.connections
-              .filter((c) => c.kind === kind)
-              .map((c) => (
-                <ConsentCard
-                  key={`${c.id}:${c.revision}`}
-                  connection={c}
-                  refresh={refresh}
-                />
-              ))}
-          </section>
+          </div>
+        )}
+      </section>
+      <nav className="sharing-tabs" aria-label="Sharing views">
+        {(
+          [
+            ["connections", "Your connections", active.length],
+            ["requests", "Requests", pending.length],
+            ["ended", "Ended connections", null],
+          ] as const
+        ).map(([value, label, count]) => (
+          <button
+            key={value}
+            className={`pill ${tab === value ? "on" : ""}`}
+            aria-pressed={tab === value}
+            onClick={() => setTab(value)}
+          >
+            {label}
+            {data && count !== null && (
+              <span className="sharing-count">{count}</span>
+            )}
+          </button>
         ))}
-      </div>
-      <h2>Meaningful access history</h2>
-      <p className="muted">
-        Most recent 100 recorded access and connection operations.
-      </p>
-      {data?.history.map((event, i) => (
-        <p key={i}>
-          {new Date(event.recorded_at).toLocaleString()} · {event.action} ·{" "}
-          {event.actor_account_id ?? "System"}
-        </p>
-      ))}
-      <h2>Your record</h2>
-      <p>
-        <a href="/api/export" download>
-          Download private record export
-        </a>{" "}
-        · <Link href="/profile">Profile and optional contacts</Link>
-      </p>
-      <p>
-        Original documents can be downloaded separately in Documents. Review
-        requests preserve shared clinical history; submitting one does not
-        delete it or close your account automatically.
-      </p>
-      <form
-        className="account-form"
-        onSubmit={async (e) => {
-          e.preventDefault();
-          setBusy(true);
-          const f = new FormData(e.currentTarget);
-          try {
-            await api("/api/health", {
-              action: "review",
-              data: {
-                kind: f.get("kind"),
-                eventId: null,
-                reason: f.get("reason"),
-                requestKey: crypto.randomUUID(),
-              },
-            });
-            setNotice(
-              "Request submitted for review. Your account and clinical history remain available.",
-            );
-            await refresh();
-          } catch (e) {
-            setError(errorMessage(e));
-          } finally {
-            setBusy(false);
-          }
-        }}
-      >
-        <label>
-          Request type
-          <select name="kind">
-            <option value="removal">Review removal request</option>
-            <option value="account-closure">Review account closure</option>
-          </select>
-        </label>
-        <label>
-          Reason
-          <textarea name="reason" maxLength={3000} required />
-        </label>
-        <Btn type="submit" disabled={busy}>
-          Submit review request
-        </Btn>
-        <p role="status">{notice}</p>
-      </form>
-      {data?.requests.map((r) => (
-        <p key={r.id}>
-          {r.kind} · {r.state} · {new Date(r.created_at).toLocaleString()}
-        </p>
-      ))}
-      {error && <p role="alert">{error}</p>}
+      </nav>
+      {error ? (
+        <div className="card sharing-empty" role="alert">
+          <p>{error}</p>
+          <Btn
+            onClick={() =>
+              void refresh().catch((e) => setError(errorMessage(e)))
+            }
+          >
+            Retry connections
+          </Btn>
+        </div>
+      ) : !data ? (
+        <div className="card sharing-empty" role="status">
+          Loading your connections…
+        </div>
+      ) : (
+        <>
+          {tab === "requests" && (
+            <p className="sharing-help">
+              Review who is requesting access and the categories they want to
+              share. Pending requests do not grant record access.
+            </p>
+          )}
+          {shown.length === 0 ? (
+            <div className="card sharing-empty">
+              <Icon n={tab === "requests" ? "bell" : "link"} s={28} />
+              <h2>
+                {tab === "requests"
+                  ? "You’re all caught up"
+                  : tab === "ended"
+                    ? "No ended connections"
+                    : "Your care connections start here"}
+              </h2>
+              <p>
+                {tab === "requests"
+                  ? "New connection requests will appear here for you to review."
+                  : tab === "ended"
+                    ? "Connections you end will stay here for reference."
+                    : "Find a practitioner above, or review a request from your care team."}
+              </p>
+            </div>
+          ) : (
+            <div className="sharing-groups">
+              {(["direct", "organization"] as const).map((kind) => {
+                const rows = shown.filter((c) => c.kind === kind);
+                return (
+                  rows.length > 0 && (
+                    <section key={kind}>
+                      <div className="sharing-section-head">
+                        <h2>
+                          {kind === "direct"
+                            ? "Practitioners"
+                            : "Organizations"}
+                        </h2>
+                        <span className="badge">{rows.length}</span>
+                      </div>
+                      <div className="sharing-connection-grid">
+                        {rows.map((connection) => (
+                          <ConnectionCard
+                            key={connection.id}
+                            connection={connection}
+                            onManage={(event) => {
+                              markReturn(event);
+                              setSelection({ connection });
+                            }}
+                            onHistory={(event) => {
+                              markReturn(event);
+                              setHistory({ connection });
+                            }}
+                          />
+                        ))}
+                      </div>
+                    </section>
+                  )
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+      <details className="card sharing-record-controls">
+        <summary>
+          <Icon n="doc" />
+          Your record & account requests
+          <Icon n="chev" />
+        </summary>
+        <div>
+          <p>Download your record or submit an account request for review.</p>
+          <div className="sharing-card-actions">
+            <Btn asChild sm icon="download">
+              <a href="/api/export" download>
+                Export your record
+              </a>
+            </Btn>
+            <Link href="/profile">Profile and contacts</Link>
+          </div>
+          <p className="sharing-help">
+            Original files are available in Documents. Review requests do not
+            automatically delete shared clinical history or close your account.
+          </p>
+          <form
+            className="account-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              const fields = new FormData(event.currentTarget);
+              setReviewBusy(true);
+              setNotice("");
+              try {
+                await api("/api/health", {
+                  action: "review",
+                  data: {
+                    kind: fields.get("kind"),
+                    eventId: null,
+                    reason: fields.get("reason"),
+                    requestKey: crypto.randomUUID(),
+                  },
+                });
+                setNotice(
+                  "Request submitted for review. Your account remains available.",
+                );
+                await refresh();
+              } catch (e) {
+                setNotice(errorMessage(e));
+              } finally {
+                setReviewBusy(false);
+              }
+            }}
+          >
+            <label>
+              Request type
+              <select name="kind">
+                <option value="removal">Review record removal</option>
+                <option value="account-closure">Review account closure</option>
+              </select>
+            </label>
+            <label>
+              Reason
+              <textarea name="reason" minLength={3} maxLength={3000} required />
+            </label>
+            <Btn type="submit" disabled={reviewBusy}>
+              {reviewBusy ? "Submitting…" : "Submit review request"}
+            </Btn>
+          </form>
+          <p role="status">{notice}</p>
+          {data?.requests.map((request) => (
+            <div className="sharing-review-row" key={request.id}>
+              <strong>
+                {request.kind === "account-closure"
+                  ? "Account closure review"
+                  : "Record review"}
+              </strong>
+              <span className="badge">{request.state}</span>
+              <time dateTime={request.created_at}>
+                {dateLabel(request.created_at)}
+              </time>
+            </div>
+          ))}
+        </div>
+      </details>
+      {selection && (
+        <ConsentPanel
+          {...selection}
+          onClose={() => setSelection(null)}
+          onSaved={refresh}
+        />
+      )}
+      {history && (
+        <HistoryPanel {...history} onClose={() => setHistory(null)} />
+      )}
     </section>
   );
 }

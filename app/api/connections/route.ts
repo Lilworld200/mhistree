@@ -7,6 +7,11 @@ import {
 } from "@/features/access/patient-controls";
 import { revokeConnection } from "@/features/access/server";
 import {
+  searchPractitioners,
+  connectPractitioner,
+  patientAccessHistory,
+} from "@/features/access/sharing";
+import {
   mutationGuard,
   jsonBody,
   sessionFrom,
@@ -24,9 +29,23 @@ export async function POST(request: NextRequest) {
   try {
     mutationGuard(request);
     const input = z
-      .object({ action: z.enum(["consent", "revoke"]), data: z.unknown() })
+      .object({
+        action: z.enum(["consent", "revoke", "search", "connect", "history"]),
+        data: z.unknown(),
+      })
       .strict()
       .parse(await jsonBody(request));
+    const operations = {
+      search: searchPractitioners,
+      connect: connectPractitioner,
+      history: patientAccessHistory,
+    };
+    if (input.action in operations) {
+      const operation = operations[input.action as keyof typeof operations];
+      return success(
+        await operation(database(), sessionFrom(request), input.data),
+      );
+    }
     if (input.action === "revoke") {
       await revokeConnection(
         database(),

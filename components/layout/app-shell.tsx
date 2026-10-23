@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 
 import { ChatNavigationProvider, useChatNavigation } from "./chat-navigation";
+import { MobileTopbarTarget } from "./mobile-topbar-actions";
 import type { WorkspaceAccess } from "@/features/auth/workspace-access";
 
 const navigation: { href: string; label: string; icon: IconName }[] = [
@@ -30,10 +31,13 @@ const practitionerNavigation: {
 }[] = [
   {
     href: "/clinician/dashboard",
-    label: "Today and availability",
-    icon: "cal",
+    label: "Today",
+    icon: "pulse",
   },
   { href: "/clinician/patients", label: "My patients", icon: "steth" },
+  { href: "/clinician/schedule", label: "Schedule", icon: "cal" },
+  { href: "/clinician/inbox", label: "Care inbox", icon: "chat" },
+  { href: "/clinician/requests", label: "Requests & results", icon: "doc" },
   { href: "/clinician/profile", label: "Professional profile", icon: "user" },
 ];
 function inPractitionerWorkspace(
@@ -274,6 +278,9 @@ function Shell({
   workspaces: WorkspaceAccess;
 }) {
   const [open, setOpen] = useState(false);
+  const [mobileActions, setMobileActions] = useState<HTMLDivElement | null>(
+    null,
+  );
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const professional = inPractitionerWorkspace(
@@ -288,41 +295,43 @@ function Shell({
           (item) => item.href === pathname,
         )?.label ?? "Mhistree");
   return (
-    <div className="app" data-theme="light">
-      <a className="skip-link" href="#main-content">
-        Skip to content
-      </a>
-      <Dialog.Root open={open} onOpenChange={setOpen}>
-        <div className="stage">
-          <div className="topbar">
-            <Dialog.Trigger asChild>
-              <IconBtn icon="menu" size={44} title="Open menu" />
-            </Dialog.Trigger>
-            <span className="tbtitle">{title}</span>
-            <span style={{ width: 44 }} />
+    <MobileTopbarTarget.Provider value={mobileActions}>
+      <div className="app" data-theme="light">
+        <a className="skip-link" href="#main-content">
+          Skip to content
+        </a>
+        <Dialog.Root open={open} onOpenChange={setOpen}>
+          <div className="stage">
+            <div className="topbar">
+              <Dialog.Trigger asChild>
+                <IconBtn icon="menu" size={44} title="Open menu" />
+              </Dialog.Trigger>
+              <span className="tbtitle">{title}</span>
+              <div className="mobile-topbar-actions" ref={setMobileActions} />
+            </div>
+            <aside className="side">
+              <Navigation workspaces={workspaces} professional={professional} />
+            </aside>
+            <main className="main-shell" id="main-content" tabIndex={-1}>
+              <div className="page">{children}</div>
+            </main>
           </div>
-          <aside className="side">
-            <Navigation workspaces={workspaces} professional={professional} />
-          </aside>
-          <main className="main-shell" id="main-content" tabIndex={-1}>
-            <div className="page">{children}</div>
-          </main>
-        </div>
-        <Dialog.Portal>
-          <Dialog.Overlay className="foundation-scrim" />
-          <Dialog.Content className="drawer-left">
-            <Dialog.Title className="sr-only">Navigation</Dialog.Title>
-            <Dialog.Description className="sr-only">
-              Choose a Mhistree section.
-            </Dialog.Description>
-            <Navigation
-              workspaces={workspaces}
-              professional={professional}
-              close={() => setOpen(false)}
-            />
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </div>
+          <Dialog.Portal>
+            <Dialog.Overlay className="foundation-scrim" />
+            <Dialog.Content className="drawer-left">
+              <Dialog.Title className="sr-only">Navigation</Dialog.Title>
+              <Dialog.Description className="sr-only">
+                Choose a Mhistree section.
+              </Dialog.Description>
+              <Navigation
+                workspaces={workspaces}
+                professional={professional}
+                close={() => setOpen(false)}
+              />
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      </div>
+    </MobileTopbarTarget.Provider>
   );
 }
