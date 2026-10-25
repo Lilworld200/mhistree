@@ -13,7 +13,7 @@ export async function directPatients(pool: Pool, session: string) {
     const actor = await requirePractitioner(tx, session);
     return (
       await tx.query(
-        "select c.id,c.patient_person_id,c.status,c.revision,p.display_name,p.birth_date,s.categories,s.exclusions,s.method from mhistree.connections c join mhistree.persons p on p.id=c.patient_person_id left join lateral(select categories,exclusions,method from mhistree.consents where connection_id=c.id order by recorded_at desc,id desc limit 1)s on true where c.kind='direct' and c.practitioner_account_id=$1 order by p.display_name,c.id limit 100",
+        "select c.id,c.patient_person_id,c.status,c.revision,c.patient_approved,c.practitioner_approved,p.display_name,p.birth_date,s.categories,s.exclusions,s.method from mhistree.connections c join mhistree.persons p on p.id=c.patient_person_id left join lateral(select categories,exclusions,method from mhistree.consents where connection_id=c.id order by recorded_at desc,id desc limit 1)s on true where c.kind='direct' and c.practitioner_account_id=$1 order by p.display_name,c.id limit 100",
         [actor.accountId],
       )
     ).rows;
@@ -56,6 +56,7 @@ export async function initiateDirectConnection(
     .object({
       patientPersonId: z.uuid(),
       requestKey: z.uuid(),
+      exactAlias: z.string().min(1).max(80).optional(),
       method: z.enum(["login", "in-person"]),
       categories: z.array(category).min(1).max(10),
       exclusions: z.array(category).max(10),
@@ -110,19 +111,39 @@ export async function initiateDirectConnection(
           )
         ).rows[0]
       : null;
-    const state = d.method === "login" ? "pending" : "active";
+    let patientApproved = d.method === "in-person";
+    let autoConsent: { account_id: string; version: number } | undefined;
+    if (!connection && d.method === "login" && d.exactAlias) {
+      const settings = (
+        await tx.query(
+          "select settings.* from mhistree.connection_approval_settings settings join mhistree.accounts a on a.id=settings.account_id where a.person_id=$1 and a.status='active' and settings.patient_auto_approve and exists(select 1 from mhistree.patient_identifiers i where i.alias=$2 and i.retired_at is null and mhistree.canonical_person(i.person_id)=mhistree.canonical_person($1)) order by a.id limit 1 for share of settings,a",
+          [d.patientPersonId, d.exactAlias],
+        )
+      ).rows[0];
+      if (
+        settings &&
+        d.categories.every(
+          (c) =>
+            d.exclusions.includes(c) || settings.patient_categories.includes(c),
+        )
+      ) {
+        patientApproved = true;
+        autoConsent = settings;
+      }
+    }
+    const state = patientApproved ? "active" : "pending";
     if (connection) {
       connection = (
         await tx.query(
-          "update mhistree.connections set status=$2,revision=revision+1 where id=$1 returning *",
-          [connection.id, state],
+          "update mhistree.connections set status=$2,patient_approved=$3,practitioner_approved=true,revision=revision+1 where id=$1 returning *",
+          [connection.id, state, patientApproved],
         )
       ).rows[0];
     } else
       connection = (
         await tx.query(
-          "insert into mhistree.connections(patient_person_id,kind,practitioner_account_id,status) values($1,'direct',$2,$3) returning *",
-          [d.patientPersonId, actor.accountId, state],
+          "insert into mhistree.connections(patient_person_id,kind,practitioner_account_id,status,patient_approved,practitioner_approved) values($1,'direct',$2,$3,$4,true) returning *",
+          [d.patientPersonId, actor.accountId, state, patientApproved],
         )
       ).rows[0];
     await tx.query(
@@ -134,8 +155,10 @@ export async function initiateDirectConnection(
         previous?.origin_person_ids ?? [d.patientPersonId],
         previous?.origin_context_ids ?? ["*"],
         d.method,
-        actor.accountId,
-        d.evidence ?? null,
+        autoConsent?.account_id ?? actor.accountId,
+        autoConsent
+          ? `approval-settings:${autoConsent.account_id}:${autoConsent.version}`
+          : (d.evidence ?? null),
         previous?.id ?? null,
       ],
     );
@@ -151,5 +174,63 @@ export async function initiateDirectConnection(
       referenceId: connection.id,
     });
     return { id: connection.id, status: state, replayed: false };
+  }, pool);
+}
+
+export async function respondDirectConnection(
+  pool: Pool,
+  session: string,
+  input: unknown,
+) {
+  const data = z
+    .object({
+      id: z.uuid(),
+      version: z.number().int().positive(),
+      action: z.enum(["approve", "decline"]),
+    })
+    .strict()
+    .parse(input);
+  return transaction(async (tx) => {
+    const actor = await requirePractitioner(tx, session);
+    const connection = (
+      await tx.query(
+        "select * from mhistree.connections where id=$1 and kind='direct' and practitioner_account_id=$2 for update",
+        [data.id, actor.accountId],
+      )
+    ).rows[0];
+    if (!connection) throw new DomainError("ACCESS_DENIED");
+    if (
+      connection.status !== "pending" ||
+      connection.revision !== data.version ||
+      (data.action === "approve" && connection.practitioner_approved)
+    )
+      throw new DomainError("VERSION_CONFLICT");
+    const status =
+      data.action === "decline"
+        ? "revoked"
+        : connection.patient_approved
+          ? "active"
+          : "pending";
+    const row = (
+      await tx.query(
+        "update mhistree.connections set status=$2,practitioner_approved=$3,revision=revision+1 where id=$1 returning revision",
+        [data.id, status, data.action === "approve"],
+      )
+    ).rows[0];
+    await appendEvent(tx, {
+      actorAccountId: actor.accountId,
+      personId: connection.patient_person_id,
+      action:
+        data.action === "approve"
+          ? "connection.practitioner.approved"
+          : "connection.practitioner.declined",
+      referenceId: data.id,
+      contextId: `direct:${data.id}`,
+    });
+    await tx.query(
+      "insert into mhistree.outbox(kind,reference_id,revision) values('access.invalidated',$1,$2)",
+      [data.id, row.revision],
+    );
+    return { status, version: row.revision };
   }, pool);
 }

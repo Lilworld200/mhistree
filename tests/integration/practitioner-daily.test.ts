@@ -7,8 +7,13 @@ import {
   practitionerToday,
   saveAvailability,
   removeAvailability,
+  updateAvailability,
 } from "@/features/practitioner/daily";
-import { requestAppointment } from "@/features/appointments/server";
+import {
+  requestAppointment,
+  createPractitionerAppointment,
+  changeAppointment,
+} from "@/features/appointments/server";
 import { sendCareMessage } from "@/features/messaging/server";
 import { saveWork } from "@/features/clinical-care/work";
 import { revokeConnection } from "@/features/access/server";
@@ -121,6 +126,118 @@ it("availability uses real overlap, capability and optimistic-version guards", a
     (await practitionerToday(db.pool, doctor.session)).availability,
   ).toHaveLength(0);
 });
+
+it("calendar booking is atomic, idempotent, context-bound and confirmed after clinician rescheduling", async () => {
+  const slot = {
+    startsAt: new Date(Date.now() + 5 * 86400000).toISOString(),
+    endsAt: new Date(Date.now() + 5 * 86400000 + 1800000).toISOString(),
+    timezone: "Africa/Lagos",
+  };
+  const context = { kind: "direct" as const, connectionId: connection };
+  const data = { connectionId: connection, requestKey: randomUUID(), slot };
+  await saveAvailability(db.pool, doctor.session, {
+    startsAt: new Date(Date.now() + 20 * 86400000).toISOString(),
+    endsAt: new Date(Date.now() + 20 * 86400000 + 1800000).toISOString(),
+    timezone: "UTC",
+  });
+  const [a, b] = await Promise.all([
+    createPractitionerAppointment(db.pool, doctor.session, context, data),
+    createPractitionerAppointment(db.pool, doctor.session, context, data),
+  ]);
+  expect(a.id).toBe(b.id);
+  expect(a.state).toBe("accepted");
+  await expect(
+    createPractitionerAppointment(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      { ...data, requestKey: randomUUID() },
+    ),
+  ).rejects.toThrow("ACCESS_DENIED");
+  await expect(
+    createPractitionerAppointment(db.pool, doctor.session, context, {
+      ...data,
+      requestKey: randomUUID(),
+    }),
+  ).rejects.toThrow("VERSION_CONFLICT");
+  const moved = await changeAppointment(db.pool, doctor.session, context, {
+    id: a.id,
+    version: a.version,
+    action: "reschedule",
+    slot: {
+      ...slot,
+      startsAt: new Date(Date.parse(slot.startsAt) + 3600000).toISOString(),
+      endsAt: new Date(Date.parse(slot.endsAt) + 3600000).toISOString(),
+    },
+  });
+  expect(moved.state).toBe("accepted");
+  const from = new Date(Date.parse(slot.startsAt) - 86400000).toISOString(),
+    to = new Date(Date.parse(slot.endsAt) + 86400000).toISOString();
+  const calendar = await practitionerToday(db.pool, doctor.session, {
+    from,
+    to,
+  });
+  expect(
+    calendar.items
+      .flatMap((item) => item.appointments)
+      .some((row) => row.id === a.id),
+  ).toBe(true);
+  expect(
+    calendar.items.find((item) => item.connectionId === connection)
+      ?.upcomingAppointment?.id,
+  ).toBe(a.id);
+  const oldFrom = new Date(Date.now() - 100 * 86400000).toISOString(),
+    oldTo = new Date(Date.now() - 90 * 86400000).toISOString();
+  const olderMonth = await practitionerToday(db.pool, doctor.session, {
+    from: oldFrom,
+    to: oldTo,
+  });
+  expect(
+    olderMonth.items.find((item) => item.connectionId === connection)
+      ?.upcomingAppointment?.id,
+  ).toBe(a.id);
+  await expect(
+    practitionerToday(db.pool, doctor.session, {
+      from,
+      to: new Date(Date.parse(from) + 90 * 86400000).toISOString(),
+    }),
+  ).rejects.toThrow();
+});
+it("availability editing preserves ownership, overlap and version checks", async () => {
+  const startsAt = new Date(Date.now() + 10 * 86400000).toISOString(),
+    endsAt = new Date(Date.now() + 10 * 86400000 + 1800000).toISOString();
+  const saved = await saveAvailability(db.pool, doctor.session, {
+    startsAt,
+    endsAt,
+    timezone: "UTC",
+  });
+  await updateAvailability(db.pool, doctor.session, {
+    id: saved.id,
+    version: 1,
+    startsAt,
+    endsAt,
+    timezone: "Africa/Lagos",
+  });
+  await expect(
+    updateAvailability(db.pool, doctor.session, {
+      id: saved.id,
+      version: 1,
+      startsAt,
+      endsAt,
+      timezone: "UTC",
+    }),
+  ).rejects.toThrow("VERSION_CONFLICT");
+  await expect(
+    updateAvailability(db.pool, other.session, {
+      id: saved.id,
+      version: 2,
+      startsAt,
+      endsAt,
+      timezone: "UTC",
+    }),
+  ).rejects.toThrow();
+});
+
 it("revocation removes dependent work from daily projections and professional suspension denies the whole projection", async () => {
   await revokeConnection(db.pool, patient.session, connection);
   expect((await practitionerToday(db.pool, doctor.session)).items).toHaveLength(

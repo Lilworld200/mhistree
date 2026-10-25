@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { ConnectionApprovalSettings } from "@/features/access/approval-settings-view";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
@@ -250,6 +251,9 @@ export function ProfessionalProfile({
           </section>
           <section className="card daily-section">
             <h2>Account & workspace settings</h2>
+            {status === "approved" && (
+              <ConnectionApprovalSettings role="practitioner" />
+            )}
             <p>
               Your personal account and professional profile share one sign-in.
               Change workspace mode from your account profile.

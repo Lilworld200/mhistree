@@ -1,3 +1,4 @@
+import { timeline } from "@/features/health-records/timeline";
 import { NextRequest } from "next/server";
 import { withAccess } from "@/features/access/server";
 import { z } from "zod";
@@ -13,7 +14,10 @@ import {
 } from "@/features/clinical-care/requests";
 import { practitionerAssistance } from "@/features/ai-chat/practitioner";
 import { careMessages, sendCareMessage } from "@/features/messaging/server";
-import { changeAppointment } from "@/features/appointments/server";
+import {
+  changeAppointment,
+  createPractitionerAppointment,
+} from "@/features/appointments/server";
 import { markThreadRead } from "@/features/practitioner/daily";
 import { aiGateway } from "@/lib/ai/gateway";
 import {
@@ -32,6 +36,17 @@ export async function GET(r: NextRequest) {
       session = sessionFrom(r),
       context = { kind: "direct" as const, connectionId };
     const data = await directWorkspace(pool, session, connectionId);
+    if (r.nextUrl.searchParams.get("view") === "timeline")
+      return success(
+        await timeline(pool, session, context, {
+          ...(r.nextUrl.searchParams.get("category")
+            ? { category: r.nextUrl.searchParams.get("category") }
+            : {}),
+          ...(r.nextUrl.searchParams.get("cursor")
+            ? { cursor: r.nextUrl.searchParams.get("cursor") }
+            : {}),
+        }),
+      );
     const canMessage = await withAccess(
       pool,
       session,
@@ -71,6 +86,7 @@ export async function POST(r: NextRequest) {
           "ai",
           "message",
           "appointment",
+          "appointment-create",
           "read",
         ]),
         data: z.unknown(),
@@ -110,6 +126,7 @@ export async function POST(r: NextRequest) {
         result: publishResult,
         message: sendCareMessage,
         appointment: changeAppointment,
+        "appointment-create": createPractitionerAppointment,
       }[d.action](pool, session, context, d.data),
     );
   } catch (e) {

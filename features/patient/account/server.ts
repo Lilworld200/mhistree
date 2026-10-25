@@ -101,7 +101,7 @@ export async function accountProfile(pool: Pool, session: string) {
     ).rows[0];
     const account = (
       await tx.query(
-        "select login_identifier from mhistree.accounts where id=$1",
+        "select login_identifier,provider from mhistree.accounts where id=$1",
         [actor.accountId],
       )
     ).rows[0];
@@ -111,7 +111,21 @@ export async function accountProfile(pool: Pool, session: string) {
         [actor.personId],
       )
     ).rows;
-    return { ...person, ...account, contacts, accountId: actor.accountId };
+    const identifier = (
+      await tx.query(
+        "select alias from mhistree.patient_identifiers where person_id=$1 and retired_at is null order by created_at,alias limit 1",
+        [actor.personId],
+      )
+    ).rows[0];
+    return {
+      ...person,
+      login_identifier: account.login_identifier,
+      loginEmail:
+        account.provider === "supabase" ? account.login_identifier : null,
+      patientId: identifier?.alias ?? null,
+      contacts,
+      accountId: actor.accountId,
+    };
   }, pool);
 }
 export async function updateProfile(

@@ -53,10 +53,29 @@ export async function requestAppointment(
   context: ActingContext,
   input: unknown,
 ) {
+  return saveAppointment(pool, session, context, input, false);
+}
+
+// The direct clinician books in their own server-established care context.
+export async function createPractitionerAppointment(
+  pool: Pool,
+  session: string,
+  context: ActingContext,
+  input: unknown,
+) {
+  return saveAppointment(pool, session, context, input, true);
+}
+async function saveAppointment(
+  pool: Pool,
+  session: string,
+  context: ActingContext,
+  input: unknown,
+  clinicianBooking: boolean,
+) {
   const data = z
     .object({
       connectionId: z.uuid(),
-      practitionerId: z.uuid(),
+      practitionerId: clinicianBooking ? z.never().optional() : z.uuid(),
       requestKey: z.uuid(),
       slot,
     })
@@ -69,6 +88,16 @@ export async function requestAppointment(
         data.connectionId,
         "appointments.manage",
       );
+      const practitionerId = clinicianBooking
+        ? a.actor.accountId
+        : data.practitionerId;
+      if (
+        clinicianBooking &&
+        (context.kind !== "direct" ||
+          context.connectionId !== connection.id ||
+          connection.practitioner_account_id !== a.actor.accountId)
+      )
+        throw new DomainError("ACCESS_DENIED");
       await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
         `booking:${data.requestKey}`,
       ]);
@@ -81,7 +110,7 @@ export async function requestAppointment(
       if (existing) {
         if (
           existing.connection_id !== data.connectionId ||
-          existing.practitioner_account_id !== data.practitionerId ||
+          existing.practitioner_account_id !== practitionerId ||
           existing.timezone !== data.slot.timezone ||
           existing.starts_at.toISOString() !==
             new Date(data.slot.startsAt).toISOString() ||
@@ -95,22 +124,25 @@ export async function requestAppointment(
         throw new DomainError("VERSION_CONFLICT");
       const row = (
         await a.tx.query(
-          "insert into mhistree.appointments(connection_id,patient_person_id,practitioner_account_id,starts_at,ends_at,timezone,request_key) values($1,$2,$3,$4,$5,$6,$7) returning *",
+          "insert into mhistree.appointments(connection_id,patient_person_id,practitioner_account_id,starts_at,ends_at,timezone,request_key,state) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
           [
             connection.id,
             connection.patient_person_id,
-            data.practitionerId,
+            practitionerId,
             data.slot.startsAt,
             data.slot.endsAt,
             data.slot.timezone,
             data.requestKey,
+            clinicianBooking ? "accepted" : "requested",
           ],
         )
       ).rows[0];
       await appendEvent(a.tx, {
         actorAccountId: a.actor.accountId,
         personId: connection.patient_person_id,
-        action: "appointment.requested",
+        action: clinicianBooking
+          ? "appointment.booked"
+          : "appointment.requested",
         referenceId: row.id,
         contextId: a.contextId,
       });
@@ -174,7 +206,12 @@ export async function changeAppointment(
         accept: "accepted",
         decline: "declined",
         cancel: "cancelled",
-        reschedule: "requested",
+        reschedule:
+          row.state === "accepted" &&
+          context.kind === "direct" &&
+          a.actor.accountId === row.practitioner_account_id
+            ? "accepted"
+            : "requested",
       }[data.action];
       const updated = (
         await a.tx.query(

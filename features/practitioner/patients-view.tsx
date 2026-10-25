@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Btn } from "@/components/ui/button";
@@ -7,6 +7,7 @@ import { Icon } from "@/components/ui/icons";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { api, errorMessage } from "@/lib/client-api";
 import { categoryLabels } from "@/features/access/sharing-types";
+import { PatientSnapshot } from "./patient-snapshot";
 import { PatientEntryPanel } from "./patient-entry-panel";
 import type {
   DirectPatient,
@@ -35,11 +36,9 @@ function Scope({
 }) {
   const scope = categories?.filter((c) => !exclusions.includes(c)) ?? [];
   return scope.length > 0 ? (
-    <div className="sharing-scope">
-      {scope.map((c) => (
-        <span key={c}>{categoryLabels[c] ?? c}</span>
-      ))}
-    </div>
+    <p className="sharing-help">
+      Sharing scope: {scope.map((c) => categoryLabels[c] ?? c).join(", ")}
+    </p>
   ) : null;
 }
 
@@ -83,13 +82,65 @@ export function PatientsView({
     matches(`${row.display_name} ${row.organization_name}`),
   );
   const hasRows =
-    tab === "organization" ? organization.length > 0 : direct.length > 0;
+    !error &&
+    (tab === "organization" ? organization.length > 0 : direct.length > 0);
+  const [responding, setResponding] = useState<string | null>(null);
+  async function respond(row: DirectPatient, action: "approve" | "decline") {
+    setResponding(row.id);
+    setError("");
+    try {
+      await api("/api/practitioner/patients", {
+        action: "respond",
+        data: { id: row.id, version: row.revision, action },
+      });
+      await refresh();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setResponding(null);
+    }
+  }
   async function refresh() {
     setError("");
-    const next = await api<DirectPatient[]>("/api/practitioner/patients");
-    setRows(next);
-    router.refresh();
+    try {
+      const next = await api<DirectPatient[]>("/api/practitioner/patients");
+      setRows(next);
+      router.refresh();
+    } catch (e) {
+      setRows([]);
+      setError(errorMessage(e));
+      throw e;
+    }
   }
+  useEffect(() => {
+    let active = true;
+    const reload = () => {
+      void api<DirectPatient[]>("/api/practitioner/patients")
+        .then((next) => {
+          if (active) {
+            setRows(next);
+            setError("");
+            router.refresh();
+          }
+        })
+        .catch((e) => {
+          if (active) {
+            setRows([]);
+            setError(errorMessage(e));
+          }
+        });
+    };
+    const onVisible = () => {
+      if (document.visibilityState === "visible") reload();
+    };
+    window.addEventListener("focus", reload);
+    const timer = setInterval(onVisible, 15000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", reload);
+    };
+  }, [router]);
   function addPatient(event: React.MouseEvent<HTMLElement>) {
     trigger.current = event.currentTarget;
     setEntry(true);
@@ -169,8 +220,8 @@ export function PatientsView({
       {error && <p role="alert">{error}</p>}
       {tab === "pending" && (
         <p className="sharing-help">
-          These requests are waiting for patient approval. Record access stays
-          closed until consent is active.
+          Review incoming requests below. Requests you sent wait for the patient
+          to approve. Record access stays closed until both sides have approved.
         </p>
       )}
       {tab === "ended" && (
@@ -219,71 +270,102 @@ export function PatientsView({
           {tab === "organization"
             ? organization.map((row) => (
                 <article
-                  className="card sharing-connection"
+                  className="card patient-overview-card"
                   key={`${row.assignment_id}:${row.connection_id ?? row.basis_id}`}
                 >
                   <div className="sharing-person">
                     <PatientAvatar name={row.display_name} />
                     <div>
-                      <h2>{row.display_name}</h2>
-                      <p>{row.organization_name}</p>
+                      <h2>
+                        <Link
+                          href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
+                          aria-label={`View ${row.display_name}\'s patient details`}
+                        >
+                          {row.display_name}
+                        </Link>
+                      </h2>
+                      <p>
+                        {row.organization_name} ·{" "}
+                        {row.basis_id
+                          ? "Initial care"
+                          : "Organization connection"}
+                      </p>
                     </div>
-                    <span className="badge">Assigned</span>
+                    <Icon n="chevronRight" />
                   </div>
-                  <Scope categories={row.categories} />
-                  <p className="sharing-help">
-                    {row.basis_id
-                      ? "Initial care · registered without a login"
-                      : "Organization connection"}
-                  </p>
-                  <div className="sharing-card-actions">
-                    <Btn asChild sm>
-                      <Link
-                        href={`/organizations/record?organization=${row.organization_id}&${row.basis_id ? `basis=${row.basis_id}` : `connection=${row.connection_id}`}&assignment=${row.assignment_id}`}
-                      >
-                        Open organization record
-                      </Link>
-                    </Btn>
-                  </div>
+                  <PatientSnapshot overview={row.overview} />
                 </article>
               ))
-            : direct.map((row) => (
-                <article className="card sharing-connection" key={row.id}>
-                  <div className="sharing-person">
-                    <PatientAvatar name={row.display_name} />
-                    <div>
-                      <h2>{row.display_name}</h2>
-                      <p>Direct connection</p>
+            : direct.map((row) =>
+                row.status === "active" ? (
+                  <article className="card patient-overview-card" key={row.id}>
+                    <div className="sharing-person">
+                      <PatientAvatar name={row.display_name} />
+                      <div>
+                        <h2>
+                          <Link
+                            href={`/clinician/patients/${row.id}`}
+                            aria-label={`View ${row.display_name}\'s patient details`}
+                          >
+                            {row.display_name}
+                          </Link>
+                        </h2>
+                        <p>Direct connection</p>
+                      </div>
+                      <Icon n="chevronRight" />
                     </div>
-                    <span className={`badge sharing-status ${row.status}`}>
-                      {row.status === "active"
-                        ? "Connected"
-                        : row.status === "pending"
+                    <PatientSnapshot overview={row.overview} />
+                  </article>
+                ) : (
+                  <article className="card sharing-connection" key={row.id}>
+                    <div className="sharing-person">
+                      <PatientAvatar name={row.display_name} />
+                      <div>
+                        <h2>{row.display_name}</h2>
+                        <p>Direct connection</p>
+                      </div>
+                      <span className={`badge sharing-status ${row.status}`}>
+                        {row.status === "pending"
                           ? "Awaiting approval"
                           : "Access ended"}
-                    </span>
-                  </div>
-                  <Scope
-                    categories={row.categories}
-                    exclusions={row.exclusions}
-                  />
-                  {row.status === "active" ? (
-                    <div className="sharing-card-actions">
-                      <Btn asChild sm>
-                        <Link href={`/clinician/patients/${row.id}`}>
-                          Open patient record
-                        </Link>
-                      </Btn>
+                      </span>
                     </div>
-                  ) : (
+                    <Scope
+                      categories={row.categories}
+                      exclusions={row.exclusions}
+                    />
                     <p className="sharing-help">
                       {row.status === "pending"
-                        ? "Waiting for the patient to confirm sharing."
+                        ? row.practitioner_approved === false
+                          ? "This patient has requested a connection. Review the scope before approving."
+                          : "Waiting for the patient to confirm sharing."
                         : "Fresh consent is needed before opening this record."}
                     </p>
-                  )}
-                </article>
-              ))}
+                    {row.status === "pending" &&
+                      row.practitioner_approved === false && (
+                        <div className="sharing-card-actions">
+                          <Btn
+                            kind="dark"
+                            sm
+                            disabled={responding !== null}
+                            onClick={() => void respond(row, "approve")}
+                          >
+                            {responding === row.id
+                              ? "Updating…"
+                              : "Approve connection"}
+                          </Btn>
+                          <Btn
+                            sm
+                            disabled={responding !== null}
+                            onClick={() => void respond(row, "decline")}
+                          >
+                            Decline request
+                          </Btn>
+                        </div>
+                      )}
+                  </article>
+                ),
+              )}
         </div>
       )}
       <p className="sharing-help">

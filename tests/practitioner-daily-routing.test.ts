@@ -35,7 +35,12 @@ it.each(["dashboard", "schedule", "inbox", "requests"] as const)(
   "%s uses current approval and server-owned care projections",
   async (view) => {
     const result = await PractitionerDailyPage({ view });
-    expect(state.today).toHaveBeenCalledWith("pool", "verified-session");
+    if (view === "schedule")
+      expect(state.today).toHaveBeenCalledWith("pool", "verified-session", {
+        from: expect.any(String),
+        to: expect.any(String),
+      });
+    else expect(state.today).toHaveBeenCalledWith("pool", "verified-session");
     expect(result.props.view).toBe(view);
     expect(result.props.canManageAppointments).toBe(false);
   },

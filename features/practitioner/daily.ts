@@ -7,7 +7,22 @@ import { directPatients } from "./patients";
 import { withAccess } from "@/features/access/server";
 import type { ActingContext } from "@/features/access/server";
 import { DomainError } from "@/lib/errors";
-export async function practitionerToday(pool: Pool, session: string) {
+export async function practitionerToday(
+  pool: Pool,
+  session: string,
+  range?: { from: string; to: string },
+) {
+  if (range)
+    z.object({
+      from: z.iso.datetime({ offset: true }),
+      to: z.iso.datetime({ offset: true }),
+    })
+      .refine(
+        (v) =>
+          Date.parse(v.to) > Date.parse(v.from) &&
+          Date.parse(v.to) - Date.parse(v.from) <= 35 * 86400000,
+      )
+      .parse(range);
   const connections = (await directPatients(pool, session))
     .filter((c) => c.status === "active")
     .slice(0, 30);
@@ -23,10 +38,20 @@ export async function practitionerToday(pool: Pool, session: string) {
           patientName: c.display_name,
           appointments: (
             await a.tx.query(
-              "select id,starts_at,ends_at,timezone,state,version from mhistree.appointments where connection_id=$1 and starts_at>=clock_timestamp()-interval '1 day' order by starts_at limit 15",
-              [c.id],
+              range
+                ? "select id,starts_at,ends_at,timezone,state,version from mhistree.appointments where connection_id=$1 and ((starts_at<$3 and ends_at>$2) or (state='requested' and ends_at>clock_timestamp())) order by starts_at limit 101"
+                : "select id,starts_at,ends_at,timezone,state,version from mhistree.appointments where connection_id=$1 and starts_at>=clock_timestamp()-interval '1 day' order by starts_at limit 15",
+              range ? [c.id, range.from, range.to] : [c.id],
             )
           ).rows,
+          upcomingAppointment: range
+            ? ((
+                await a.tx.query(
+                  "select id,starts_at,ends_at,timezone,state,version from mhistree.appointments where connection_id=$1 and state='accepted' and ends_at>clock_timestamp() order by starts_at,id limit 1",
+                  [c.id],
+                )
+              ).rows[0] ?? null)
+            : undefined,
           requests: (
             await a.tx.query(
               "select id,service_name,state,version,result_event_id from mhistree.service_requests where connection_id=$1 or recipient_connection_id=$1 order by created_at desc limit 15",
@@ -66,35 +91,43 @@ export async function practitionerToday(pool: Pool, session: string) {
       ).rows,
     };
   }, pool);
-  return { items, ...personal, limited: connections.length === 30 };
+  const appointmentLimit = items.some((item) => item.appointments.length > 100);
+  return {
+    items: items.map((item) => ({
+      ...item,
+      appointments: item.appointments.slice(0, range ? 100 : 15),
+    })),
+    ...personal,
+    limited: connections.length === 30 || appointmentLimit,
+  };
 }
+const availabilityInput = z
+  .object({
+    startsAt: z.iso.datetime({ offset: true }),
+    endsAt: z.iso.datetime({ offset: true }),
+    timezone: z.string().refine((v) => {
+      try {
+        new Intl.DateTimeFormat("en", { timeZone: v });
+        return true;
+      } catch {
+        return false;
+      }
+    }),
+  })
+  .strict()
+  .refine(
+    (v) =>
+      new Date(v.startsAt) > new Date() &&
+      new Date(v.endsAt) > new Date(v.startsAt) &&
+      new Date(v.endsAt).getTime() - new Date(v.startsAt).getTime() <= 86400000,
+  );
+
 export async function saveAvailability(
   pool: Pool,
   session: string,
   input: unknown,
 ) {
-  const d = z
-    .object({
-      startsAt: z.iso.datetime({ offset: true }),
-      endsAt: z.iso.datetime({ offset: true }),
-      timezone: z.string().refine((v) => {
-        try {
-          new Intl.DateTimeFormat("en", { timeZone: v });
-          return true;
-        } catch {
-          return false;
-        }
-      }),
-    })
-    .strict()
-    .refine(
-      (v) =>
-        new Date(v.startsAt) > new Date() &&
-        new Date(v.endsAt) > new Date(v.startsAt) &&
-        new Date(v.endsAt).getTime() - new Date(v.startsAt).getTime() <=
-          86400000,
-    )
-    .parse(input);
+  const d = availabilityInput.parse(input);
   try {
     return await transaction(async (tx) => {
       const actor = await requirePractitioner(
@@ -108,6 +141,53 @@ export async function saveAvailability(
           [actor.accountId, d.startsAt, d.endsAt, d.timezone],
         )
       ).rows[0];
+    }, pool);
+  } catch (e) {
+    if ((e as { code?: string }).code === "23P01")
+      throw new DomainError("VERSION_CONFLICT");
+    throw e;
+  }
+}
+export async function updateAvailability(
+  pool: Pool,
+  session: string,
+  input: unknown,
+) {
+  const data = z
+    .object({
+      id: z.uuid(),
+      version: z.number().int().positive(),
+      startsAt: z.string(),
+      endsAt: z.string(),
+      timezone: z.string(),
+    })
+    .strict()
+    .parse(input);
+  const slot = availabilityInput.parse({
+    startsAt: data.startsAt,
+    endsAt: data.endsAt,
+    timezone: data.timezone,
+  });
+  try {
+    return await transaction(async (tx) => {
+      const actor = await requirePractitioner(
+        tx,
+        session,
+        "appointments.manage",
+      );
+      const changed = await tx.query(
+        "update mhistree.availability_slots set starts_at=$4,ends_at=$5,timezone=$6,version=version+1 where id=$1 and account_id=$2 and version=$3 and active returning id",
+        [
+          data.id,
+          actor.accountId,
+          data.version,
+          slot.startsAt,
+          slot.endsAt,
+          slot.timezone,
+        ],
+      );
+      if (!changed.rowCount) throw new DomainError("VERSION_CONFLICT");
+      return changed.rows[0];
     }, pool);
   } catch (e) {
     if ((e as { code?: string }).code === "23P01")

@@ -67,7 +67,10 @@ function ConnectionCard({
           {connection.status === "active"
             ? "Connected"
             : connection.status === "pending"
-              ? "Awaiting approval"
+              ? connection.patient_approved &&
+                connection.practitioner_approved === false
+                ? "Awaiting practitioner approval"
+                : "Awaiting approval"
               : "Access ended"}
         </span>
       </div>
@@ -81,7 +84,10 @@ function ConnectionCard({
       <div className="sharing-card-actions">
         <Btn sm onClick={onManage}>
           {connection.status === "pending"
-            ? "Review request"
+            ? connection.patient_approved &&
+              connection.practitioner_approved === false
+              ? "View request"
+              : "Review request"
             : connection.status === "revoked"
               ? "Review reconnection"
               : "Manage access"}
@@ -121,6 +127,7 @@ export function PatientControlsView() {
     const next = await api<Controls>("/api/connections");
     setData(next);
     setError("");
+    return next;
   }
   useEffect(() => {
     let current = true;
@@ -473,7 +480,21 @@ export function PatientControlsView() {
         <ConsentPanel
           {...selection}
           onClose={() => setSelection(null)}
-          onSaved={refresh}
+          onSaved={async () => {
+            const next = await refresh();
+            if (selection.practitioner) {
+              const saved = next.connections.find(
+                (item) =>
+                  item.practitioner_account_id === selection.practitioner!.id,
+              );
+              setTab(saved?.status === "pending" ? "requests" : "connections");
+              setNotice(
+                saved?.status === "pending"
+                  ? "Request sent. Awaiting practitioner approval."
+                  : "Connection approved.",
+              );
+            }
+          }}
         />
       )}
       {history && (

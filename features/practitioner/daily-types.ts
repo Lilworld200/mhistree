@@ -11,6 +11,7 @@ export type DailyItem = {
   patientName: string;
   unread: number;
   appointments: Appointment[];
+  upcomingAppointment?: Appointment | null;
   requests: {
     id: string;
     service_name: string;

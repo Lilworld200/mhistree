@@ -94,10 +94,18 @@ export async function connectPractitioner(
       ).rowCount
     )
       throw new DomainError("VERSION_CONFLICT");
+    const autoApprove = Boolean(
+      (
+        await tx.query(
+          "select practitioner_auto_approve from mhistree.connection_approval_settings where account_id=$1 for share",
+          [practitioner.id],
+        )
+      ).rows[0]?.practitioner_auto_approve,
+    );
     const connection = (
       await tx.query(
-        "insert into mhistree.connections(patient_person_id,kind,practitioner_account_id,status) values($1,'direct',$2,'pending') returning id,revision",
-        [actor.personId, data.practitionerId],
+        "insert into mhistree.connections(patient_person_id,kind,practitioner_account_id,status,patient_approved,practitioner_approved) values($1,'direct',$2,'pending',false,$3) returning id,revision",
+        [actor.personId, data.practitionerId, autoApprove],
       )
     ).rows[0];
     await consentInTransaction(tx, actor, {

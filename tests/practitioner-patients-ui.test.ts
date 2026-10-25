@@ -172,3 +172,16 @@ it("hides lookup/registration actions without the corresponding server-projected
   expect(host.textContent).not.toContain("Add patient");
   expect(host.textContent).toContain("Connected Patient");
 });
+
+it("active cards are single clickable surfaces without status/scope pills or an open-record button", async () => {
+  await mount();
+  const card = host.querySelector<HTMLAnchorElement>(
+    ".patient-overview-card a",
+  )!;
+  expect(card.getAttribute("href")).toBe("/clinician/patients/active-id");
+  expect(card.closest("article")?.textContent).toContain("Direct connection");
+  expect(card.closest("article")?.querySelector(".sharing-status")).toBeNull();
+  expect(card.closest("article")?.querySelector(".sharing-scope")).toBeNull();
+  expect(card.querySelector("button")).toBeNull();
+  expect(host.textContent).not.toContain("Open patient record");
+});

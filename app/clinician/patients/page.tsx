@@ -1,8 +1,10 @@
 import { requirePatient } from "@/lib/auth/patient";
 import { database } from "@/lib/db/client";
-import { directPatients } from "@/features/practitioner/patients";
+import {
+  directPatientCards,
+  assignedPatientCards,
+} from "@/features/practitioner/patient-overview";
 import { PatientsView } from "@/features/practitioner/patients-view";
-import { assignedPatients } from "@/features/organizations/assignments";
 import { professionalProfile } from "@/features/practitioner/profile";
 export default async function Page() {
   const { session } = await requirePatient();
@@ -17,10 +19,10 @@ export default async function Page() {
         connect: privileges.includes("records.write"),
       }}
       assigned={JSON.parse(
-        JSON.stringify(await assignedPatients(database(), session)),
+        JSON.stringify(await assignedPatientCards(database(), session)),
       )}
       initial={JSON.parse(
-        JSON.stringify(await directPatients(database(), session)),
+        JSON.stringify(await directPatientCards(database(), session)),
       )}
     />
   );

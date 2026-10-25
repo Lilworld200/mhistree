@@ -9,12 +9,14 @@ export function SidePanel({
   onClose,
   returnFocus,
   children,
+  className = "",
 }: {
   title: string;
   description: string;
   onClose: () => void;
   returnFocus?: () => HTMLElement | null;
   children: ReactNode;
+  className?: string;
 }) {
   const previousFocus = useRef(
     typeof document !== "undefined"
@@ -31,7 +33,7 @@ export function SidePanel({
       <Dialog.Portal>
         <Dialog.Overlay className="foundation-scrim" />
         <Dialog.Content
-          className="sharing-panel"
+          className={`sharing-panel ${className}`}
           onCloseAutoFocus={(event) => {
             event.preventDefault();
             (returnFocus?.() ?? previousFocus.current)?.focus();

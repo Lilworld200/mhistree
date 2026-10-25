@@ -1,11 +1,12 @@
+import { directPatientCards } from "@/features/practitioner/patient-overview";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
 import {
-  directPatients,
   practitionerLookup,
   registerDirectPatient,
   initiateDirectConnection,
+  respondDirectConnection,
 } from "@/features/practitioner/patients";
 import {
   mutationGuard,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/http";
 export async function GET(r: NextRequest) {
   try {
-    return success(await directPatients(database(), sessionFrom(r)));
+    return success(await directPatientCards(database(), sessionFrom(r)));
   } catch (e) {
     return failure(e);
   }
@@ -26,7 +27,7 @@ export async function POST(r: NextRequest) {
     mutationGuard(r);
     const d = z
       .object({
-        action: z.enum(["lookup", "register", "connect"]),
+        action: z.enum(["lookup", "register", "connect", "respond"]),
         data: z.unknown(),
       })
       .strict()
@@ -36,6 +37,7 @@ export async function POST(r: NextRequest) {
         lookup: practitionerLookup,
         register: registerDirectPatient,
         connect: initiateDirectConnection,
+        respond: respondDirectConnection,
       }[d.action](database(), sessionFrom(r), d.data),
     );
   } catch (e) {

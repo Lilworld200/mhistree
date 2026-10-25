@@ -1,3 +1,7 @@
+## Calendar booking contract — 2026-10-25
+
+`createPractitionerAppointment(pool, session, context, input)` shares request validation/transaction/idempotency/overlap protection with patient booking. Input is `{connectionId, requestKey, slot}`; practitionerId is prohibited. The server requires the signed-in approved direct practitioner to own the selected connection and possess current appointments.manage consent/privilege. It creates `accepted` and audits `appointment.booked` in the same transaction. Replays verify identity, time and timezone. `changeAppointment` keeps an accepted booking accepted only when its direct clinician reschedules it; patient and pending-request reschedules still become requested. Date/time changes never edit patient identity. The calendar source migration allows deliberate authorized direct booking outside advertised availability; other contexts retain the prior availability guard. No external calendar or notification delivery provider was added.
+
 # Shared appointments
 
 server.ts owns requestAppointment, changeAppointment, listAppointments and current can_participate checks. One explicit patient/direct/org context is required. SQL care migration enforces clinician and patient interval exclusion concurrently; service version locks prevent stale changes. Patient requests/reschedules/cancels; the assigned qualified provider accepts/declines. Only reschedule accepts replacement time; retries compare target, interval and timezone. Revocation/narrowing pauses pending work; reconnect never resumes it.

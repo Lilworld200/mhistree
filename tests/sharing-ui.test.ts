@@ -170,7 +170,8 @@ it("separates connections and requests, and opens named history with focus retur
   expect(document.activeElement).toBe(trigger);
 });
 it("search is read-only until the patient reviews and confirms categories", async () => {
-  await mount([]);
+  const connections: Connection[] = [];
+  await mount(connections);
   const input = host.querySelector<HTMLInputElement>('input[type="search"]')!;
   await act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -191,6 +192,14 @@ it("search is read-only until the patient reviews and confirms categories", asyn
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
     "What can they access?",
   );
+  connections.push({
+    ...direct,
+    practitioner_account_id: "doctor-new",
+    display_name: "Dr. New Doctor",
+    status: "pending",
+    patient_approved: true,
+    practitioner_approved: false,
+  });
   await act(async () =>
     document
       .querySelector<HTMLFormElement>(".sharing-consent-form")!
@@ -206,6 +215,15 @@ it("search is read-only until the patient reviews and confirms categories", asyn
       }),
     }),
   );
+  expect(host.textContent).toContain(
+    "Request sent. Awaiting practitioner approval.",
+  );
+  await act(async () => button("View request").click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "This request is awaiting practitioner approval",
+  );
+  expect(document.querySelector(".sharing-consent-form")).toBeNull();
+  expect(button("Withdraw request")).toBeDefined();
 });
 it("narrowing cannot enable categories outside the active grant, and revocation requires confirmation", async () => {
   await mount([direct]);

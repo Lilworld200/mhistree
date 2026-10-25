@@ -2,32 +2,8 @@ import "server-only";
 import type { Pool } from "pg";
 import { withAccess } from "@/features/access/server";
 import { appendEvent } from "@/features/audit/server";
-export function medicationPresentation(
-  body: { medication?: { useStatus: string; plannedEnd: string | null } },
-  now = new Date(),
-) {
-  const use = body.medication;
-  if (!use)
-    return {
-      useStatus: "unknown",
-      explanation: "Current use has not been established.",
-    };
-  if (
-    use.useStatus === "taking" &&
-    use.plannedEnd &&
-    use.plannedEnd < now.toISOString().slice(0, 10)
-  )
-    return {
-      useStatus: "unknown",
-      explanation:
-        "The planned course has ended. Actual current use is not confirmed; the original report is retained.",
-    };
-  return {
-    useStatus: use.useStatus,
-    explanation:
-      "Patient-reported use; a prescription does not prove use or fulfillment.",
-  };
-}
+import { medicationPresentation } from "./current-state-presentation";
+export { medicationPresentation } from "./current-state-presentation";
 export async function healthState(pool: Pool, session: string) {
   return withAccess(pool, session, { kind: "patient" }, async (a) => {
     const rows = (

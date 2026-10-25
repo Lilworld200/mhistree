@@ -6,86 +6,11 @@ import { api, errorMessage } from "@/lib/client-api";
 import type { Appointment } from "./daily-types";
 import { isCareAccessError, careTime } from "./daily-types";
 
-export function AvailabilityPanel({
-  onClose,
-  onSaved,
-  returnFocus,
-  onAccessLost,
-}: {
-  onClose: () => void;
-  onSaved: () => Promise<void>;
-  returnFocus: () => HTMLElement | null;
-  onAccessLost: (error: unknown) => void;
-}) {
-  const [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  return (
-    <SidePanel
-      title="Add availability"
-      description="Choose a time when patients can request an appointment."
-      onClose={onClose}
-      returnFocus={returnFocus}
-    >
-      <div className="sharing-panel-body">
-        <form
-          className="account-form practitioner-panel-form"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            const form = new FormData(event.currentTarget);
-            setBusy(true);
-            setError("");
-            try {
-              const start = new Date(String(form.get("start"))),
-                end = new Date(String(form.get("end")));
-              if (
-                start <= new Date() ||
-                end <= start ||
-                end.getTime() - start.getTime() > 86400000
-              )
-                throw new Error("VALIDATION_FAILED");
-              await api("/api/practitioner/today", {
-                action: "add",
-                data: {
-                  startsAt: start.toISOString(),
-                  endsAt: end.toISOString(),
-                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                },
-              });
-              await onSaved();
-              onClose();
-            } catch (e) {
-              if (isCareAccessError(e)) onAccessLost(e);
-              setError(errorMessage(e));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <label>
-            Start
-            <input
-              name="start"
-              type="datetime-local"
-              required
-              disabled={busy}
-            />
-          </label>
-          <label>
-            End
-            <input name="end" type="datetime-local" required disabled={busy} />
-          </label>
-          <p className="sharing-help">
-            Times use your device’s timezone. Choose a future interval of up to
-            24 hours. Overlapping availability is checked when saving.
-          </p>
-          <Btn kind="dark" type="submit" disabled={busy}>
-            {busy ? "Saving…" : "Save availability"}
-          </Btn>
-        </form>
-        {error && <p role="alert">{error}</p>}
-      </div>
-    </SidePanel>
-  );
+export function localInput(value: string) {
+  const date = new Date(value);
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    .toISOString()
+    .slice(0, 16);
 }
 
 export function AppointmentPanel({
@@ -112,6 +37,7 @@ export function AppointmentPanel({
     [error, setError] = useState("");
   return (
     <SidePanel
+      className="schedule-panel"
       title="Manage appointment"
       description={patientName}
       onClose={onClose}
@@ -175,7 +101,11 @@ export function AppointmentPanel({
                   <option value="decline">Decline appointment</option>
                 </>
               )}
-              <option value="reschedule">Propose a new time</option>
+              <option value="reschedule">
+                {appointment.state === "accepted"
+                  ? "Change date or time"
+                  : "Propose a new time"}
+              </option>
               <option value="cancel">Cancel appointment</option>
             </select>
           </label>
@@ -184,6 +114,7 @@ export function AppointmentPanel({
               <label>
                 New start
                 <input
+                  defaultValue={localInput(appointment.starts_at)}
                   name="start"
                   type="datetime-local"
                   required
@@ -193,6 +124,7 @@ export function AppointmentPanel({
               <label>
                 New end
                 <input
+                  defaultValue={localInput(appointment.ends_at)}
                   name="end"
                   type="datetime-local"
                   required
@@ -201,8 +133,8 @@ export function AppointmentPanel({
               </label>
               <p className="sharing-help">
                 Use a future interval of up to 8 hours in your device’s
-                timezone. Rescheduling returns the appointment to requested
-                status.
+                timezone. Confirmed appointments stay confirmed when you move
+                them; requests remain pending until accepted.
               </p>
             </>
           )}

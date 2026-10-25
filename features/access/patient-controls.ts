@@ -11,7 +11,7 @@ export async function patientConnections(pool: Pool, session: string) {
     const actor = await verifySession(tx, session);
     const connections = (
       await tx.query(
-        `select c.id,c.kind,c.status,c.revision,
+        `select c.id,c.kind,c.status,c.revision,c.patient_approved,c.practitioner_approved,
  coalesce(p.display_name,o.display_name,case when c.kind='organization' then 'Organization awaiting profile details' else 'Practitioner' end) display_name,c.practitioner_account_id,
  s.categories,s.exclusions,s.method,s.recorded_at,s.origin_person_ids,s.origin_context_ids
  from mhistree.connections c left join mhistree.accounts a on a.id=c.practitioner_account_id left join mhistree.persons p on p.id=a.person_id
@@ -90,6 +90,24 @@ export async function consentInTransaction(
     ).rowCount
   )
     throw new DomainError("ACCESS_DENIED");
+  if (
+    connection.kind === "direct" &&
+    data.mode === "approve" &&
+    connection.patient_approved &&
+    !connection.practitioner_approved
+  )
+    throw new DomainError("VERSION_CONFLICT");
+  let practitionerApproved = connection.practitioner_approved;
+  if (connection.kind === "direct" && data.mode === "reconnect") {
+    practitionerApproved = Boolean(
+      (
+        await tx.query(
+          "select practitioner_auto_approve from mhistree.connection_approval_settings where account_id=$1 for share",
+          [connection.practitioner_account_id],
+        )
+      ).rows[0]?.practitioner_auto_approve,
+    );
+  }
   const prior = (
     await tx.query(
       "select * from mhistree.consents where connection_id=$1 order by recorded_at desc,id desc limit 1",
@@ -121,8 +139,14 @@ export async function consentInTransaction(
   );
   const changed = (
     await tx.query(
-      "update mhistree.connections set status='active',revision=revision+1 where id=$1 returning revision",
-      [connection.id],
+      "update mhistree.connections set status=$2,patient_approved=true,practitioner_approved=$3,revision=revision+1 where id=$1 returning revision",
+      [
+        connection.id,
+        connection.kind !== "direct" || practitionerApproved
+          ? "active"
+          : "pending",
+        practitionerApproved,
+      ],
     )
   ).rows[0];
   if (data.mode === "narrow")

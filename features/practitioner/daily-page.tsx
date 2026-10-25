@@ -15,7 +15,21 @@ export async function PractitionerDailyPage({
   const pool = database(),
     { profile } = await professionalProfile(pool, session);
   if (profile?.status !== "approved") redirect("/clinician/profile");
-  const daily = await practitionerToday(pool, session);
+  const now = new Date();
+  const range =
+    view === "schedule"
+      ? {
+          from: new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0),
+          ).toISOString(),
+          to: new Date(
+            Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 2),
+          ).toISOString(),
+        }
+      : undefined;
+  const daily = range
+    ? await practitionerToday(pool, session, range)
+    : await practitionerToday(pool, session);
   return (
     <TodayView
       view={view}

@@ -33,8 +33,9 @@ export function PatientEntryPanel({
     [error, setError] = useState("");
   const [candidates, setCandidates] = useState<PatientCandidate[] | null>(null),
     [selected, setSelected] = useState<
-      (PatientCandidate & { requestKey: string }) | null
+      (PatientCandidate & { requestKey: string; exactAlias?: string }) | null
     >(null);
+  const [lookupAlias, setLookupAlias] = useState("");
   const [method, setMethod] = useState("login"),
     [receipt, setReceipt] = useState<{ alias: string } | null>(null);
   return (
@@ -125,6 +126,9 @@ export function PatientEntryPanel({
                       patientPersonId: selected.personId,
                       requestKey: selected.requestKey,
                       method,
+                      ...(selected.exactAlias
+                        ? { exactAlias: selected.exactAlias }
+                        : {}),
                       categories,
                       exclusions: [],
                       ...(method === "in-person"
@@ -187,8 +191,8 @@ export function PatientEntryPanel({
                 </>
               ) : (
                 <p className="sharing-help">
-                  The request stays pending until the patient approves it in
-                  Sharing.
+                  The patient confirms in Sharing unless they have already
+                  enabled automatic approval for this ID and requested scope.
                 </p>
               )}
               <Btn type="submit" kind="dark" disabled={busy}>
@@ -211,6 +215,7 @@ export function PatientEntryPanel({
                 setError("");
                 setCandidates(null);
                 try {
+                  setLookupAlias(String(fields.get("alias")));
                   setCandidates(
                     await api<PatientCandidate[]>(
                       "/api/practitioner/patients",
@@ -292,6 +297,7 @@ export function PatientEntryPanel({
                         setSelected({
                           ...person,
                           requestKey: crypto.randomUUID(),
+                          exactAlias: lookupAlias,
                         });
                         setMethod("login");
                         setError("");

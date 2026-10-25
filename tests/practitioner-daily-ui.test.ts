@@ -348,6 +348,13 @@ it("reschedule requires replacement dates and keeps them out of other actions", 
 });
 it("availability removal requires confirmation and preserves version checks", async () => {
   await daily("schedule");
+  await act(async () => {
+    [...host.querySelectorAll<HTMLButtonElement>(".schedule-date-cell button")]
+      .find(
+        (button) => button.textContent === String(new Date(start).getDate()),
+      )!
+      .click();
+  });
   await click("Remove slot");
   expect(request).not.toHaveBeenCalled();
   await click("Confirm removal");
@@ -355,6 +362,202 @@ it("availability removal requires confirmation and preserves version checks", as
     action: "remove",
     data: { id: "slot", version: 2 },
   });
+});
+it("calendar joins adjacent bookings, fades past bookings and leaves requests unfilled", async () => {
+  const now = new Date(),
+    year = now.getFullYear(),
+    month = now.getMonth();
+  const booking = (day: number, state = "accepted") => ({
+    id: `day-${day}`,
+    version: 1,
+    state,
+    starts_at: new Date(year, month, day, 9).toISOString(),
+    ends_at: new Date(year, month, day, 10).toISOString(),
+  });
+  const sample = {
+    ...initial,
+    items: [
+      {
+        ...initial.items[0],
+        appointments: [
+          booking(8),
+          booking(9),
+          booking(10),
+          booking(12, "requested"),
+        ],
+      },
+    ],
+  };
+  await render(
+    createElement(TodayView, {
+      initial: sample,
+      view: "schedule",
+      canManageAppointments: true,
+    }),
+  );
+  expect(
+    host.querySelectorAll(
+      ".schedule-date-cell.is-booked, .schedule-date-cell.is-past",
+    ),
+  ).toHaveLength(3);
+  const middle = [...host.querySelectorAll(".schedule-date-cell")].find(
+    (cell) => cell.textContent === "9",
+  )!;
+  // Runs wrap visually at the week boundary instead of bridging into empty cells.
+  const weekday = new Date(year, month, 9).getDay();
+  expect(middle.classList.contains("join-before")).toBe(weekday !== 0);
+  expect(middle.classList.contains("join-after")).toBe(weekday !== 6);
+  const eighth = [...host.querySelectorAll(".schedule-date-cell")].find(
+    (cell) => cell.textContent === "8",
+  )!;
+  expect(eighth.classList.contains("is-past")).toBe(
+    new Date(year, month, 8, 10).getTime() <= Date.now(),
+  );
+  expect(
+    [...host.querySelectorAll(".schedule-date-cell")]
+      .find((cell) => cell.textContent === "12")!
+      .classList.contains("is-booked"),
+  ).toBe(false);
+  expect(host.textContent).not.toContain("Your availability");
+  await act(async () =>
+    (eighth.querySelector("button") as HTMLButtonElement).click(),
+  );
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Synthetic patient",
+  );
+});
+it("empty date creates a real connected-patient booking and refreshes the calendar", async () => {
+  await daily("schedule");
+  const date = new Date(start);
+  await act(async () =>
+    [...host.querySelectorAll<HTMLButtonElement>(".schedule-date-cell button")]
+      .find((button) => button.textContent === String(date.getDate()))!
+      .click(),
+  );
+  const select = document.querySelector<HTMLSelectElement>(
+    'select[name="patient"]',
+  )!;
+  select.value = "connection";
+  document.querySelector<HTMLInputElement>('input[name="start"]')!.value =
+    `${start.slice(0, 10)}T14:00`;
+  document.querySelector<HTMLInputElement>('input[name="end"]')!.value =
+    `${start.slice(0, 10)}T14:30`;
+  await submit();
+  expect(request).toHaveBeenCalledWith(
+    "/api/practitioner/workspace",
+    expect.objectContaining({
+      connectionId: "connection",
+      action: "appointment-create",
+      data: expect.objectContaining({
+        connectionId: "connection",
+        requestKey: expect.any(String),
+        slot: expect.objectContaining({
+          startsAt: expect.any(String),
+          endsAt: expect.any(String),
+          timezone: expect.any(String),
+        }),
+      }),
+    }),
+  );
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(
+    request.mock.calls.some(([url]) => String(url).includes("?from=")),
+  ).toBe(true);
+});
+it("approval maps the confirmed date and history replaces the availability header action", async () => {
+  await daily("schedule");
+  const accepted = structuredClone(initial);
+  accepted.items[0].appointments[0].state = "accepted";
+  request.mockResolvedValueOnce({}).mockResolvedValueOnce(accepted);
+  await click("Manage appointment");
+  await submit();
+  expect(host.querySelector(".schedule-date-cell.is-booked")).not.toBeNull();
+  expect(host.textContent).not.toContain("Add availability");
+  await click("History");
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Appointment history",
+  );
+});
+it("upcoming schedule selects the nearest confirmed booking independently of the calendar month", async () => {
+  const sample = structuredClone(initial);
+  sample.items[0].appointments = [
+    {
+      ...sample.items[0].appointments[0],
+      id: "past",
+      state: "accepted",
+      starts_at: new Date(Date.now() - 86400000).toISOString(),
+      ends_at: new Date(Date.now() - 82800000).toISOString(),
+    },
+  ];
+  sample.items[0].upcomingAppointment = {
+    id: "future",
+    state: "accepted",
+    version: 2,
+    starts_at: new Date(Date.now() + 40 * 86400000).toISOString(),
+    ends_at: new Date(Date.now() + 40 * 86400000 + 1800000).toISOString(),
+    timezone: "UTC",
+  };
+  sample.items.push({
+    ...sample.items[0],
+    connectionId: "later-connection",
+    patientName: "Later patient",
+    upcomingAppointment: {
+      ...sample.items[0].upcomingAppointment,
+      id: "later",
+      starts_at: new Date(Date.now() + 50 * 86400000).toISOString(),
+      ends_at: new Date(Date.now() + 50 * 86400000 + 1800000).toISOString(),
+    },
+  });
+  const navbar = document.createElement("div");
+  await render(
+    createElement(
+      MobileTopbarTarget.Provider,
+      { value: navbar },
+      createElement(TodayView, {
+        initial: sample,
+        view: "schedule",
+        canManageAppointments: true,
+      }),
+    ),
+  );
+  const card = host.querySelector(".schedule-next-card")!;
+  expect(card.textContent).toContain("Synthetic patient");
+  expect(card.textContent).not.toContain("Later patient");
+  expect(host.textContent).not.toContain("Recent history");
+  const mobileButton = navbar.querySelector<HTMLButtonElement>("button")!;
+  expect(mobileButton.textContent).toBe("Upcoming schedule");
+  await act(async () => mobileButton.click());
+  expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+    "Synthetic patient",
+  );
+  expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain(
+    "Later patient",
+  );
+  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close panel"]')!.click());
+});
+it("pending requests stay outside the upcoming preview", async () => {
+  await daily("schedule");
+  expect(host.querySelector(".schedule-next-card")?.textContent).toContain(
+    "No upcoming schedule",
+  );
+  expect(host.querySelector(".schedule-requests")?.textContent).toContain(
+    "Synthetic patient",
+  );
+});
+it("month navigation reloads a bounded range and clears care on access failure", async () => {
+  await daily("schedule");
+  request.mockRejectedValueOnce(new Error("ACCESS_REVOKED"));
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Previous month"]')!
+      .click(),
+  );
+  const url = new URL(request.mock.calls[0][0], "http://localhost");
+  expect(url.searchParams.has("from")).toBe(true);
+  expect(url.searchParams.has("to")).toBe(true);
+  expect(host.querySelector(".schedule-calendar")).toBeNull();
+  expect(host.textContent).not.toContain("Synthetic patient");
+  expect(host.querySelector('[role="alert"]')).not.toBeNull();
 });
 it("read-only professional capabilities do not expose appointment mutations", async () => {
   await daily("schedule", false);

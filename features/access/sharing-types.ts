@@ -3,6 +3,8 @@ export type Connection = {
   kind: "direct" | "organization";
   status: "active" | "pending" | "revoked";
   revision: number;
+  patient_approved?: boolean;
+  practitioner_approved?: boolean;
   display_name: string;
   practitioner_account_id: string | null;
   categories: string[] | null;

@@ -3,6 +3,8 @@ import React from "react";
 /* Rounded-stroke icon geometry shared across the whole product. */
 
 const PATHS = {
+  chevronRight: "M9 5l7 7-7 7",
+  arrowLeft: "M19 12H5M12 19l-7-7 7-7",
   chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
   pulse: "M22 12h-4l-3 9L9 3l-3 9H2",
   heart:

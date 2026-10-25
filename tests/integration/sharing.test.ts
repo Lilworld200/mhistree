@@ -7,6 +7,7 @@ import {
   connectPractitioner,
   patientAccessHistory,
 } from "@/features/access/sharing";
+import { respondDirectConnection } from "@/features/practitioner/patients";
 import { patientConnections } from "@/features/access/patient-controls";
 import {
   revokeConnection,
@@ -75,7 +76,14 @@ it("patient confirmation creates scoped consent atomically and concurrent retry 
   expect(results[1].id).toBe(connection);
   const rows = (await patientConnections(db.pool, patient.session)).connections;
   expect(rows).toHaveLength(1);
-  expect(rows[0].status).toBe("active");
+  expect(rows[0].status).toBe("pending");
+  expect(rows[0].patient_approved).toBe(true);
+  expect(rows[0].practitioner_approved).toBe(false);
+  await respondDirectConnection(db.pool, doctor.session, {
+    id: connection,
+    version: rows[0].revision,
+    action: "approve",
+  });
   expect(rows[0].categories).toEqual(["allergy"]);
   const resource = {
     patientPersonId: patient.personId,
@@ -139,8 +147,8 @@ it("history shows meaningful actors, supports exact timestamp pagination, filter
     before: first.nextCursor,
   });
   const combined = [...first.items, ...second.items];
-  expect(combined).toHaveLength(36);
-  expect(new Set(combined.map((e) => e.id)).size).toBe(36);
+  expect(combined).toHaveLength(37);
+  expect(new Set(combined.map((e) => e.id)).size).toBe(37);
   expect(JSON.stringify(combined)).not.toContain(doctor.accountId);
   await expect(
     patientAccessHistory(db.pool, other.session, { connectionId: connection }),

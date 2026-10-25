@@ -4,6 +4,7 @@ import { database } from "@/lib/db/client";
 import {
   practitionerToday,
   saveAvailability,
+  updateAvailability,
   removeAvailability,
 } from "@/features/practitioner/daily";
 import {
@@ -15,7 +16,13 @@ import {
 } from "@/lib/http";
 export async function GET(r: NextRequest) {
   try {
-    return success(await practitionerToday(database(), sessionFrom(r)));
+    const from = r.nextUrl.searchParams.get("from"),
+      to = r.nextUrl.searchParams.get("to");
+    const range =
+      from || to
+        ? z.object({ from: z.string(), to: z.string() }).parse({ from, to })
+        : undefined;
+    return success(await practitionerToday(database(), sessionFrom(r), range));
   } catch (e) {
     return failure(e);
   }
@@ -24,15 +31,18 @@ export async function POST(r: NextRequest) {
   try {
     mutationGuard(r);
     const d = z
-      .object({ action: z.enum(["add", "remove"]), data: z.unknown() })
+      .object({
+        action: z.enum(["add", "update", "remove"]),
+        data: z.unknown(),
+      })
       .strict()
       .parse(await jsonBody(r));
     return success(
-      await (d.action === "add" ? saveAvailability : removeAvailability)(
-        database(),
-        sessionFrom(r),
-        d.data,
-      ),
+      await {
+        add: saveAvailability,
+        update: updateAvailability,
+        remove: removeAvailability,
+      }[d.action](database(), sessionFrom(r), d.data),
     );
   } catch (e) {
     return failure(e);

@@ -1,6 +1,9 @@
 import "server-only";
 import type { PoolClient } from "pg";
 export type AuditAction =
+  | "connection.approval-settings.updated"
+  | "connection.practitioner.approved"
+  | "connection.practitioner.declined"
   | "auth.supabase.activated"
   | "auth.supabase.staff-recovery.completed"
   | "auth.email.password-reset"
@@ -25,6 +28,7 @@ export type AuditAction =
   | "professional.approved"
   | "professional.rejected"
   | "professional.suspended"
+  | "appointment.booked"
   | "appointment.requested"
   | "appointment.updated"
   | "care.message.saved"

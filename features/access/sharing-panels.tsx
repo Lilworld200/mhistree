@@ -55,6 +55,11 @@ export function ConsentPanel({
   const [requestKey] = useState(() => crypto.randomUUID());
   const name = connection?.display_name ?? practitioner!.display_name;
   const active = connection?.status === "active";
+  const awaitingPractitioner =
+    connection?.kind === "direct" &&
+    connection.status === "pending" &&
+    connection.patient_approved &&
+    connection.practitioner_approved === false;
   return (
     <SharingPanel
       title={active ? "Manage sharing" : "Review sharing"}
@@ -66,14 +71,16 @@ export function ConsentPanel({
           <Icon n="shield" />
           <p>
             You choose which parts of your health record to share. This includes
-            future finalized records in those categories. Private notes and
-            drafts are excluded.
+            future finalized records in those categories once both sides
+            approve. Private notes and drafts are excluded.
           </p>
         </div>
         {connection?.method && (
           <p className="sharing-help">
             {connection.status === "pending"
-              ? "Connection request received"
+              ? awaitingPractitioner
+                ? "Connection request sent"
+                : "Connection request received"
               : "Consent recorded"}{" "}
             {connection.status === "pending"
               ? ""
@@ -92,127 +99,140 @@ export function ConsentPanel({
             access you allow.
           </p>
         )}
-        <form
-          className="sharing-consent-form"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            setBusy(true);
-            setError("");
-            const form = new FormData(event.currentTarget),
-              categories = form.getAll("category").map(String);
-            if (!categories.length) {
-              setError("Choose at least one category, or end this connection.");
-              setBusy(false);
-              return;
-            }
-            try {
-              if (connection)
-                await api("/api/connections", {
-                  action: "consent",
-                  data: {
-                    connectionId: connection.id,
-                    version: connection.revision,
-                    mode: active
-                      ? "narrow"
-                      : connection.status === "revoked"
-                        ? "reconnect"
-                        : "approve",
-                    categories,
-                    exclusions: active
-                      ? (connection.exclusions ?? [])
-                      : (connection.exclusions ?? []).filter(
-                          (c) => !categories.includes(c),
-                        ),
-                  },
-                });
-              else
-                await api("/api/connections", {
-                  action: "connect",
-                  data: {
-                    practitionerId: practitioner!.id,
-                    requestKey,
-                    categories,
-                    exclusions: [],
-                  },
-                });
-              await onSaved();
-              onClose();
-            } catch (e) {
-              setError(errorMessage(e));
-            } finally {
-              setBusy(false);
-            }
-          }}
-        >
-          <fieldset disabled={busy}>
-            <legend>What can they access?</legend>
-            <div className="sharing-category-grid">
-              {category.options.map((c) => {
-                const excluded = connection?.exclusions?.includes(c),
-                  allowed =
-                    !active || Boolean(connection.categories?.includes(c));
-                return (
-                  <label key={c} className="sharing-category">
-                    <input
-                      type="checkbox"
-                      name="category"
-                      value={c}
-                      defaultChecked={
-                        allowed &&
-                        !excluded &&
-                        (connection?.categories?.includes(c) ?? true)
-                      }
-                      disabled={active && (!allowed || excluded)}
-                    />
-                    <span>
-                      {categoryLabels[c]}
-                      {excluded && (
-                        <small>
-                          {active
-                            ? "Excluded from sharing"
-                            : "Previously excluded"}
-                        </small>
-                      )}
-                    </span>
-                  </label>
+        {awaitingPractitioner ? (
+          <p className="sharing-callout">
+            Your sharing choices are saved. This request is awaiting
+            practitioner approval; no record access has started.
+          </p>
+        ) : (
+          <form
+            className="sharing-consent-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              setBusy(true);
+              setError("");
+              const form = new FormData(event.currentTarget),
+                categories = form.getAll("category").map(String);
+              if (!categories.length) {
+                setError(
+                  "Choose at least one category, or end this connection.",
                 );
-              })}
+                setBusy(false);
+                return;
+              }
+              try {
+                if (connection)
+                  await api("/api/connections", {
+                    action: "consent",
+                    data: {
+                      connectionId: connection.id,
+                      version: connection.revision,
+                      mode: active
+                        ? "narrow"
+                        : connection.status === "revoked"
+                          ? "reconnect"
+                          : "approve",
+                      categories,
+                      exclusions: active
+                        ? (connection.exclusions ?? [])
+                        : (connection.exclusions ?? []).filter(
+                            (c) => !categories.includes(c),
+                          ),
+                    },
+                  });
+                else
+                  await api("/api/connections", {
+                    action: "connect",
+                    data: {
+                      practitionerId: practitioner!.id,
+                      requestKey,
+                      categories,
+                      exclusions: [],
+                    },
+                  });
+                await onSaved();
+                onClose();
+              } catch (e) {
+                setError(errorMessage(e));
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <fieldset disabled={busy}>
+              <legend>What can they access?</legend>
+              <div className="sharing-category-grid">
+                {category.options.map((c) => {
+                  const excluded = connection?.exclusions?.includes(c),
+                    allowed =
+                      !active || Boolean(connection.categories?.includes(c));
+                  return (
+                    <label key={c} className="sharing-category">
+                      <input
+                        type="checkbox"
+                        name="category"
+                        value={c}
+                        defaultChecked={
+                          allowed &&
+                          !excluded &&
+                          (connection?.categories?.includes(c) ?? true)
+                        }
+                        disabled={active && (!allowed || excluded)}
+                      />
+                      <span>
+                        {categoryLabels[c]}
+                        {excluded && (
+                          <small>
+                            {active
+                              ? "Excluded from sharing"
+                              : "Previously excluded"}
+                          </small>
+                        )}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+            {active && (
+              <p className="sharing-help">
+                You can reduce existing access here. End the connection to stop
+                all access through it.
+              </p>
+            )}
+            {connection?.status === "revoked" && (
+              <p className="sharing-help">
+                Reconnecting requires fresh consent. Previously paused care must
+                be reviewed by your practitioner before it can resume.
+              </p>
+            )}
+            <div className="sharing-panel-actions">
+              <Btn type="button" onClick={onClose} disabled={busy}>
+                Cancel
+              </Btn>
+              <Btn type="submit" kind="dark" disabled={busy}>
+                {busy
+                  ? "Saving…"
+                  : active
+                    ? "Save sharing choices"
+                    : connection?.status === "revoked"
+                      ? "Confirm reconnection"
+                      : connection
+                        ? "Confirm sharing"
+                        : "Confirm and send request"}
+              </Btn>
             </div>
-          </fieldset>
-          {active && (
-            <p className="sharing-help">
-              You can reduce existing access here. End the connection to stop
-              all access through it.
-            </p>
-          )}
-          {connection?.status === "revoked" && (
-            <p className="sharing-help">
-              Reconnecting requires fresh consent. Previously paused care must
-              be reviewed by your practitioner before it can resume.
-            </p>
-          )}
-          <div className="sharing-panel-actions">
-            <Btn type="button" onClick={onClose} disabled={busy}>
-              Cancel
-            </Btn>
-            <Btn type="submit" kind="dark" disabled={busy}>
-              {busy
-                ? "Saving…"
-                : active
-                  ? "Save sharing choices"
-                  : connection?.status === "revoked"
-                    ? "Confirm reconnection"
-                    : "Confirm and connect"}
-            </Btn>
-          </div>
-        </form>
+          </form>
+        )}
         {connection && connection.status !== "revoked" && (
           <div className="sharing-end">
             {revoking ? (
               <>
                 <h3>
                   {connection.status === "pending"
-                    ? "Decline this request?"
+                    ? awaitingPractitioner
+                      ? "Withdraw this request?"
+                      : "Decline this request?"
                     : "End this connection?"}
                 </h3>
                 <p>
@@ -250,7 +270,9 @@ export function ConsentPanel({
             ) : (
               <Btn onClick={() => setRevoking(true)}>
                 {connection.status === "pending"
-                  ? "Decline request"
+                  ? awaitingPractitioner
+                    ? "Withdraw request"
+                    : "Decline request"
                   : "End connection"}
               </Btn>
             )}
@@ -271,6 +293,10 @@ const historyLabels: Record<string, string> = {
   "file.read.authorized": "Accessed a document",
   "connection.consent.updated": "Recorded or updated sharing consent",
   "connection.revoked": "Ended access through a connection",
+  "connection.practitioner.approved": "Practitioner approved the connection",
+  "connection.practitioner.declined": "Practitioner declined the connection",
+  "connection.approval-settings.updated":
+    "Updated automatic connection approval",
 };
 export function HistoryPanel({
   connection,
