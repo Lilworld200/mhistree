@@ -10,6 +10,8 @@ Owner-approved chat recovery (2026-10-26): practitioner discovery is a separate 
 
 Owner practitioner-notification decision (2026-10-26): use blue notification dots for incoming unread direct-care messages on Today, My patients and Care inbox navigation, the dashboard Care inbox shortcut, affected patient cards and the patient's Health/Care inbox controls. Health replaces the former Health summary label. Recent dashboard activity shows all loaded entries in a bounded left-aligned scroll area. A private symptom discussion or AI suggestion to contact a practitioner must not itself send an alert: the patient chooses and sends a care message/reviewed handoff. One unread message drives consistent badges; explicit acknowledgement of displayed messages clears those badges without resolving a clinical issue or completing care. Preserve current recipient scope, private-AI-chat isolation and one shared non-overlapping badge refresh owner.
 
+Owner repository cleanup decision (2026-10-26): remove the old reference-only legacy/ application. Historical code remains recoverable from Git; current source, migrations, original assets and authoritative design/playbook references remain at their active paths. Do not recreate or execute the retired application. This cleanup does not remove supported dependency paths such as pdfjs-dist/legacy or authorize database/data deletion.
+
 # Mhistree: portable product specification and agent rules
 
 Revision: 2026-10-14. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages, with subsequent explicit owner decisions recorded below.

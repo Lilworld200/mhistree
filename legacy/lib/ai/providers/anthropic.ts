@@ -1,5 +1,0 @@
-﻿/* SCAFFOLD STUB
- * 
- */
-export {}
-

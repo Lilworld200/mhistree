@@ -1,6 +1,6 @@
 # Mhistree rebuild
 
-Read AGENTS.md, WORKFLOW.md and the current playbook task packet before editing. This rebuild can run from the project checkout or the independent `codex/rebuild` worktree. `legacy/` preserves the old application and migrations as reference only; do not execute its cleanup or expose its APIs. Local runtime configuration remains specific to each checkout; merging source does not copy ignored environment or database files.
+Read AGENTS.md, WORKFLOW.md and the current playbook task packet before editing. This rebuild can run from the project checkout or the independent `codex/rebuild` worktree. The old reference-only `legacy/` application was removed at the owner's request on 2026-10-26; it remains recoverable from Git history (for example commit `89b6957673cdbc7f11c7777d279edcf1f76c274e`). Local runtime configuration remains specific to each checkout; merging source does not copy ignored environment or database files.
 
 ## Local shell
 
@@ -8,7 +8,7 @@ Use Node 24 and pnpm 10.33.2. Run `pnpm install --frozen-lockfile`, then `pnpm d
 
 Active MVP authentication uses Supabase email/password. See [manual SMTP and callback setup](docs/tasks/supabase-auth-setup.md). `pnpm exec tsx scripts/prepare-local.mts` prepares/resumes only a local synthetic application database and writes ignored DB/origin configuration; configure Supabase keys separately in ignored environment files. It does not migrate hosted patient data. Native PostgreSQL test clusters start/stop automatically. Current auth tests are `tests/integration/supabase-email.test.ts`; older auth/patient-account/identity-assistance/merge provider tests retain Keycloak foundation scenarios and require their historical .local fixture/Java25 provider. A full legacy suite is not a Supabase delivery test. Never deploy the local Keycloak test configuration.
 
-Checks: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:client`. The original checkout's lint failures are isolated under `legacy/`; active source must pass. Copy `.env.example` only when configuring a deliberately selected environment. Never copy legacy secrets or use the unrelated Reslz project.
+Checks: `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm check:client`. Active source must pass. Copy `.env.example` only when configuring a deliberately selected environment. Never copy historical secrets or use the unrelated Reslz project.
 
 ## Owners
 

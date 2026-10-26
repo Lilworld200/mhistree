@@ -42,7 +42,7 @@ Professional entry2026-10-20: app/(auth)/auth/professional and [entry] -> shared
 
 2026-10-14 current auth owner: `features/auth/email.ts` and `lib/auth/supabase.ts`, selected by `lib/auth/config.ts`; account entry uses email/password and verification. /auth/callback exchanges PKCE codes server-side; /auth/confirm provides invalid-link guidance and guarded /recovery/update composes `features/patient/account/email-callback.tsx`; /recovery composes `email-recovery-form.tsx`. [Auth contract](contracts/auth.md), [SMTP/callback setup](tasks/supabase-auth-setup.md), `tests/integration/supabase-email.test.ts`. Main project checkout now contains this active source; older rebuild-root/provider descriptions below are historical.
 
-Revision 2026-10-13. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The active source lives in the codex/rebuild worktree; old entrypoints below now have a `legacy/` prefix there. The following foundation owners are implemented; the older planning table retains historical targets, not claims of completion. Current T19-T31 owners are indexed below; no T32+ implementation is authorized by this phase.
+Historical revision 2026-10-13. Start with AGENTS and WORKFLOW, then the owning README/contracts/direct callers. The former reference-only legacy application was removed by owner instruction on 2026-10-26 and remains in Git history. Active app/components/features/lib and supabase migrations are at the repository root. The following foundation owners are implemented; the older planning table retains historical targets, not claims of completion. Current T19-T31 owners are indexed below; this older phase boundary is historical.
 
 | Implemented owner | Entry/API and evidence |
 | --- | --- |
