@@ -25,8 +25,8 @@ export default async function Section({
   if (!Object.hasOwn(sections, section)) notFound();
   return (
     <PageState title={`${sections[section]} is being prepared`}>
-      This section is not available yet. No health information is loaded or
-      changed.
+      This section is not available at the momment. No health information is
+      loaded or changed.
     </PageState>
   );
 }
