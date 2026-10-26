@@ -5,6 +5,7 @@ import { z } from "zod";
 import { recordNarrative } from "@/features/health-records/narrative";
 import { aiDebug } from "@/lib/ai/debug";
 import { searchTimelineInAccess } from "./timeline-search";
+import { getConnectedPractitionersInAccess } from "@/features/access/patient-controls";
 export type Evidence = {
   id: string;
   sourceId: string;
@@ -96,9 +97,14 @@ export async function retrieveEvidence(
             )
           ).rows
         : [];
+    const connectedPractitioners =
+      context.kind === "patient"
+        ? await getConnectedPractitionersInAccess(a.tx, patientPersonId)
+        : [];
     const result = {
       evidence,
       gaps,
+      connectedPractitioners,
       bounded:
         rows.length >= 8 ||
         evidence.length < rows.length ||

@@ -30,6 +30,38 @@ export async function patientConnections(pool: Pool, session: string) {
     return { connections, requests };
   }, pool);
 }
+
+export type ConnectedPractitionerSummary = {
+  connectionId: string;
+  name: string;
+  kind: "direct" | "organization";
+  canMessage: boolean;
+};
+
+export async function getConnectedPractitionersInAccess(
+  tx: PoolClient,
+  patientPersonId: string,
+): Promise<ConnectedPractitionerSummary[]> {
+  const rows = (
+    await tx.query(
+      `select c.id, c.kind, coalesce(p.display_name, o.display_name, 'Practitioner') as display_name,
+       mhistree.can_participate(c.id, 'messages.send') as can_message
+       from mhistree.connections c
+       left join mhistree.accounts a on a.id = c.practitioner_account_id
+       left join mhistree.persons p on p.id = a.person_id
+       left join mhistree.organizations o on o.id = c.organization_id
+       where mhistree.canonical_person(c.patient_person_id) = mhistree.canonical_person($1)
+         and c.status = 'active'`,
+      [patientPersonId],
+    )
+  ).rows;
+  return rows.map((r) => ({
+    connectionId: r.id as string,
+    name: r.display_name as string,
+    kind: r.kind as "direct" | "organization",
+    canMessage: Boolean(r.can_message),
+  }));
+}
 export const patientConsentSchema = z
   .object({
     connectionId: z.uuid(),

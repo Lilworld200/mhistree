@@ -33,6 +33,8 @@ export type Detail = Omit<Workspace, "state" | "recent"> & {
   recent: DisplayRecord[];
   limited: boolean;
   capabilities?: { work: boolean; requests: boolean; messages: boolean };
+  notifications?: { health: boolean; messages: boolean; ai: boolean };
+  handoverSummary?: string | null;
 };
 type Panel = "summary" | "ai" | "work" | "requests" | "messages";
 function ClinicalRecord({ record }: { record: DisplayRecord }) {
@@ -205,7 +207,12 @@ export function PatientDetailView({
     usePatientWorkspace<Detail>(connectionId, view, initialData, () =>
       setPanel(null),
     );
-  function tile(value: Panel, icon: IconName, description: string) {
+  function tile(
+    value: Panel,
+    icon: IconName,
+    description: string,
+    hasNotification?: boolean,
+  ) {
     return (
       <button
         type="button"
@@ -216,11 +223,42 @@ export function PatientDetailView({
           setPanel(value);
         }}
       >
-        <span className="patient-tile-icon">
+        <span className="patient-tile-icon" style={{ position: "relative" }}>
           <Icon n={icon} s={24} />
+          {hasNotification && (
+            <span
+              className="badge-dot"
+              style={{
+                position: "absolute",
+                top: "2px",
+                right: "2px",
+                background: "#ef4444",
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+              }}
+              aria-hidden="true"
+            />
+          )}
         </span>
         <div>
-          <h2>{titles[value]}</h2>
+          <h2>
+            {titles[value]}
+            {hasNotification && (
+              <span
+                style={{
+                  display: "inline-block",
+                  width: "7px",
+                  height: "7px",
+                  borderRadius: "50%",
+                  background: "#ef4444",
+                  marginLeft: "8px",
+                  verticalAlign: "middle",
+                }}
+                aria-label="New update"
+              />
+            )}
+          </h2>
           <p>{description}</p>
         </div>
         <Icon n="chevronRight" />
@@ -263,6 +301,7 @@ export function PatientDetailView({
               <PatientActionButton
                 icon="pulse"
                 label={titles.summary}
+                hasNotification={Boolean(data.notifications?.health)}
                 onClick={(event) => {
                   trigger.current = event.currentTarget;
                   setPanel("summary");
@@ -340,12 +379,14 @@ export function PatientDetailView({
               "ai",
               "spark",
               "Explore shared records and, when permitted, review and save care or private notes.",
+              Boolean(data.notifications?.ai),
             )}
             {(data.capabilities?.messages ?? data.messages !== null) &&
               tile(
                 "messages",
                 "chat",
                 "Communicate with this patient, separately from AI chat.",
+                Boolean(data.notifications?.messages),
               )}
           </div>
           {panel && (

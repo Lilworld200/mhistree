@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { Btn } from "@/components/ui/button";
+import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
 import type { ActingContext } from "@/features/access/server";
 import {
@@ -56,6 +57,8 @@ export type Workspace = {
       delivery_state: string;
     }[];
   } | null;
+  notifications?: { health: boolean; messages: boolean; ai: boolean };
+  handoverSummary?: string | null;
 };
 export function WorkspaceView({
   connectionId,
@@ -685,6 +688,43 @@ export function WorkspaceView({
               Separate from AI chat. Stored delivery does not mean the patient
               has read or acted on a message.
             </p>
+            {data.handoverSummary && (
+              <div
+                className="card handover-summary-card"
+                style={{
+                  marginBottom: "16px",
+                  borderLeft: "4px solid var(--accent, #3b82f6)",
+                  padding: "12px 16px",
+                  background: "var(--card-subtle, rgba(59, 130, 246, 0.05))",
+                }}
+              >
+                <h3
+                  style={{
+                    margin: "0 0 6px 0",
+                    fontSize: "14px",
+                    fontWeight: 600,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <Icon n="spark" s={16} /> Patient Summary from AI
+                </h3>
+                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink2)" }}>
+                  {data.handoverSummary}
+                </p>
+                <small
+                  style={{
+                    display: "block",
+                    marginTop: "6px",
+                    color: "var(--ink3)",
+                    fontSize: "11px",
+                  }}
+                >
+                  Clinical summary only. Raw patient-AI chat remains private to the patient.
+                </small>
+              </div>
+            )}
             {data.messages?.items.map((m) => (
               <article className="record-card" key={m.id}>
                 <p>{m.content}</p>
