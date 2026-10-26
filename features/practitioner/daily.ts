@@ -7,6 +7,7 @@ import { directPatients } from "./patients";
 import { withAccess } from "@/features/access/server";
 import type { ActingContext } from "@/features/access/server";
 import { DomainError } from "@/lib/errors";
+import { requireCare } from "@/features/appointments/server";
 export async function practitionerToday(
   pool: Pool,
   session: string,
@@ -219,17 +220,23 @@ export async function markThreadRead(
   session: string,
   connectionId: string,
   selectedContext?: Extract<ActingContext, { kind: "organization" }>,
+  throughSequence?: string,
 ) {
   z.uuid().parse(connectionId);
+  if (throughSequence)
+    z.string()
+      .regex(/^\d{1,18}$/)
+      .parse(throughSequence);
   return withAccess(
     pool,
     session,
     selectedContext ?? { kind: "direct", connectionId },
     async (a) => {
+      await requireCare(a, connectionId, "messages.send");
       const row = (
         await a.tx.query(
-          "select t.id,coalesce(max(m.sequence),0) sequence from mhistree.care_threads t left join mhistree.care_messages m on m.thread_id=t.id where t.connection_id=$1 group by t.id",
-          [connectionId],
+          "select t.id,coalesce(max(m.sequence),0) sequence from mhistree.care_threads t left join mhistree.care_messages m on m.thread_id=t.id and ($2::bigint is null or m.sequence<=$2::bigint) where t.connection_id=$1 group by t.id",
+          [connectionId, throughSequence ?? null],
         )
       ).rows[0];
       if (!row) throw new DomainError("ACCESS_DENIED");

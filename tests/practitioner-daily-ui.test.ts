@@ -159,7 +159,7 @@ it("dashboard puts workspace links and refresh above the blue card and keeps rem
     ),
   ).not.toBeNull();
 });
-it("activity previews the newest three with stable ties and expands independently from reminders", async () => {
+it("activity renders all loaded items in a scroll region with stable ties and independent reminders", async () => {
   const data = structuredClone(initial);
   data.notifications = [
     {
@@ -209,21 +209,15 @@ it("activity previews the newest three with stable ties and expands independentl
     "Appointment update",
     "Care message update",
   ]);
-  expect(list.querySelector(".daily-feed")!.children).toHaveLength(3);
-  const more = list.querySelector(".daily-disclosure")!;
-  expect(more.hasAttribute("inert")).toBe(true);
-  await click("Show all activity");
-  expect(more.hasAttribute("inert")).toBe(false);
-  expect(button("Show less").getAttribute("aria-expanded")).toBe("true");
+  expect(list.querySelector(".daily-feed")!.children).toHaveLength(5);
+  expect(list.getAttribute("tabindex")).toBe("0");
+  expect(list.querySelector(".daily-disclosure")).toBeNull();
   const drawer = host.querySelector<HTMLButtonElement>(".daily-drawer-toggle")!;
   expect(drawer.getAttribute("aria-expanded")).toBe("false");
   await act(async () => drawer.click());
-  expect(button("Show less").getAttribute("aria-expanded")).toBe("true");
-  await click("Show less");
   expect(drawer.getAttribute("aria-expanded")).toBe("true");
   await act(async () => drawer.click());
   expect(drawer.getAttribute("aria-expanded")).toBe("false");
-  expect(more.hasAttribute("inert")).toBe(true);
   expect(
     list.querySelector(
       'a[href="/clinician/patients/connection#care-text-inbox"]',
@@ -533,7 +527,11 @@ it("upcoming schedule selects the nearest confirmed booking independently of the
   expect(document.querySelector('[role="dialog"]')?.textContent).not.toContain(
     "Later patient",
   );
-  await act(async () => document.querySelector<HTMLButtonElement>('[aria-label="Close panel"]')!.click());
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>('[aria-label="Close panel"]')!
+      .click(),
+  );
 });
 it("pending requests stay outside the upcoming preview", async () => {
   await daily("schedule");

@@ -1,4 +1,5 @@
 export type ErrorCode =
+  | "DATABASE_PERMISSION_DENIED"
   | "DATABASE_UNAVAILABLE"
   | "VALIDATION_FAILED"
   | "EMAIL_DELIVERY_UNAVAILABLE"
@@ -18,4 +19,16 @@ export class DomainError extends Error {
     super(code);
     this.name = "DomainError";
   }
+}
+
+export function applicationErrorCode(error: unknown): ErrorCode {
+  if (error instanceof DomainError) return error.code;
+  if (
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "42501"
+  )
+    return "DATABASE_PERMISSION_DENIED";
+  return "PROVIDER_UNAVAILABLE";
 }

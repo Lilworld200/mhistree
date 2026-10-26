@@ -106,12 +106,17 @@ export function ChatView() {
     setProcessing((count) => count + 1);
     setProcessingError("");
     try {
-      const result = await api<{ state: string }>("/api/extraction", { messageId });
-      if (["succeeded", "partial", "held"].includes(result.state)) notifyRecordsChanged();
+      const result = await api<{ state: string }>("/api/extraction", {
+        messageId,
+      });
+      if (["succeeded", "partial", "held"].includes(result.state))
+        notifyRecordsChanged();
       if (["partial", "held", "failed"].includes(result.state))
-        setProcessingError(result.state === "held"
-          ? "Your message is saved. Some report details need clarification or review before they can appear in your timeline. Open Report processing below."
-          : "Your message is saved, but timeline processing is incomplete. Some details may already be recorded. Open Report processing below to review or retry.");
+        setProcessingError(
+          result.state === "held"
+            ? "Your message is saved. Some report details need clarification or review before they can appear in your timeline. Open Report processing below."
+            : "Your message is saved, but timeline processing is incomplete. Some details may already be recorded. Open Report processing below to review or retry.",
+        );
     } catch {
       setProcessingError(
         "Your message is saved, but record processing needs a retry. Open Report processing below.",
@@ -175,6 +180,7 @@ export function ChatView() {
               Conversation options
             </summary>
             <div className="chat-tools-panel card">
+              <Link href="/inbox">Contact a connected practitioner</Link>
               <label className="mlabel">
                 Saved conversation
                 <select

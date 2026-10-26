@@ -1,5 +1,7 @@
 # Durable care text messaging
 
+Unread notification integration2026-10-26: incoming saved direct-care messages drive the clinician's blue Today/My patients/Care inbox/patient-card/Health markers. No AI phrase or private chat sends a message automatically. Practitioner `markThreadRead` checks current messages.send participation and UI supplies throughSequence from displayed messages, preserving concurrently arriving unread messages. The shared snapshot contains connection IDs/counts only; no message text or patient AI transcript. Existing care send idempotency/attribution/RLS remain unchanged. Patient chat's Conversation options links to /inbox so the patient can select a recipient and review/send their own care message. No full AI-summary handoff is claimed.
+
 server.ts owns sendCareMessage and careMessages. This is separate from AI chat. Current can_participate validates explicit context, connection and applicable qualification/membership/assignment/privilege. Messages retain signed-in author, order and idempotency key; transaction writes audit and outbox. Stored means durable, not read or clinical task completion. Pages are bounded and unauthorized participants are denied.
 
 /api/care is the patient transport; T25 provides provider inbox producers. Narrowed/revoked access prevents further thread use; reconnect does not resume paused clinical work. Existing stored messages are retained. No email/push delivery daemon, audio or video is implied. See tests/integration/care.test.ts.

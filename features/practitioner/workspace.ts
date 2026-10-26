@@ -123,33 +123,13 @@ export function directWorkspace(
         : null;
 
     const unreadMessages = flags.can_message
-      ? (
+      ? ((
           await a.tx.query(
             "select count(*)::int n from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where t.connection_id=$1 and m.author_account_id<>$2 and m.sequence>coalesce((select sequence from mhistree.message_read_positions where account_id=$2 and thread_id=t.id),0)",
             [connectionId, a.actor.accountId],
           )
-        ).rows[0]?.n ?? 0
+        ).rows[0]?.n ?? 0)
       : 0;
-
-    const recentPatientReport = (
-      await a.tx.query(
-        "select e.body->>'text' as text, e.category, e.recorded_at from mhistree.record_heads h join mhistree.contributions e on e.id=h.current_id where e.patient_person_id=$1 and e.source_status='patient-reported' and e.recorded_at > clock_timestamp() - interval '48 hours' order by e.recorded_at desc limit 1",
-        [personId],
-      )
-    ).rows[0];
-
-    const hasNewSymptoms = Boolean(recentPatientReport);
-
-    const pendingEscalation = (
-      await a.tx.query(
-        "select id, event_key, kind from mhistree.notifications where connection_id=$1 and account_id=$2 and read_at is null order by created_at desc limit 1",
-        [connectionId, a.actor.accountId],
-      )
-    ).rows[0];
-
-    const handoverSummary = recentPatientReport
-      ? `Patient recently reported ${recentPatientReport.category}: "${recentPatientReport.text}"`
-      : null;
 
     await appendEvent(a.tx, {
       actorAccountId: a.actor.accountId,
@@ -177,11 +157,11 @@ export function directWorkspace(
         messages: Boolean(flags.can_message),
       },
       notifications: {
-        health: hasNewSymptoms,
-        messages: unreadMessages > 0 || Boolean(pendingEscalation),
-        ai: Boolean(pendingEscalation),
+        health: unreadMessages > 0,
+        messages: unreadMessages > 0,
+        ai: false,
       },
-      handoverSummary,
+      handoverSummary: null,
       context: a.context,
       revision: identity.revision,
       limited: state.length === 100 || recent.length === 30,

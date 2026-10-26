@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Btn } from "@/components/ui/button";
@@ -8,6 +8,8 @@ import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { api, errorMessage } from "@/lib/client-api";
 import { TodayDashboard } from "./today-dashboard";
 import { ScheduleView } from "./schedule-view";
+import { useCareNotifications } from "./notification-context";
+import { NotificationDot } from "@/components/ui/notification-dot";
 import {
   careState,
   patientWorkspace,
@@ -75,6 +77,24 @@ function DailyWorkView({
     [filter, setFilter] = useState("all"),
     [query, setQuery] = useState("");
   const router = useRouter();
+  const { snapshot, ready } = useCareNotifications();
+  const notificationVersion = JSON.stringify(snapshot.connections);
+  const lastNotificationVersion = useRef<string | undefined>(undefined);
+  const reloadLatest = useRef(reload);
+  useEffect(() => {
+    reloadLatest.current = reload;
+  });
+  useEffect(() => {
+    if (!ready) return;
+    if (lastNotificationVersion.current === undefined) {
+      lastNotificationVersion.current = notificationVersion;
+      return;
+    }
+    if (lastNotificationVersion.current !== notificationVersion) {
+      lastNotificationVersion.current = notificationVersion;
+      void reloadLatest.current().catch(() => {});
+    }
+  }, [ready, notificationVersion]);
   async function reload() {
     try {
       setData(await api<Today>("/api/practitioner/today"));
@@ -97,7 +117,13 @@ function DailyWorkView({
   }
   const matches = (text: string) =>
     text.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
-  const items = data?.items ?? [];
+  const items = (data?.items ?? []).map((item) => ({
+    ...item,
+    unread: ready
+      ? (snapshot.connections.find((c) => c.connectionId === item.connectionId)
+          ?.unread ?? 0)
+      : item.unread,
+  }));
   const requests = items.flatMap((item) =>
     item.requests.map((r) => ({
       ...r,
@@ -198,7 +224,10 @@ function DailyWorkView({
                         <Icon n="chat" />
                       </span>
                       <div className="daily-row-main">
-                        <h2>{item.patientName}</h2>
+                        <h2>
+                          {item.patientName}
+                          {item.unread > 0 && <NotificationDot />}
+                        </h2>
                         <p>
                           {item.unread > 0
                             ? `${item.unread} unread messages`

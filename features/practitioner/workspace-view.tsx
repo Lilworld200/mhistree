@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
+import { useCareNotifications } from "./notification-context";
 import type { ActingContext } from "@/features/access/server";
 import {
   recordNarrative,
@@ -55,6 +56,7 @@ export type Workspace = {
       content: string;
       sent_at: string;
       delivery_state: string;
+      sequence?: string;
     }[];
   } | null;
   notifications?: { health: boolean; messages: boolean; ai: boolean };
@@ -130,6 +132,7 @@ export function WorkspaceView({
       ? controller.data
       : null
     : localData;
+  const { refresh: refreshNotifications } = useCareNotifications();
   async function act(action: string, payload: unknown) {
     setBusy(true);
     setMessage("");
@@ -142,6 +145,8 @@ export function WorkspaceView({
         data: payload,
       });
       await refresh();
+      if (action === "read" || action === "message")
+        await refreshNotifications();
       setMessage("Saved.");
       return result;
     } catch (e) {
@@ -710,7 +715,9 @@ export function WorkspaceView({
                 >
                   <Icon n="spark" s={16} /> Patient Summary from AI
                 </h3>
-                <p style={{ margin: 0, fontSize: "13px", color: "var(--ink2)" }}>
+                <p
+                  style={{ margin: 0, fontSize: "13px", color: "var(--ink2)" }}
+                >
                   {data.handoverSummary}
                 </p>
                 <small
@@ -721,7 +728,8 @@ export function WorkspaceView({
                     fontSize: "11px",
                   }}
                 >
-                  Clinical summary only. Raw patient-AI chat remains private to the patient.
+                  Clinical summary only. Raw patient-AI chat remains private to
+                  the patient.
                 </small>
               </div>
             )}
@@ -753,7 +761,14 @@ export function WorkspaceView({
                 Send care message
               </Btn>
             </form>
-            <Btn disabled={busy} onClick={() => void act("read", {})}>
+            <Btn
+              disabled={busy || !data.messages?.items.at(-1)?.sequence}
+              onClick={() =>
+                void act("read", {
+                  throughSequence: data.messages?.items.at(-1)?.sequence,
+                })
+              }
+            >
               Mark displayed thread read
             </Btn>
           </>

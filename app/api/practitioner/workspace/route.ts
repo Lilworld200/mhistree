@@ -86,8 +86,26 @@ export async function POST(r: NextRequest) {
     const pool = database(),
       session = sessionFrom(r),
       context = { kind: "direct" as const, connectionId: d.connectionId };
-    if (d.action === "read")
-      return success(await markThreadRead(pool, session, d.connectionId));
+    if (d.action === "read") {
+      const read = z
+        .object({
+          throughSequence: z
+            .string()
+            .regex(/^\d{1,18}$/)
+            .optional(),
+        })
+        .strict()
+        .parse(d.data ?? {});
+      return success(
+        await markThreadRead(
+          pool,
+          session,
+          d.connectionId,
+          undefined,
+          read.throughSequence,
+        ),
+      );
+    }
     if (d.action === "ai") {
       const data = z
         .object({

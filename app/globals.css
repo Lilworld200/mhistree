@@ -3416,6 +3416,21 @@ textarea:focus-visible {
   overscroll-behavior-y: contain;
   scrollbar-gutter: stable;
 }
+.care-notification-dot {
+  display: inline-block;
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  margin-inline-start: 8px;
+  border-radius: 999px;
+  background: #1684ed;
+  vertical-align: middle;
+}
+.daily-activity, .daily-activity-heading, .daily-activity-list, .daily-activity-empty {
+  text-align: left;
+}
+.daily-activity-list { max-height: min(52dvh, 420px); }
+.daily-activity-list .daily-row { align-items: flex-start; justify-content: flex-start; }
 .daily-activity-list,
 .daily-activity-empty {
   background: transparent;

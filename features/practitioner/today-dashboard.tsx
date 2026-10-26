@@ -5,6 +5,8 @@ import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { dateLabel } from "@/features/access/sharing-types";
 import { patientWorkspace, type Today } from "./daily-types";
+import { useCareNotifications } from "./notification-context";
+import { NotificationDot } from "@/components/ui/notification-dot";
 
 export function TodayDashboard({
   data,
@@ -15,10 +17,12 @@ export function TodayDashboard({
   busy: boolean;
   onRefresh: () => void;
 }) {
-  const [activityOpen, setActivityOpen] = useState(false),
-    [remindersOpen, setRemindersOpen] = useState(false);
-  const activityId = useId(),
-    remindersId = useId();
+  const [remindersOpen, setRemindersOpen] = useState(false);
+  const remindersId = useId();
+  const { snapshot, ready } = useCareNotifications();
+  const hasMessages = ready
+    ? snapshot.connections.some((c) => c.unread > 0)
+    : data.items.some((c) => c.unread > 0);
   const activities = [...data.notifications].sort(
     (a, b) =>
       Date.parse(b.created_at) - Date.parse(a.created_at) ||
@@ -98,7 +102,12 @@ export function TodayDashboard({
             ] as const
           ).map(([href, label, icon]) => (
             <Btn sm asChild key={href} icon={icon}>
-              <Link href={href}>{label}</Link>
+              <Link href={href}>
+                {label}
+                {href === "/clinician/inbox" && hasMessages && (
+                  <NotificationDot />
+                )}
+              </Link>
             </Btn>
           ))}
         </nav>
@@ -132,37 +141,8 @@ export function TodayDashboard({
                 aria-label="Recent care updates"
                 tabIndex={0}
               >
-                <ul className="daily-feed">
-                  {activities.slice(0, 3).map(activityRow)}
-                </ul>
-                {activities.length > 3 && (
-                  <div
-                    className="daily-disclosure"
-                    data-open={activityOpen}
-                    id={activityId}
-                    aria-hidden={!activityOpen}
-                    inert={!activityOpen}
-                  >
-                    <div className="daily-disclosure-inner">
-                      <ul className="daily-feed daily-feed-more">
-                        {activities.slice(3).map(activityRow)}
-                      </ul>
-                    </div>
-                  </div>
-                )}
+                <ul className="daily-feed">{activities.map(activityRow)}</ul>
               </div>
-              {activities.length > 3 && (
-                <button
-                  type="button"
-                  className="daily-expand"
-                  aria-expanded={activityOpen}
-                  aria-controls={activityId}
-                  onClick={() => setActivityOpen(!activityOpen)}
-                >
-                  {activityOpen ? "Show less" : "Show all activity"}
-                  <Icon n="chev" />
-                </button>
-              )}
             </>
           ) : (
             <div className="daily-activity-empty">

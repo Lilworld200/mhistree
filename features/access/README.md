@@ -6,6 +6,8 @@ Owners: approval-settings.ts verifies current own session (and approved practiti
 
 # Shared access and private delivery
 
+Chat discovery2026-10-26: `patient-controls.getConnectedPractitioners(pool,session)` derives patient identity from verifySession in its own transaction and projects at most100 eligible recipient identities plus bounded flag. Requires active own connection/current consent with permitted source scope, approved active professional/account with messages.send+records.read, and applicable approved organization/active membership/assignment/category intersection. It reads no clinical content, changes no grants and is not a handoff authorization token. Clinical retrieval remains restricted; every future send must recheck current context/source permissions. The former getConnectedPractitionersInAccess identity join is removed because mhistree_runtime cannot read accounts/persons. Unavailable optional discovery is distinct from available+empty. See docs/tasks/chat-practitioner-discovery-fix-2026-10-26.md.
+
 Panel extraction2026-10-22: sharing-panels.tsx retains its SharingPanel interface and feature-specific focus target, delegating the common Radix shell to components/ui/side-panel.tsx for practitioner entry reuse. Authorization/history/consent services are unchanged; sharing-ui covers focus return and prior interactions.
 
 Owner refinement2026-10-22 removes all overview cards. The content header is desktop-only (above980px); mobile history is page-owned through MobileTopbarActions into the shell action slot beside Sharing. Existing connection/request tabs keep their counts and history uses the same authorized panel. components/layout/mobile-topbar-actions.tsx owns only portal placement, with no access policy or global browser events.

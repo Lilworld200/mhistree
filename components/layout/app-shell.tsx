@@ -12,6 +12,11 @@ import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 import { ChatNavigationProvider, useChatNavigation } from "./chat-navigation";
 import { MobileTopbarTarget } from "./mobile-topbar-actions";
 import type { WorkspaceAccess } from "@/features/auth/workspace-access";
+import {
+  CareNotificationProvider,
+  useCareNotifications,
+} from "@/features/practitioner/notification-context";
+import { NotificationDot } from "@/components/ui/notification-dot";
 
 const navigation: { href: string; label: string; icon: IconName }[] = [
   { href: "/chat", label: "AI", icon: "chat" },
@@ -67,6 +72,7 @@ function Navigation({
   const pathname = usePathname();
   const router = useRouter();
   const chat = useChatNavigation();
+  const { snapshot: careNotifications } = useCareNotifications();
   return (
     <>
       <div className="brand">
@@ -129,6 +135,14 @@ function Navigation({
               >
                 <Icon n={item.icon} s={17} />
                 {item.label}
+                {[
+                  "/clinician/dashboard",
+                  "/clinician/patients",
+                  "/clinician/inbox",
+                ].includes(item.href) &&
+                  careNotifications.connections.some((c) => c.unread > 0) && (
+                    <NotificationDot />
+                  )}
               </Link>
             ))}
             {workspaces.organizations && (
@@ -264,9 +278,14 @@ export function AppShell({
   children?: React.ReactNode;
   workspaces?: WorkspaceAccess;
 }) {
+  const pathname = usePathname();
   return (
     <ChatNavigationProvider>
-      <Shell workspaces={workspaces}>{children}</Shell>
+      <CareNotificationProvider
+        enabled={workspaces.practitioner && pathname.startsWith("/clinician")}
+      >
+        <Shell workspaces={workspaces}>{children}</Shell>
+      </CareNotificationProvider>
     </ChatNavigationProvider>
   );
 }

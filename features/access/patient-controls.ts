@@ -36,31 +36,66 @@ export type ConnectedPractitionerSummary = {
   name: string;
   kind: "direct" | "organization";
   canMessage: boolean;
+  categories: string[];
+  revision: number;
+  practitionerId: string;
+  assignmentId: string | null;
 };
 
-export async function getConnectedPractitionersInAccess(
-  tx: PoolClient,
-  patientPersonId: string,
-): Promise<ConnectedPractitionerSummary[]> {
-  const rows = (
-    await tx.query(
-      `select c.id, c.kind, coalesce(p.display_name, o.display_name, 'Practitioner') as display_name,
-       mhistree.can_participate(c.id, 'messages.send') as can_message
+/** Minimum identity projection, before any restricted clinical transaction.
+ * Identity comes only from the verified session; this is not a clinical grant. */
+export async function getConnectedPractitioners(pool: Pool, session: string) {
+  return transaction(async (tx) => {
+    const actor = await verifySession(tx, session);
+    const rows = (
+      await tx.query(
+        `select c.id,c.kind,c.revision,p.display_name,a.id practitioner_id,
+        assignment.id assignment_id,
+        array(select cat from unnest(scope.categories) cat
+          where not(cat=any(scope.exclusions))
+          and (c.kind='direct' or cat=any(assignment.categories)) order by cat) categories
        from mhistree.connections c
-       left join mhistree.accounts a on a.id = c.practitioner_account_id
-       left join mhistree.persons p on p.id = a.person_id
-       left join mhistree.organizations o on o.id = c.organization_id
-       where mhistree.canonical_person(c.patient_person_id) = mhistree.canonical_person($1)
-         and c.status = 'active'`,
-      [patientPersonId],
-    )
-  ).rows;
-  return rows.map((r) => ({
-    connectionId: r.id as string,
-    name: r.display_name as string,
-    kind: r.kind as "direct" | "organization",
-    canMessage: Boolean(r.can_message),
-  }));
+       join lateral(select * from mhistree.consents where connection_id=c.id
+         order by recorded_at desc,id desc limit 1) scope on true
+       join mhistree.accounts a on a.status='active' and
+         (c.kind='direct' and a.id=c.practitioner_account_id or c.kind='organization')
+       join mhistree.professionals prof on prof.account_id=a.id and prof.status='approved'
+         and 'messages.send'=any(prof.privileges) and 'records.read'=any(prof.privileges)
+       join mhistree.persons p on p.id=a.person_id
+       left join mhistree.organizations o on o.id=c.organization_id
+       left join mhistree.memberships member on member.organization_id=c.organization_id
+         and member.account_id=a.id and member.active
+       left join mhistree.assignments assignment on assignment.organization_id=c.organization_id
+         and assignment.account_id=a.id and assignment.patient_person_id=c.patient_person_id and assignment.active
+       where mhistree.canonical_person(c.patient_person_id)=$1 and c.status='active'
+         and c.patient_person_id=any(scope.origin_person_ids)
+         and ('*'=any(scope.origin_context_ids) or ('patient:'||$2::text)=any(scope.origin_context_ids))
+         and (c.kind='direct' or (o.status='approved' and member.active
+           and 'messages.send'=any(member.privileges) and 'records.read'=any(member.privileges)
+           and assignment.id is not null))
+         and exists(select 1 from unnest(scope.categories) cat where not(cat=any(scope.exclusions))
+           and (c.kind='direct' or cat=any(assignment.categories)))
+       order by c.id,a.id,assignment.id limit 101`,
+        [actor.personId, actor.accountId],
+      )
+    ).rows;
+    return {
+      status: "available" as const,
+      bounded: rows.length > 100,
+      connectedPractitioners: rows
+        .slice(0, 100)
+        .map((r): ConnectedPractitionerSummary => ({
+          connectionId: r.id,
+          name: r.display_name,
+          kind: r.kind,
+          canMessage: true,
+          categories: r.categories,
+          revision: r.revision,
+          practitionerId: r.practitioner_id,
+          assignmentId: r.assignment_id ?? null,
+        })),
+    };
+  }, pool);
 }
 export const patientConsentSchema = z
   .object({

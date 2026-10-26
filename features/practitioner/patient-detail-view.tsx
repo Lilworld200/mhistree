@@ -184,7 +184,7 @@ function SharedHistory({
   );
 }
 const titles: Record<Panel, string> = {
-  summary: "Health summary",
+  summary: "Health",
   ai: "Ask Mhistree",
   work: "Care notes",
   requests: "Requests & results",
@@ -207,6 +207,20 @@ export function PatientDetailView({
     usePatientWorkspace<Detail>(connectionId, view, initialData, () =>
       setPanel(null),
     );
+  const canMessage = Boolean(data?.capabilities?.messages ?? data?.messages);
+  const canWork = Boolean(data?.capabilities?.work);
+  const canRequest = Boolean(data?.capabilities?.requests);
+  useEffect(() => {
+    const openLinkedPanel = () => {
+      const hash = window.location.hash;
+      if (hash === "#care-text-inbox" && canMessage) setPanel("messages");
+      else if (hash === "#private-work" && canWork) setPanel("work");
+      else if (hash === "#requests-results" && canRequest) setPanel("requests");
+    };
+    openLinkedPanel();
+    window.addEventListener("hashchange", openLinkedPanel);
+    return () => window.removeEventListener("hashchange", openLinkedPanel);
+  }, [connectionId, canMessage, canWork, canRequest]);
   function tile(
     value: Panel,
     icon: IconName,
@@ -232,7 +246,7 @@ export function PatientDetailView({
                 position: "absolute",
                 top: "2px",
                 right: "2px",
-                background: "#ef4444",
+                background: "#1684ed",
                 width: "8px",
                 height: "8px",
                 borderRadius: "50%",
@@ -251,7 +265,7 @@ export function PatientDetailView({
                   width: "7px",
                   height: "7px",
                   borderRadius: "50%",
-                  background: "#ef4444",
+                  background: "#1684ed",
                   marginLeft: "8px",
                   verticalAlign: "middle",
                 }}
@@ -400,6 +414,13 @@ export function PatientDetailView({
               <div className="sharing-panel-body patient-detail-panel-body">
                 {panel === "summary" && (
                   <>
+                    {data.notifications?.health && (
+                      <p role="status">
+                        There is an unread care message. Health below shows
+                        accepted shared reports; reading a message does not
+                        resolve a health issue.
+                      </p>
+                    )}
                     <p className="sharing-help">
                       A bounded view of currently shared records. A missing item
                       does not establish that a condition or medication is

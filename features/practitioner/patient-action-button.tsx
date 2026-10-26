@@ -32,7 +32,7 @@ export function PatientActionButton({
               position: "absolute",
               top: "-2px",
               right: "-2px",
-              background: "#ef4444",
+              background: "#1684ed",
               width: "7px",
               height: "7px",
               borderRadius: "50%",

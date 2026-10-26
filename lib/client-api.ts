@@ -17,7 +17,10 @@ export function errorMessage(error: unknown) {
   return (
     (
       {
-        DATABASE_UNAVAILABLE: "The database connection is temporarily unavailable. Please try again. Your unsaved input is retained.",
+        DATABASE_PERMISSION_DENIED:
+          "This service could not access required data. Please contact Mhistree support. Your saved information is retained.",
+        DATABASE_UNAVAILABLE:
+          "The database connection is temporarily unavailable. Please try again. Your unsaved input is retained.",
         EMAIL_DELIVERY_UNAVAILABLE:
           "Email delivery is not configured for this address yet. Please contact Mhistree support.",
         AUTH_REQUIRED:

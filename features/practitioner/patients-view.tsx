@@ -9,6 +9,8 @@ import { api, errorMessage } from "@/lib/client-api";
 import { categoryLabels } from "@/features/access/sharing-types";
 import { PatientSnapshot } from "./patient-snapshot";
 import { PatientEntryPanel } from "./patient-entry-panel";
+import { useCareNotifications } from "./notification-context";
+import { NotificationDot } from "@/components/ui/notification-dot";
 import type {
   DirectPatient,
   AssignedPatient,
@@ -60,6 +62,7 @@ export function PatientsView({
     [error, setError] = useState(""),
     [refreshing, setRefreshing] = useState(false);
   const trigger = useRef<HTMLElement | null>(null);
+  const { snapshot: careNotifications } = useCareNotifications();
   const router = useRouter();
   const counts = {
     direct: rows.filter((row) => row.status === "active").length,
@@ -308,6 +311,9 @@ export function PatientsView({
                             aria-label={`View ${row.display_name}\'s patient details`}
                           >
                             {row.display_name}
+                            {careNotifications.connections.some(
+                              (c) => c.connectionId === row.id && c.unread > 0,
+                            ) && <NotificationDot />}
                           </Link>
                         </h2>
                         <p>Direct connection</p>

@@ -6,11 +6,12 @@ import { withAccess } from "@/features/access/server";
 import { appendEvent } from "@/features/audit/server";
 import { consumeAttempt } from "@/lib/db/rate-limit";
 import { digest } from "@/features/auth/sessions";
-import { DomainError } from "@/lib/errors";
+import { DomainError, applicationErrorCode } from "@/lib/errors";
 import type { AIGateway, AIMessage } from "@/lib/ai/gateway";
 import { retrieveEvidence } from "./retrieval";
 import { patientChatPolicy } from "./patient-prompt";
 import { aiDebug, debugMessage, debugRef, withAIDebug } from "@/lib/ai/debug";
+import { practitionerDiscovery } from "./practitioner-discovery";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -227,8 +228,9 @@ async function generatePatientReply(
       prepared.personId,
       prepared.message.content,
     );
+    const discovery = await practitionerDiscovery(pool, session);
     const reply = await gateway.generate(
-      `${patientChatPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify(evidence)}`,
+      `${patientChatPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ ...evidence, ...discovery })}`,
       messages,
       { signal },
     );
@@ -242,6 +244,17 @@ async function generatePatientReply(
     const currentIds = new Set(currentEvidence.evidence.map((e) => e.id));
     if (evidence.evidence.some((e) => !currentIds.has(e.id)))
       throw new DomainError("ACCESS_REVOKED");
+    if (
+      discovery.status === "available" &&
+      discovery.connectedPractitioners.length
+    ) {
+      const currentDiscovery = await practitionerDiscovery(pool, session);
+      if (
+        currentDiscovery.status !== "available" ||
+        JSON.stringify(currentDiscovery) !== JSON.stringify(discovery)
+      )
+        throw new DomainError("ACCESS_REVOKED");
+    }
     if (signal?.aborted) throw new DomainError("PROVIDER_UNAVAILABLE");
     const result = await withAccess(
       pool,
@@ -279,11 +292,7 @@ async function generatePatientReply(
       await withAccess(pool, session, { kind: "patient" }, (a) =>
         a.tx.query(
           "update mhistree.chat_generations set state='failed',error_code=$3,lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running'",
-          [
-            messageId,
-            lease,
-            error instanceof DomainError ? error.code : "PROVIDER_UNAVAILABLE",
-          ],
+          [messageId, lease, applicationErrorCode(error)],
         ),
       );
     } catch {}

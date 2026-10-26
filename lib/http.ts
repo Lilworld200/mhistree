@@ -1,7 +1,7 @@
 import "server-only";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
-import { DomainError } from "./errors";
+import { DomainError, applicationErrorCode } from "./errors";
 export const sessionCookie = "mhistree-session";
 export const setupCookie = "mhistree-setup";
 export function cookieOptions() {
@@ -72,19 +72,30 @@ export function failure(error: unknown) {
       ? error.code
       : error instanceof z.ZodError || error instanceof SyntaxError
         ? "VALIDATION_FAILED"
-        : "PROVIDER_UNAVAILABLE";
+        : applicationErrorCode(error);
+  if (code === "DATABASE_PERMISSION_DENIED")
+    console.error(
+      "[MHISTREE DB]",
+      JSON.stringify({
+        event: "request.permission-denied",
+        code,
+        sqlState: "42501",
+      }),
+    );
   const status =
-    code === "AUTH_REQUIRED" || code === "SESSION_RETIRED"
-      ? 401
-      : code === "ACCESS_DENIED" || code === "ACCESS_REVOKED"
-        ? 403
-        : code === "VERSION_CONFLICT" || code === "IDENTITY_REVIEW_REQUIRED"
-          ? 409
-          : code === "RATE_LIMITED"
-            ? 429
-            : code === "VALIDATION_FAILED" || code === "TOKEN_INVALID"
-              ? 422
-              : 503;
+    code === "DATABASE_PERMISSION_DENIED"
+      ? 500
+      : code === "AUTH_REQUIRED" || code === "SESSION_RETIRED"
+        ? 401
+        : code === "ACCESS_DENIED" || code === "ACCESS_REVOKED"
+          ? 403
+          : code === "VERSION_CONFLICT" || code === "IDENTITY_REVIEW_REQUIRED"
+            ? 409
+            : code === "RATE_LIMITED"
+              ? 429
+              : code === "VALIDATION_FAILED" || code === "TOKEN_INVALID"
+                ? 422
+                : 503;
   return NextResponse.json(
     { ok: false, error: { code, requestId: crypto.randomUUID() } },
     { status, headers: { "Cache-Control": "no-store" } },

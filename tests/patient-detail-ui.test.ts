@@ -122,7 +122,7 @@ it("shows patient identity, a back link and permission-aware section cards rathe
 });
 it("opens scoped summaries without an automatic AI call and keeps care tools in their own panel", async () => {
   await mount();
-  await act(async () => button("Health summary").click());
+  await act(async () => button("Health").click());
   expect(request.mock.calls.some((call) => call[1]?.action === "ai")).toBe(
     false,
   );
@@ -206,7 +206,7 @@ it("merges identity and overview with folder tools and labelled care notes", asy
   expect(profile.querySelector(".patient-detail-overview")).not.toBeNull();
   expect(profile.querySelectorAll(".card")).toHaveLength(0);
   expect(host.querySelector(".patient-folder-tab")?.textContent).toContain(
-    "Health summary",
+    "Health",
   );
   expect(
     profile.querySelector('[aria-label="Care notes"]')?.textContent,
@@ -232,14 +232,35 @@ it("merges identity and overview with folder tools and labelled care notes", asy
   ).not.toContain("Shared history");
   expect(
     host.querySelector(".patient-section-grid")?.textContent,
-  ).not.toContain("Health summary");
+  ).not.toContain("Health");
   expect(
     host.querySelector(".patient-section-grid")?.textContent,
   ).not.toContain("Care notes");
   expect(host.querySelector(".patient-detail-refresh")).not.toBeNull();
 });
 
-it("combines authorized medications and browsable history within Health summary", async () => {
+it("opens the care conversation directly from its inbox link and retains its blue update marker", async () => {
+  window.history.replaceState(null, "", "/#care-text-inbox");
+  try {
+    await mount({
+      ...workspace,
+      capabilities: { messages: true, work: true, requests: false },
+      notifications: { health: true, messages: true, ai: false },
+    } as typeof workspace);
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
+      "Authorized care tools: messages",
+    );
+    expect(
+      host.querySelector(
+        '.patient-folder-tab [aria-label="Health (new update)"]',
+      ),
+    ).not.toBeNull();
+  } finally {
+    window.history.replaceState(null, "", "/");
+  }
+});
+
+it("combines authorized medications and browsable history within Health", async () => {
   await mount();
   request.mockResolvedValueOnce({
     ...workspace,
@@ -255,7 +276,7 @@ it("combines authorized medications and browsable history within Health summary"
   expect(
     host.querySelector(".patient-section-grid")?.textContent,
   ).not.toContain("Shared history");
-  await act(async () => button("Health summary").click());
+  await act(async () => button("Health").click());
   const dialog = document.querySelector('[role="dialog"]')!;
   expect(dialog.textContent).toContain("Reported medication use");
   expect(dialog.textContent).toContain("Professional prescriptions");
