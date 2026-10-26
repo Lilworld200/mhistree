@@ -8,6 +8,7 @@ import { ExtractionStatus } from "./extraction/status-view";
 import { notifyRecordsChanged } from "@/features/health-records/record-updates";
 import { Icon, Logo } from "@/components/ui/icons";
 import { useChatNavigation } from "@/components/layout/chat-navigation";
+import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
 type Message = {
   id: string;
@@ -168,82 +169,21 @@ export function ChatView() {
   }
   return (
     <section className="pagecol restored-chat">
+      <MobileTopbarActions>
+        <IconBtn
+          ghost
+          icon="bell"
+          size={44}
+          title="Notifications unavailable"
+          disabled
+        />
+      </MobileTopbarActions>
       <header className="chead">
         <div>
           <h1 className="ctitle">Conversation</h1>
           <p className="csub">Your health story, kept together</p>
         </div>
         <div className="chat-header-actions">
-          <details className="chat-tools">
-            <summary className="hpill hpill-dark">
-              <Icon n="spark" s={13} />
-              Conversation options
-            </summary>
-            <div className="chat-tools-panel card">
-              <Link href="/inbox">Contact a connected practitioner</Link>
-              <label className="mlabel">
-                Saved conversation
-                <select
-                  value={selected}
-                  disabled={busy || Boolean(generating)}
-                  onChange={(e) => {
-                    current.current = e.target.value;
-                    setSelected(e.target.value);
-                    if (e.target.value)
-                      void load(e.target.value).catch((e) =>
-                        setError(errorMessage(e)),
-                      );
-                    else setHistory({ items: [], nextCursor: null });
-                  }}
-                >
-                  <option value="">New conversation</option>
-                  {conversations.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {new Date(c.created_at).toLocaleString()}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <Btn
-                sm
-                disabled={busy || Boolean(generating)}
-                onClick={() => {
-                  setSelected("");
-                  current.current = "";
-                  setHistory({ items: [], nextCursor: null });
-                }}
-              >
-                New chat
-              </Btn>
-              <Btn
-                sm
-                disabled={busy || Boolean(generating) || !selected}
-                onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  try {
-                    await api("/api/assessment", {
-                      conversationId: selected,
-                      requestKey: crypto.randomUUID(),
-                      timezone:
-                        Intl.DateTimeFormat().resolvedOptions().timeZone,
-                    });
-                  } catch (e) {
-                    setError(errorMessage(e));
-                  } finally {
-                    setBusy(false);
-                    await load(selected);
-                  }
-                }}
-              >
-                Assess available evidence
-              </Btn>
-              <p className="muted">
-                AI interpretation stays in chat. Clear reports are extracted
-                into your record.
-              </p>
-            </div>
-          </details>
           <IconBtn
             ghost
             icon="bell"

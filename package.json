@@ -2,11 +2,10 @@
   "name": "mhistree",
   "version": "0.2.0",
   "private": true,
-  "packageManager": "pnpm@10.33.2",
   "scripts": {
-    "dev": "next dev --hostname 127.0.0.1 --port 3101",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start --hostname 127.0.0.1 --port 3101",
+    "start": "next start",
     "lint": "eslint app components features lib tests scripts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

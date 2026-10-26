@@ -2557,36 +2557,6 @@ textarea:focus-visible {
   gap: 8px;
   margin-left: auto;
 }
-.chat-tools {
-  position: relative;
-}
-.chat-tools > summary {
-  cursor: pointer;
-  list-style: none;
-  min-height: 38px;
-}
-.chat-tools-panel {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  width: min(340px, calc(100vw - 56px));
-  z-index: 5;
-  display: grid;
-  gap: 12px;
-  background: var(--card);
-  box-shadow: var(--sh3);
-}
-.chat-tools-panel select {
-  display: block;
-  margin-top: 8px;
-  width: 100%;
-  min-width: 0;
-  padding: 10px;
-  border-radius: 12px;
-  background: var(--shell);
-  color: var(--ink);
-  font-size: 13px;
-}
 .restored-chat .empty {
   min-height: 300px;
 }
@@ -2722,8 +2692,7 @@ textarea:focus-visible {
   list-style: none;
   cursor: pointer;
 }
-.record-evidence > summary::-webkit-details-marker,
-.chat-tools > summary::-webkit-details-marker {
+.record-evidence > summary::-webkit-details-marker {
   display: none;
 }
 .record-evidence > summary .evdesc {
@@ -3923,7 +3892,7 @@ textarea:focus-visible {
     max-width: 88%;
   }
   .restored-chat .chead {
-    padding: 14px 16px;
+    display: none;
   }
   .restored-chat textarea.cinput {
     font-size: 16px;
@@ -3936,10 +3905,6 @@ textarea:focus-visible {
   }
   .restored-chat .msgs {
     padding: 20px 16px;
-  }
-  .chat-tools > summary {
-    font-size: 10px;
-    padding-inline: 10px;
   }
   .document-upload,
   .profile-edit-form {
