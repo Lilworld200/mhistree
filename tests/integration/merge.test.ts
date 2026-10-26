@@ -308,16 +308,29 @@ it("concurrent merge replays once, preserves history/aliases and original grants
     evidenceReference: "Synthetic reviewed post-reversal ownership check",
   };
   await expect(
-    issueCredential(db.pool, provider, reviewer.session, recoveryInput),
+    issueCredential(
+      db.pool,
+      db.lockPool,
+      provider,
+      reviewer.session,
+      recoveryInput,
+    ),
   ).rejects.toThrow("IDENTITY_REVIEW_REQUIRED");
-  const recovery = await issueCredential(db.pool, provider, reviewer.session, {
-    ...recoveryInput,
-    purpose: "recovery",
-  });
+  const recovery = await issueCredential(
+    db.pool,
+    db.lockPool,
+    provider,
+    reviewer.session,
+    {
+      ...recoveryInput,
+      purpose: "recovery",
+    },
+  );
   const setup = await redeemCredential(db.pool, recovery.code, randomUUID());
   const password = `Synthetic-${randomUUID()}!`;
   const renewed = await completeSetup(
     db.pool,
+    db.lockPool,
     provider,
     setup.setupSession,
     password,

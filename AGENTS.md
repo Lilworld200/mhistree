@@ -4,6 +4,8 @@ Owner button-radius refinement (2026-10-26): Care notes, Health summary and Requ
 
 Owner folder-card refinement (2026-10-26): put Health summary and permission-gated Requests & results in an attached folder-style tab at the top left of the merged patient card. Keep Care notes as a glass icon-and-text button at the top right inside the card; it need not be circular. Tighten the card inner spacing. This supersedes the circular icon and separate Requests & results tile presentation; existing access and panel behavior remain unchanged.
 
+Owner connection-reliability decision (2026-10-26): preserve an eight-connection per-process budget split into six ordinary and two session-level credential-lock connections. Release every borrowed connection unconditionally and destroy sessions with failed unlock/connection cleanup. Retry at most once for transient acquisition failure before BEGIN; never replay transaction work or retry pool saturation automatically. Reuse pools across development reloads and keep diagnostics free of clinical text, SQL and credentials. Reuse authorized server snapshots and compose focused patient workspace reads in one authorized transaction, with one non-overlapping 15-second client refresh owner. Request-local authentication memoization must never become cross-request authorization caching. Retain current access checks, revocation clearing, session-pooler compatibility and verified TLS.
+
 # Mhistree: portable product specification and agent rules
 
 Revision: 2026-10-14. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages, with subsequent explicit owner decisions recorded below.

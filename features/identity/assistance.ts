@@ -20,6 +20,7 @@ export async function identityReviewer(tx: PoolClient, session: string) {
 }
 export async function assistedCredential(
   pool: Pool,
+  lockPool: Pool,
   provider: CredentialProvider,
   session: string,
   input: unknown,
@@ -34,7 +35,7 @@ export async function assistedCredential(
     })
     .strict()
     .parse(input);
-  return issueCredential(pool, provider, session, {
+  return issueCredential(pool, lockPool, provider, session, {
     personId: d.personId,
     contextId: `organization:${d.organizationId}`,
     purpose: d.purpose,

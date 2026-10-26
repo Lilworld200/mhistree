@@ -9,6 +9,8 @@ export default async function Page({
 }) {
   const { session } = await requirePatient();
   const { id } = await params;
-  await directWorkspace(database(), session, id);
-  return <PatientDetailView key={id} connectionId={id} />;
+  const initialData = await directWorkspace(database(), session, id, "profile");
+  return (
+    <PatientDetailView key={id} connectionId={id} initialData={initialData} />
+  );
 }

@@ -1,7 +1,11 @@
 import "server-only";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { withAccess, type ActingContext } from "@/features/access/server";
+import {
+  withAccess,
+  type ActingContext,
+  type AccessTransaction,
+} from "@/features/access/server";
 import { requireCare } from "@/features/appointments/server";
 import { DomainError } from "@/lib/errors";
 import { appendEvent } from "@/features/audit/server";
@@ -73,21 +77,28 @@ export async function careMessages(
   connectionId: string,
   before?: string,
 ) {
+  return withAccess(pool, session, context, (a) =>
+    careMessagesInAccess(a, connectionId, before),
+  );
+}
+export async function careMessagesInAccess(
+  a: AccessTransaction,
+  connectionId: string,
+  before?: string,
+) {
   z.uuid().parse(connectionId);
   if (before)
     z.string()
       .regex(/^\d{1,18}$/)
       .parse(before);
-  return withAccess(pool, session, context, async (a) => {
-    await requireCare(a, connectionId, "messages.send");
-    const rows = (
-      await a.tx.query(
-        "select m.id,m.content,m.author_account_id,m.sent_at,m.delivery_state,m.sequence::text from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where t.connection_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51",
-        [connectionId, before ?? null],
-      )
-    ).rows;
-    const more = rows.length > 50;
-    const items = rows.slice(0, 50).reverse();
-    return { items, nextCursor: more ? items[0].sequence : null };
-  });
+  await requireCare(a, connectionId, "messages.send");
+  const rows = (
+    await a.tx.query(
+      "select m.id,m.content,m.author_account_id,m.sent_at,m.delivery_state,m.sequence::text from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where t.connection_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51",
+      [connectionId, before ?? null],
+    )
+  ).rows;
+  const more = rows.length > 50;
+  const items = rows.slice(0, 50).reverse();
+  return { items, nextCursor: more ? items[0].sequence : null };
 }

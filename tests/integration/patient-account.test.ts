@@ -45,6 +45,7 @@ describe("patient entry on the real foundation", () => {
     ).toBe(1);
     const ready = await completeSetup(
       db.pool,
+      db.lockPool,
       provider,
       setups[0].setupSession,
       password,

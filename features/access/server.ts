@@ -52,6 +52,7 @@ export async function withAccess<T>(
   session: string,
   selectedContext: unknown,
   work: (access: AccessTransaction) => Promise<T>,
+  prepareIdentity?: (tx: PoolClient, actor: VerifiedSession) => Promise<void>,
 ) {
   const context = actingContextSchema.parse(selectedContext);
   let deniedActor: string | undefined;
@@ -59,6 +60,9 @@ export async function withAccess<T>(
     return await transaction(async (tx) => {
       const actor = await verifySession(tx, session);
       deniedActor = actor.accountId;
+      // Trusted server-only minimum identity projection, before restricted clinical RLS.
+      // Consumers must still read/write clinical material only through `work` below.
+      await prepareIdentity?.(tx, actor);
       await tx.query(
         "select set_config('mhistree.session',$1,true),set_config('mhistree.context',$2,true)",
         [digest(session), JSON.stringify(context)],

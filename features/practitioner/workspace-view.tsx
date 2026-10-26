@@ -41,7 +41,7 @@ type RequestRow = {
   result_work_id: string | null;
   result_event_id: string | null;
 };
-type Workspace = {
+export type Workspace = {
   patientPersonId: string;
   revision: number;
   state: Entry[];
@@ -61,10 +61,17 @@ export function WorkspaceView({
   connectionId,
   organizationContext,
   section = "all",
+  controller,
 }: {
   connectionId: string;
   organizationContext?: ActingContext;
   section?: "all" | "work" | "requests" | "messages";
+  controller?: {
+    data: Workspace | null;
+    ready: boolean;
+    refresh: () => Promise<void>;
+    clear: () => void;
+  };
 }) {
   const endpoint = organizationContext
     ? "/api/organizations/workspace"
@@ -72,7 +79,7 @@ export function WorkspaceView({
   const query = organizationContext
     ? `context=${encodeURIComponent(JSON.stringify(organizationContext))}`
     : `connection=${connectionId}`;
-  const [data, setData] = useState<Workspace | null>(null),
+  const [localData, setData] = useState<Workspace | null>(null),
     [message, setMessage] = useState(""),
     [busy, setBusy] = useState(false),
     [suggestion, setSuggestion] = useState<{
@@ -82,6 +89,7 @@ export function WorkspaceView({
       evidenceIds: string[];
     } | null>(null);
   const refresh = useCallback(async () => {
+    if (controller) return controller.refresh();
     try {
       setData(await api<Workspace>(`${endpoint}?${query}`));
     } catch (e) {
@@ -89,8 +97,9 @@ export function WorkspaceView({
       setSuggestion(null);
       setMessage(errorMessage(e));
     }
-  }, [endpoint, query]);
+  }, [endpoint, query, controller]);
   useEffect(() => {
+    if (controller) return;
     let active = true;
     api<Workspace>(`${endpoint}?${query}`)
       .then((value) => {
@@ -112,7 +121,12 @@ export function WorkspaceView({
       clearInterval(timer);
       window.removeEventListener("focus", refresh);
     };
-  }, [refresh, endpoint, query]);
+  }, [refresh, endpoint, query, controller]);
+  const data = controller
+    ? controller.ready
+      ? controller.data
+      : null
+    : localData;
   async function act(action: string, payload: unknown) {
     setBusy(true);
     setMessage("");
@@ -129,8 +143,19 @@ export function WorkspaceView({
       return result;
     } catch (e) {
       setMessage(errorMessage(e));
-      setData(null);
-      setSuggestion(null);
+      if (
+        e instanceof Error &&
+        [
+          "ACCESS_DENIED",
+          "ACCESS_REVOKED",
+          "AUTH_REQUIRED",
+          "SESSION_RETIRED",
+        ].includes(e.message)
+      ) {
+        setData(null);
+        setSuggestion(null);
+        controller?.clear();
+      }
     } finally {
       setBusy(false);
     }

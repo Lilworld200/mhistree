@@ -81,7 +81,16 @@ export async function testDatabase() {
     user: "postgres",
     password,
     database: "postgres",
-    max: 8,
+    max: 6,
+  });
+  const lockPool = new Pool({
+    host: "127.0.0.1",
+    port,
+    user: "postgres",
+    password,
+    database: "postgres",
+    max: 2,
+    connectionTimeoutMillis: 5000,
   });
   try {
     for (const file of (await readdir("supabase/migrations"))
@@ -90,13 +99,16 @@ export async function testDatabase() {
       await pool.query(await readFile(`supabase/migrations/${file}`, "utf8"));
     }
   } catch (error) {
+    await lockPool.end();
     await pool.end();
     await stop();
     throw error;
   }
   return {
     pool,
+    lockPool,
     stop: async () => {
+      await lockPool.end();
       await pool.end();
       await stop();
     },

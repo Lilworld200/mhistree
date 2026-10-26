@@ -1,9 +1,11 @@
-import { timeline } from "@/features/health-records/timeline";
 import { NextRequest } from "next/server";
-import { withAccess } from "@/features/access/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
-import { directWorkspace } from "@/features/practitioner/workspace";
+import {
+  directWorkspace,
+  directTimeline,
+  workspaceView,
+} from "@/features/practitioner/workspace";
 import { saveWork, editWork } from "@/features/clinical-care/work";
 import { finalizeEntry } from "@/features/clinical-care/entries";
 import { savePractitionerProposal } from "@/features/clinical-care/ai-entry";
@@ -11,10 +13,9 @@ import {
   createServiceRequest,
   changeServiceRequest,
   publishResult,
-  requestList,
 } from "@/features/clinical-care/requests";
 import { practitionerAssistance } from "@/features/ai-chat/practitioner";
-import { careMessages, sendCareMessage } from "@/features/messaging/server";
+import { sendCareMessage } from "@/features/messaging/server";
 import {
   changeAppointment,
   createPractitionerAppointment,
@@ -34,12 +35,10 @@ export async function GET(r: NextRequest) {
       .uuid()
       .parse(r.nextUrl.searchParams.get("connection"));
     const pool = database(),
-      session = sessionFrom(r),
-      context = { kind: "direct" as const, connectionId };
-    const data = await directWorkspace(pool, session, connectionId);
+      session = sessionFrom(r);
     if (r.nextUrl.searchParams.get("view") === "timeline")
       return success(
-        await timeline(pool, session, context, {
+        await directTimeline(pool, session, connectionId, {
           ...(r.nextUrl.searchParams.get("category")
             ? { category: r.nextUrl.searchParams.get("category") }
             : {}),
@@ -48,25 +47,14 @@ export async function GET(r: NextRequest) {
             : {}),
         }),
       );
-    const canMessage = await withAccess(
-      pool,
-      session,
-      context,
-      async (a) =>
-        (
-          await a.tx.query(
-            "select mhistree.can_participate($1,'messages.send') allowed",
-            [connectionId],
-          )
-        ).rows[0].allowed as boolean,
+    return success(
+      await directWorkspace(
+        pool,
+        session,
+        connectionId,
+        workspaceView.parse(r.nextUrl.searchParams.get("view") ?? "all"),
+      ),
     );
-    return success({
-      ...data,
-      requests: await requestList(pool, session, context),
-      messages: canMessage
-        ? await careMessages(pool, session, context, connectionId)
-        : null,
-    });
   } catch (e) {
     return failure(e);
   }

@@ -5,7 +5,9 @@ import { database, transaction } from "@/lib/db/client";
 import { verifySession } from "@/features/auth/sessions";
 import { sessionCookie } from "@/lib/http";
 import { DomainError } from "@/lib/errors";
-export async function currentPatient() {
+import { cache } from "react";
+// React scopes this snapshot to one server render, never across requests/mutations.
+export const currentPatient = cache(async function currentPatient() {
   const session = (await cookies()).get(sessionCookie)?.value ?? "";
   if (!session) return null;
   try {
@@ -22,7 +24,7 @@ export async function currentPatient() {
       return null;
     throw error;
   }
-}
+});
 export async function requirePatient(loginPath = "/auth") {
   const patient = await currentPatient();
   if (!patient) redirect(loginPath);

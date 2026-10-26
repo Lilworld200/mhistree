@@ -106,17 +106,14 @@ export async function requestList(
   session: string,
   context: ActingContext,
 ) {
-  return withAccess(
-    pool,
-    session,
-    context,
-    async (a) =>
-      (
-        await a.tx.query(
-          "select id,connection_id,patient_person_id,service_name,state,version,requester_account_id,recipient_account_id,recipient_connection_id,priority,requested_for,result_event_id,result_work_id from mhistree.service_requests order by created_at desc,id desc limit 100",
-        )
-      ).rows,
-  );
+  return withAccess(pool, session, context, requestListInAccess);
+}
+export async function requestListInAccess(a: AccessTransaction) {
+  return (
+    await a.tx.query(
+      "select id,connection_id,patient_person_id,service_name,state,version,requester_account_id,recipient_account_id,recipient_connection_id,priority,requested_for,result_event_id,result_work_id from mhistree.service_requests order by created_at desc,id desc limit 100",
+    )
+  ).rows;
 }
 export async function changeServiceRequest(
   pool: Pool,

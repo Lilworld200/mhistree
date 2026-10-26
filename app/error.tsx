@@ -10,8 +10,8 @@ export default function ErrorBoundary({
     <main className="foundation-state" role="alert">
       <h1 className="ptitle-sm">This page couldn’t load</h1>
       <p>
-        Please try again. If you were submitting information, check its status
-        before resubmitting.
+        The service may be temporarily unavailable. Please try again. If you
+        were submitting information, check its status before resubmitting.
       </p>
       <button className="btn btn-dark" onClick={retry}>
         Try again

@@ -38,7 +38,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     await db?.stop();
   });
   const issue = (purpose: "activation" | "recovery" = "activation") =>
-    issueCredential(db.pool, provider, staff.session, {
+    issueCredential(db.pool, db.lockPool, provider, staff.session, {
       personId: patient.personId,
       purpose,
       contextId: staff.contextId,
@@ -66,6 +66,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     ).rejects.toThrow("SESSION_RETIRED");
     const result = await completeSetup(
       db.pool,
+      db.lockPool,
       provider,
       winner.value.setupSession,
       password,
@@ -75,6 +76,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     await expect(
       completeSetup(
         db.pool,
+        db.lockPool,
         provider,
         winner.value.setupSession,
         password,
@@ -154,12 +156,18 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
       ...config,
       baseUrl: "http://127.0.0.1:1",
     });
-    const pending = await issueCredential(db.pool, unavailable, staff.session, {
-      personId: patient.personId,
-      purpose: "recovery",
-      contextId: staff.contextId,
-      evidenceReference: "synthetic-outage-check",
-    });
+    const pending = await issueCredential(
+      db.pool,
+      db.lockPool,
+      unavailable,
+      staff.session,
+      {
+        personId: patient.personId,
+        purpose: "recovery",
+        contextId: staff.contextId,
+        evidenceReference: "synthetic-outage-check",
+      },
+    );
     expect(pending.providerRevocationPending).toBe(true);
     await expect(
       transaction((tx) => verifySession(tx, oldSession), db.pool),
@@ -176,6 +184,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     const nextPassword = `New-${randomUUID()}!`;
     await completeSetup(
       db.pool,
+      db.lockPool,
       provider,
       setup.setupSession,
       nextPassword,
@@ -211,7 +220,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     expect(persisted).not.toContain(recovery.code);
     expect(persisted).not.toContain(password);
     await expect(
-      issueCredential(db.pool, provider, staff.session, {
+      issueCredential(db.pool, db.lockPool, provider, staff.session, {
         personId: patient.personId,
         purpose: "recovery",
         contextId: staff.contextId,
@@ -221,7 +230,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     ).rejects.toThrow();
     const ordinary = await staffFixture(db.pool, ["person.lookup"]);
     await expect(
-      issueCredential(db.pool, provider, ordinary.session, {
+      issueCredential(db.pool, db.lockPool, provider, ordinary.session, {
         personId: patient.personId,
         purpose: "recovery",
         contextId: ordinary.contextId,
@@ -236,18 +245,31 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
       staff.contextId,
       { displayName: "Synthetic retry patient" },
     );
-    const issued = await issueCredential(db.pool, provider, staff.session, {
-      personId: fresh.personId,
-      purpose: "activation",
-      contextId: staff.contextId,
-      evidenceReference: "synthetic-retry-check",
-    });
+    const issued = await issueCredential(
+      db.pool,
+      db.lockPool,
+      provider,
+      staff.session,
+      {
+        personId: fresh.personId,
+        purpose: "activation",
+        contextId: staff.contextId,
+        evidenceReference: "synthetic-retry-check",
+      },
+    );
     const setup = await redeemCredential(db.pool, issued.code, key());
     await db.pool.query(
       "create function mhistree.synthetic_auth_fail() returns trigger language plpgsql as $$begin raise exception 'SYNTHETIC_AUTH_COMMIT_FAILURE';end;$$;create trigger synthetic_auth_fail before insert on mhistree.accounts for each row execute function mhistree.synthetic_auth_fail()",
     );
     await expect(
-      completeSetup(db.pool, provider, setup.setupSession, password, key()),
+      completeSetup(
+        db.pool,
+        db.lockPool,
+        provider,
+        setup.setupSession,
+        password,
+        key(),
+      ),
     ).rejects.toThrow("SYNTHETIC_AUTH_COMMIT_FAILURE");
     const before = (
       await db.pool.query(
@@ -261,6 +283,7 @@ describe("T08 actual Keycloak and PostgreSQL", () => {
     );
     const completed = await completeSetup(
       db.pool,
+      db.lockPool,
       provider,
       setup.setupSession,
       password,

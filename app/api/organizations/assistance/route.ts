@@ -1,3 +1,4 @@
+import { credentialLockDatabase } from "@/lib/db/client";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
@@ -24,6 +25,7 @@ export async function POST(r: NextRequest) {
       d.action === "issue"
         ? await assistedCredential(
             database(),
+            credentialLockDatabase(),
             authenticationProvider(),
             sessionFrom(r),
             d.data,

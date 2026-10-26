@@ -61,11 +61,18 @@ it("designated staff recover a no-contact patient; ordinary staff cannot recover
   };
   const first = await assistedCredential(
       db.pool,
+      db.lockPool,
       provider,
       staff.session,
       input,
     ),
-    second = await assistedCredential(db.pool, provider, staff.session, input);
+    second = await assistedCredential(
+      db.pool,
+      db.lockPool,
+      provider,
+      staff.session,
+      input,
+    );
   await expect(
     redeemCredential(db.pool, first.code, randomUUID()),
   ).rejects.toThrow("TOKEN_INVALID");
@@ -73,6 +80,7 @@ it("designated staff recover a no-contact patient; ordinary staff cannot recover
     password = `Synthetic-${randomUUID()}!`;
   const account = await completeSetup(
     db.pool,
+    db.lockPool,
     provider,
     setup.setupSession,
     password,
@@ -86,7 +94,7 @@ it("designated staff recover a no-contact patient; ordinary staff cannot recover
     randomUUID(),
   );
   await expect(
-    assistedCredential(db.pool, provider, staff.session, {
+    assistedCredential(db.pool, db.lockPool, provider, staff.session, {
       ...input,
       purpose: "recovery",
     }),
@@ -97,10 +105,16 @@ it("designated staff recover a no-contact patient; ordinary staff cannot recover
     active: true,
     evidence: "Synthetic independent recovery staff designation",
   });
-  const recovery = await assistedCredential(db.pool, provider, staff.session, {
-    ...input,
-    purpose: "recovery",
-  });
+  const recovery = await assistedCredential(
+    db.pool,
+    db.lockPool,
+    provider,
+    staff.session,
+    {
+      ...input,
+      purpose: "recovery",
+    },
+  );
   await expect(
     transaction((tx) => verifySession(tx, login.session), db.pool),
   ).rejects.toThrow();
@@ -111,6 +125,7 @@ it("designated staff recover a no-contact patient; ordinary staff cannot recover
   );
   await completeSetup(
     db.pool,
+    db.lockPool,
     provider,
     restricted.setupSession,
     `Synthetic-${randomUUID()}!`,

@@ -1,3 +1,4 @@
+import { withCredentialLock } from "./credential-lock";
 import "server-only";
 import { appendEvent } from "@/features/audit/server";
 import { randomUUID } from "node:crypto";
@@ -9,27 +10,6 @@ import { DomainError } from "@/lib/errors";
 import type { CredentialProvider } from "@/lib/auth/provider";
 import { requireStaff } from "@/features/identity/server";
 import { digest, secret, verifySession } from "./sessions";
-
-// A session-level advisory lock serializes credential changes without holding an
-// open database transaction across provider I/O. Other patients remain independent.
-async function withCredentialLock<T>(
-  pool: Pool,
-  personId: string,
-  work: () => Promise<T>,
-) {
-  const lock = await pool.connect();
-  try {
-    await lock.query("select pg_advisory_lock(hashtextextended($1,0))", [
-      `auth:${personId}`,
-    ]);
-    return await work();
-  } finally {
-    await lock.query("select pg_advisory_unlock(hashtextextended($1,0))", [
-      `auth:${personId}`,
-    ]);
-    lock.release();
-  }
-}
 const issueInput = z
   .object({
     personId: z.uuid(),
@@ -41,140 +21,147 @@ const issueInput = z
 
 export async function issueCredential(
   pool: Pool,
+  lockPool: Pool,
   provider: CredentialProvider,
   staffSession: string,
   input: unknown,
 ) {
   const data = issueInput.parse(input);
   await consumeAttempt(pool, "auth.issue", digest(staffSession), 10);
-  return withCredentialLock(pool, data.personId, async () => {
-    const code = secret();
-    const issued = await transaction(async (tx) => {
-      const actor = await verifySession(tx, staffSession);
-      const authority = await requireStaff(
-        tx,
-        { accountId: actor.accountId, contextId: data.contextId },
-        data.purpose === "activation" ? "auth.activate" : "auth.recover",
-      );
-      const person = await tx.query(
-        "select id,original_organization_id from mhistree.persons where id=$1 and canonical_person_id is null for update",
-        [data.personId],
-      );
-      if (!person.rowCount) throw new DomainError("ACCESS_DENIED");
-      if (
-        authority.organization_id &&
-        person.rows[0].original_organization_id !== authority.organization_id &&
-        !(
-          await tx.query(
-            "select 1 from mhistree.connections where patient_person_id=$1 and organization_id=$2 and status='active'",
-            [data.personId, authority.organization_id],
-          )
-        ).rowCount
-      )
-        throw new DomainError("ACCESS_DENIED");
-      const account = (
-        await tx.query(
-          "select * from mhistree.accounts where person_id=$1 and status<>'retired' for update",
+  return withCredentialLock(
+    pool,
+    lockPool,
+    `auth:${data.personId}`,
+    async () => {
+      const code = secret();
+      const issued = await transaction(async (tx) => {
+        const actor = await verifySession(tx, staffSession);
+        const authority = await requireStaff(
+          tx,
+          { accountId: actor.accountId, contextId: data.contextId },
+          data.purpose === "activation" ? "auth.activate" : "auth.recover",
+        );
+        const person = await tx.query(
+          "select id,original_organization_id from mhistree.persons where id=$1 and canonical_person_id is null for update",
           [data.personId],
-        )
-      ).rows[0];
-      const retired = !account
-        ? (
+        );
+        if (!person.rowCount) throw new DomainError("ACCESS_DENIED");
+        if (
+          authority.organization_id &&
+          person.rows[0].original_organization_id !==
+            authority.organization_id &&
+          !(
             await tx.query(
-              "select * from mhistree.accounts where person_id=$1 and status='retired' order by last_successful_patient_login_at desc nulls last,id limit 1",
-              [data.personId],
+              "select 1 from mhistree.connections where patient_person_id=$1 and organization_id=$2 and status='active'",
+              [data.personId, authority.organization_id],
             )
-          ).rows[0]
-        : undefined;
-      const reversed =
-        retired &&
-        (
+          ).rowCount
+        )
+          throw new DomainError("ACCESS_DENIED");
+        const account = (
           await tx.query(
-            "select 1 from mhistree.merge_journal j join mhistree.merge_reversals r on r.merge_operation_id=j.operation_id where j.loser_id=$1",
+            "select * from mhistree.accounts where person_id=$1 and status<>'retired' for update",
             [data.personId],
           )
-        ).rowCount;
-      if (retired && (data.purpose !== "recovery" || !reversed))
-        throw new DomainError("IDENTITY_REVIEW_REQUIRED");
-      if (
-        data.purpose === "activation"
-          ? Boolean(account && account.status !== "setup")
-          : !account && !reversed
-      )
-        throw new DomainError("ACCESS_DENIED");
-      const id = randomUUID();
-      await tx.query(
-        `insert into mhistree.auth_enrollments(person_id,login_identifier) values($1,$2) on conflict(person_id) do nothing`,
-        [
-          data.personId,
-          account?.login_identifier ??
-            `u_${secret().slice(0, 22).toLowerCase()}`,
-        ],
-      );
-      // Reversal never reactivates an old credential. Reviewed recovery starts a new provider enrollment.
-      if (reversed)
+        ).rows[0];
+        const retired = !account
+          ? (
+              await tx.query(
+                "select * from mhistree.accounts where person_id=$1 and status='retired' order by last_successful_patient_login_at desc nulls last,id limit 1",
+                [data.personId],
+              )
+            ).rows[0]
+          : undefined;
+        const reversed =
+          retired &&
+          (
+            await tx.query(
+              "select 1 from mhistree.merge_journal j join mhistree.merge_reversals r on r.merge_operation_id=j.operation_id where j.loser_id=$1",
+              [data.personId],
+            )
+          ).rowCount;
+        if (retired && (data.purpose !== "recovery" || !reversed))
+          throw new DomainError("IDENTITY_REVIEW_REQUIRED");
+        if (
+          data.purpose === "activation"
+            ? Boolean(account && account.status !== "setup")
+            : !account && !reversed
+        )
+          throw new DomainError("ACCESS_DENIED");
+        const id = randomUUID();
         await tx.query(
-          "update mhistree.auth_enrollments set login_identifier=$2,provider_subject=null where person_id=$1",
-          [data.personId, `u_${secret().slice(0, 22).toLowerCase()}`],
+          `insert into mhistree.auth_enrollments(person_id,login_identifier) values($1,$2) on conflict(person_id) do nothing`,
+          [
+            data.personId,
+            account?.login_identifier ??
+              `u_${secret().slice(0, 22).toLowerCase()}`,
+          ],
         );
-      await tx.query(
-        `insert into mhistree.setup_credentials(id,person_id,purpose,digest,expires_at,issuer_account_id,evidence_reference) values($1,$2,$3,$4,clock_timestamp()+interval '20 minutes',$5,$6)`,
-        [
-          id,
-          data.personId,
-          data.purpose,
-          digest(code),
-          actor.accountId,
-          data.evidenceReference,
-        ],
-      );
-      await tx.query(
-        `update mhistree.setup_credentials set state='replaced',replaced_by=$1 where person_id=$2 and id<>$1 and state<>'replaced'`,
-        [id, data.personId],
-      );
-      if (data.purpose === "recovery") {
-        const recoveryAccount = account ?? retired;
+        // Reversal never reactivates an old credential. Reviewed recovery starts a new provider enrollment.
+        if (reversed)
+          await tx.query(
+            "update mhistree.auth_enrollments set login_identifier=$2,provider_subject=null where person_id=$1",
+            [data.personId, `u_${secret().slice(0, 22).toLowerCase()}`],
+          );
         await tx.query(
-          `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1,provider_valid_after=clock_timestamp() where id=$1 and status<>'retired'`,
-          [recoveryAccount.id],
-        );
-        await tx.query(
-          `update mhistree.sessions set retired_at=clock_timestamp() where account_id=$1 and retired_at is null`,
-          [recoveryAccount.id],
+          `insert into mhistree.setup_credentials(id,person_id,purpose,digest,expires_at,issuer_account_id,evidence_reference) values($1,$2,$3,$4,clock_timestamp()+interval '20 minutes',$5,$6)`,
+          [
+            id,
+            data.personId,
+            data.purpose,
+            digest(code),
+            actor.accountId,
+            data.evidenceReference,
+          ],
         );
         await tx.query(
-          `insert into mhistree.auth_reconciliation(person_id,operation) values($1,'revoke-provider-sessions') on conflict(person_id) do update set pending=true,operation=excluded.operation,updated_at=clock_timestamp()`,
-          [data.personId],
+          `update mhistree.setup_credentials set state='replaced',replaced_by=$1 where person_id=$2 and id<>$1 and state<>'replaced'`,
+          [id, data.personId],
         );
+        if (data.purpose === "recovery") {
+          const recoveryAccount = account ?? retired;
+          await tx.query(
+            `update mhistree.accounts set status='recovery-pending',session_epoch=session_epoch+1,provider_valid_after=clock_timestamp() where id=$1 and status<>'retired'`,
+            [recoveryAccount.id],
+          );
+          await tx.query(
+            `update mhistree.sessions set retired_at=clock_timestamp() where account_id=$1 and retired_at is null`,
+            [recoveryAccount.id],
+          );
+          await tx.query(
+            `insert into mhistree.auth_reconciliation(person_id,operation) values($1,'revoke-provider-sessions') on conflict(person_id) do update set pending=true,operation=excluded.operation,updated_at=clock_timestamp()`,
+            [data.personId],
+          );
+        }
+        await appendEvent(tx, {
+          actorAccountId: actor.accountId,
+          personId: data.personId,
+          action: `auth.${data.purpose}.issued`,
+          contextId: data.contextId,
+          referenceId: id,
+        });
+        return {
+          subject: (account ?? retired)?.provider_subject as string | undefined,
+          providerName: (account ?? retired)?.provider as string | undefined,
+        };
+      }, pool);
+      let providerRevocationPending = false;
+      if (issued.subject && data.purpose === "recovery") {
+        try {
+          if (issued.providerName !== (provider.name ?? "keycloak"))
+            throw new DomainError("PROVIDER_UNAVAILABLE");
+          await provider.revokeSessions(issued.subject);
+          await pool.query(
+            `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
+            [data.personId],
+          );
+        } catch {
+          providerRevocationPending = true;
+        }
       }
-      await appendEvent(tx, {
-        actorAccountId: actor.accountId,
-        personId: data.personId,
-        action: `auth.${data.purpose}.issued`,
-        contextId: data.contextId,
-        referenceId: id,
-      });
-      return {
-        subject: (account ?? retired)?.provider_subject as string | undefined,
-        providerName: (account ?? retired)?.provider as string | undefined,
-      };
-    }, pool);
-    let providerRevocationPending = false;
-    if (issued.subject && data.purpose === "recovery") {
-      try {
-        if (issued.providerName !== (provider.name ?? "keycloak"))
-          throw new DomainError("PROVIDER_UNAVAILABLE");
-        await provider.revokeSessions(issued.subject);
-        await pool.query(
-          `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
-          [data.personId],
-        );
-      } catch {
-        providerRevocationPending = true;
-      }
-    }
-    return { code, expiresInSeconds: 1200, providerRevocationPending };
-  });
+      return { code, expiresInSeconds: 1200, providerRevocationPending };
+    },
+  );
 }
 
 /** requestKey must be a trusted transport-derived network/session key, not a submitted field. */
@@ -204,6 +191,7 @@ export async function redeemCredential(
 
 export async function completeSetup(
   pool: Pool,
+  lockPool: Pool,
   provider: CredentialProvider,
   setupSession: string,
   password: string,
@@ -219,52 +207,57 @@ export async function completeSetup(
     )
   ).rows[0];
   if (!found) throw new DomainError("TOKEN_INVALID");
-  return withCredentialLock(pool, found.person_id, async () => {
-    const setup = (
+  return withCredentialLock(
+    pool,
+    lockPool,
+    `auth:${found.person_id}`,
+    async () => {
+      const setup = (
+        await pool.query(
+          `select c.id,c.person_id,c.purpose,e.login_identifier,e.provider_subject from mhistree.setup_sessions s join mhistree.setup_credentials c on c.id=s.credential_id join mhistree.auth_enrollments e on e.person_id=c.person_id where s.digest=$1 and s.used_at is null and s.expires_at>clock_timestamp() and c.state='redeemed'`,
+          [digest(setupSession)],
+        )
+      ).rows[0];
+      if (!setup) throw new DomainError("TOKEN_INVALID");
+      const subject =
+        setup.provider_subject ??
+        (await provider.ensureUser(setup.login_identifier));
       await pool.query(
-        `select c.id,c.person_id,c.purpose,e.login_identifier,e.provider_subject from mhistree.setup_sessions s join mhistree.setup_credentials c on c.id=s.credential_id join mhistree.auth_enrollments e on e.person_id=c.person_id where s.digest=$1 and s.used_at is null and s.expires_at>clock_timestamp() and c.state='redeemed'`,
-        [digest(setupSession)],
-      )
-    ).rows[0];
-    if (!setup) throw new DomainError("TOKEN_INVALID");
-    const subject =
-      setup.provider_subject ??
-      (await provider.ensureUser(setup.login_identifier));
-    await pool.query(
-      `update mhistree.auth_enrollments set provider_subject=$2 where person_id=$1`,
-      [setup.person_id, subject],
-    );
-    // Retry is safe after an uncertain provider response: same subject, same restricted setup.
-    await provider.revokeSessions(subject);
-    await provider.setPatientPassword(subject, password);
-    return transaction(async (tx) => {
-      const consumed = await tx.query(
-        `update mhistree.setup_sessions set used_at=clock_timestamp() where digest=$1 and used_at is null and expires_at>clock_timestamp() returning credential_id`,
-        [digest(setupSession)],
+        `update mhistree.auth_enrollments set provider_subject=$2 where person_id=$1`,
+        [setup.person_id, subject],
       );
-      if (!consumed.rowCount) throw new DomainError("TOKEN_INVALID");
-      await tx.query(
-        "update mhistree.setup_sessions set used_at=coalesce(used_at,clock_timestamp()) where credential_id=$1",
-        [setup.id],
-      );
-      const activated = await tx.query(
-        `insert into mhistree.accounts(person_id,provider,provider_subject,login_identifier,status) values($1,'keycloak',$2,$3,'active') on conflict(provider,provider_subject) do update set status='active',session_epoch=mhistree.accounts.session_epoch+1 where mhistree.accounts.status<>'retired'`,
-        [setup.person_id, subject, setup.login_identifier],
-      );
-      if (!activated.rowCount)
-        throw new DomainError("IDENTITY_REVIEW_REQUIRED");
-      await tx.query(
-        `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
-        [setup.person_id],
-      );
-      await appendEvent(tx, {
-        personId: setup.person_id,
-        action: "auth.password-setup.completed",
-        referenceId: setup.id,
-      });
-      return { loginIdentifier: setup.login_identifier };
-    }, pool);
-  });
+      // Retry is safe after an uncertain provider response: same subject, same restricted setup.
+      await provider.revokeSessions(subject);
+      await provider.setPatientPassword(subject, password);
+      return transaction(async (tx) => {
+        const consumed = await tx.query(
+          `update mhistree.setup_sessions set used_at=clock_timestamp() where digest=$1 and used_at is null and expires_at>clock_timestamp() returning credential_id`,
+          [digest(setupSession)],
+        );
+        if (!consumed.rowCount) throw new DomainError("TOKEN_INVALID");
+        await tx.query(
+          "update mhistree.setup_sessions set used_at=coalesce(used_at,clock_timestamp()) where credential_id=$1",
+          [setup.id],
+        );
+        const activated = await tx.query(
+          `insert into mhistree.accounts(person_id,provider,provider_subject,login_identifier,status) values($1,'keycloak',$2,$3,'active') on conflict(provider,provider_subject) do update set status='active',session_epoch=mhistree.accounts.session_epoch+1 where mhistree.accounts.status<>'retired'`,
+          [setup.person_id, subject, setup.login_identifier],
+        );
+        if (!activated.rowCount)
+          throw new DomainError("IDENTITY_REVIEW_REQUIRED");
+        await tx.query(
+          `update mhistree.auth_reconciliation set pending=false where person_id=$1`,
+          [setup.person_id],
+        );
+        await appendEvent(tx, {
+          personId: setup.person_id,
+          action: "auth.password-setup.completed",
+          referenceId: setup.id,
+        });
+        return { loginIdentifier: setup.login_identifier };
+      }, pool);
+    },
+  );
 }
 
 export async function signIn(

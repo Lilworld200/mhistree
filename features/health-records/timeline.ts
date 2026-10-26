@@ -1,7 +1,11 @@
 import "server-only";
 import type { Pool } from "pg";
 import { z } from "zod";
-import { withAccess, type ActingContext } from "@/features/access/server";
+import {
+  withAccess,
+  type ActingContext,
+  type AccessTransaction,
+} from "@/features/access/server";
 import { appendEvent } from "@/features/audit/server";
 import { category } from "./schema";
 import { digest } from "@/features/auth/sessions";
@@ -31,76 +35,80 @@ export async function timeline(
   context: ActingContext,
   input: unknown = {},
 ) {
+  return withAccess(pool, session, context, (a) => timelineInAccess(a, input));
+}
+export async function timelineInAccess(
+  a: AccessTransaction,
+  input: unknown = {},
+) {
   const data = filters.parse(input);
-  return withAccess(pool, session, context, async (a) => {
-    const fingerprint = digest(
-      JSON.stringify([
-        a.actor.accountId,
-        a.contextId,
-        data.category ?? null,
-        data.source ?? null,
-      ]),
-    );
-    const cursor = data.cursor
-      ? cursorSchema.parse(
-          JSON.parse(Buffer.from(data.cursor, "base64url").toString("utf8")),
-        )
-      : null;
-    if (cursor && cursor.filter !== fingerprint)
-      throw new DomainError("ACCESS_DENIED");
-    const snapshot =
-      cursor?.snapshot ??
-      (
-        await a.tx.query(
-          `select to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') now`,
-        )
-      ).rows[0].now;
-    const rows = (
+  const fingerprint = digest(
+    JSON.stringify([
+      a.actor.accountId,
+      a.contextId,
+      data.category ?? null,
+      data.source ?? null,
+    ]),
+  );
+  const cursor = data.cursor
+    ? cursorSchema.parse(
+        JSON.parse(Buffer.from(data.cursor, "base64url").toString("utf8")),
+      )
+    : null;
+  if (cursor && cursor.filter !== fingerprint)
+    throw new DomainError("ACCESS_DENIED");
+  const snapshot =
+    cursor?.snapshot ??
+    (
       await a.tx.query(
-        `with latest as (
+        `select to_char(clock_timestamp() at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') now`,
+      )
+    ).rows[0].now;
+  const rows = (
+    await a.tx.query(
+      `with latest as (
    select distinct on(e.logical_id) e.* from mhistree.contributions e where e.recorded_at<=$1::timestamptz order by e.logical_id,e.version desc
   ), dated as(select e.*,s.captured_at,s.chat_message_id,s.parent_source_id,
    case when e.occurred_at->>'precision'='unknown' and s.chat_message_id is null then 1 else 0 end bucket,
    coalesce((e.occurred_at->>'at')::timestamptz,(e.occurred_at->>'from')::timestamptz,s.captured_at,e.recorded_at) sort_time
    from latest e join mhistree.sources s on s.id=e.source_id where e.visibility='finalized' and ($2::text is null or e.category=$2) and ($3::text is null or e.source_status=$3))
    select *,to_char(sort_time at time zone 'UTC','YYYY-MM-DD"T"HH24:MI:SS.US"Z"') sort_key from dated where $4::int is null or bucket>$4 or(bucket=$4 and(sort_time<$5::timestamptz or(sort_time=$5::timestamptz and id<$6::uuid))) order by bucket,sort_time desc,id desc limit $7`,
-        [
-          snapshot,
-          data.category ?? null,
-          data.source ?? null,
-          cursor?.bucket ?? null,
-          cursor?.time ?? null,
-          cursor?.id ?? null,
-          data.limit + 1,
-        ],
-      )
-    ).rows;
-    const more = rows.length > data.limit;
-    const items = rows.slice(0, data.limit);
-    const last = items.at(-1);
-    await appendEvent(a.tx, {
-      actorAccountId: a.actor.accountId,
-      personId: a.actor.personId,
-      action: "record.read",
-      contextId: a.contextId,
-    });
-    return {
-      items,
-      nextCursor:
-        more && last
-          ? Buffer.from(
-              JSON.stringify({
-                snapshot,
-                filter: fingerprint,
-                bucket: last.bucket,
-                time: last.sort_key,
-                id: last.id,
-              }),
-            ).toString("base64url")
-          : null,
-      snapshot,
-    };
+      [
+        snapshot,
+        data.category ?? null,
+        data.source ?? null,
+        cursor?.bucket ?? null,
+        cursor?.time ?? null,
+        cursor?.id ?? null,
+        data.limit + 1,
+      ],
+    )
+  ).rows;
+  const more = rows.length > data.limit;
+  const items = rows.slice(0, data.limit);
+  const last = items.at(-1);
+  await appendEvent(a.tx, {
+    actorAccountId: a.actor.accountId,
+    personId: a.actor.personId,
+    action: "record.read",
+    contextId: a.contextId,
   });
+  return {
+    items,
+    nextCursor:
+      more && last
+        ? Buffer.from(
+            JSON.stringify({
+              snapshot,
+              filter: fingerprint,
+              bucket: last.bucket,
+              time: last.sort_key,
+              id: last.id,
+            }),
+          ).toString("base64url")
+        : null,
+    snapshot,
+  };
 }
 export async function sourcePreview(
   pool: Pool,

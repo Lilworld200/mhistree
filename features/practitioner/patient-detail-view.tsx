@@ -16,10 +16,11 @@ import {
 } from "@/features/health-records/timeline-view";
 import { recordNarrative } from "@/features/health-records/narrative";
 import { medicationPresentation } from "@/features/health-records/current-state-presentation";
-import { WorkspaceView } from "./workspace-view";
+import { WorkspaceView, type Workspace } from "./workspace-view";
+import { usePatientWorkspace } from "./use-patient-workspace";
 import { PatientSnapshot } from "./patient-snapshot";
 import type { PatientOverview } from "./patient-types";
-type Detail = {
+export type Detail = Omit<Workspace, "state" | "recent"> & {
   patient: {
     display_name: string;
     birth_date: string | null;
@@ -31,9 +32,7 @@ type Detail = {
   state: DisplayRecord[];
   recent: DisplayRecord[];
   limited: boolean;
-  work: unknown[];
-  requests: unknown[];
-  messages: unknown | null;
+  capabilities?: { work: boolean; requests: boolean; messages: boolean };
 };
 type Panel = "summary" | "ai" | "work" | "requests" | "messages";
 function ClinicalRecord({ record }: { record: DisplayRecord }) {
@@ -189,61 +188,23 @@ const titles: Record<Panel, string> = {
   requests: "Requests & results",
   messages: "Care inbox",
 };
-export function PatientDetailView({ connectionId }: { connectionId: string }) {
-  const [data, setData] = useState<Detail | null>(null),
-    [error, setError] = useState(""),
-    [panel, setPanel] = useState<Panel | null>(null);
-  const trigger = useRef<HTMLElement | null>(null),
-    sequence = useRef(0),
-    revision = useRef<number | null>(null);
-  const refresh = useCallback(async () => {
-    const serial = ++sequence.current;
-    try {
-      const result = await api<Detail>(
-        `/api/practitioner/workspace?connection=${connectionId}`,
-      );
-      if (serial !== sequence.current) return;
-      if (revision.current !== null && revision.current !== result.revision)
-        setPanel(null);
-      revision.current = result.revision;
-      setData(result);
-      setError("");
-    } catch (e) {
-      if (serial === sequence.current) {
-        setData(null);
-        setPanel(null);
-        setError(errorMessage(e));
-      }
-    }
-  }, [connectionId]);
-  useEffect(() => {
-    let active = true;
-    const serial = ++sequence.current;
-    api<Detail>(`/api/practitioner/workspace?connection=${connectionId}`)
-      .then((result) => {
-        if (active && serial === sequence.current) {
-          revision.current = result.revision;
-          setData(result);
-          setError("");
-        }
-      })
-      .catch((e) => {
-        if (active && serial === sequence.current) {
-          setData(null);
-          setPanel(null);
-          setError(errorMessage(e));
-        }
-      });
-    const timer = setInterval(() => {
-      if (document.visibilityState === "visible") void refresh();
-    }, 15000);
-    window.addEventListener("focus", refresh);
-    return () => {
-      active = false;
-      clearInterval(timer);
-      window.removeEventListener("focus", refresh);
-    };
-  }, [refresh, connectionId]);
+export function PatientDetailView({
+  connectionId,
+  initialData,
+}: {
+  connectionId: string;
+  initialData?: Detail;
+}) {
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const trigger = useRef<HTMLElement | null>(null);
+  const view =
+    panel === "work" || panel === "requests" || panel === "messages"
+      ? panel
+      : "profile";
+  const { data, error, refresh, loadedView, clear } =
+    usePatientWorkspace<Detail>(connectionId, view, initialData, () =>
+      setPanel(null),
+    );
   function tile(value: Panel, icon: IconName, description: string) {
     return (
       <button
@@ -307,8 +268,9 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
                   setPanel("summary");
                 }}
               />
-              {(data.permissions.read.includes("result") ||
-                data.requests.length > 0) && (
+              {(data.capabilities?.requests ??
+                (data.permissions.read.includes("result") ||
+                  data.requests.length > 0)) && (
                 <PatientActionButton
                   icon="doc"
                   label={titles.requests}
@@ -321,8 +283,9 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
             </div>
             <article className="card patient-profile-card">
               <header className="patient-identity-card">
-                {(data.permissions.write.length > 0 ||
-                  data.work.length > 0) && (
+                {(data.capabilities?.work ??
+                  (data.permissions.write.length > 0 ||
+                    data.work.length > 0)) && (
                   <PatientActionButton
                     icon="edit"
                     label={titles.work}
@@ -378,7 +341,7 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
               "spark",
               "Explore shared records and, when permitted, review and save care or private notes.",
             )}
-            {data.messages !== null &&
+            {(data.capabilities?.messages ?? data.messages !== null) &&
               tile(
                 "messages",
                 "chat",
@@ -511,7 +474,16 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
                 {(panel === "work" ||
                   panel === "requests" ||
                   panel === "messages") && (
-                  <WorkspaceView connectionId={connectionId} section={panel} />
+                  <WorkspaceView
+                    connectionId={connectionId}
+                    section={panel}
+                    controller={{
+                      data,
+                      ready: loadedView === panel,
+                      refresh,
+                      clear,
+                    }}
+                  />
                 )}
               </div>
             </SidePanel>

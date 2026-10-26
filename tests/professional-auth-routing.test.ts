@@ -13,7 +13,10 @@ const { login, signup, confirm, home } = vi.hoisted(() => ({
 vi.mock("@/features/auth/workspace-access", () => ({
   defaultAccountPath: home,
 }));
-vi.mock("@/lib/db/client", () => ({ database: () => ({}) }));
+vi.mock("@/lib/db/client", () => ({
+  database: () => ({}),
+  credentialLockDatabase: () => ({}),
+}));
 vi.mock("@/lib/auth/config", () => ({
   authenticationProvider: () => ({
     verifier: "synthetic-pkce",
@@ -112,7 +115,7 @@ it("signup intent is only a return-path cookie and is stripped before identity e
     entry: "organization",
   });
   expect(response.status).toBe(200);
-  expect(signup.mock.calls[0][2]).toEqual(credentials);
+  expect(signup.mock.calls[0][3]).toEqual(credentials);
   expect(response.cookies.get(entryCookie)?.value).toBe("organization");
   expect(response.headers.get("set-cookie")).toContain("HttpOnly");
 });

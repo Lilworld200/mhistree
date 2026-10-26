@@ -1,3 +1,4 @@
+import { credentialLockDatabase } from "@/lib/db/client";
 import {
   withAuthDebug,
   authDebugStage,
@@ -102,7 +103,13 @@ export async function POST(
           .passthrough()
           .parse(input);
         const response = await emailResponse(
-          await signupEmail(pool, provider, credentials, rate),
+          await signupEmail(
+            pool,
+            credentialLockDatabase(),
+            provider,
+            credentials,
+            rate,
+          ),
         );
         response.cookies.set(entryCookie, entry ?? "", {
           ...flowCookieOptions(),
@@ -129,6 +136,7 @@ export async function POST(
         const response = success(
           await resetEmailPassword(
             pool,
+            credentialLockDatabase(),
             provider,
             await openFlow(
               request.cookies.get(recoveryCookie)?.value,
@@ -167,6 +175,7 @@ export async function POST(
       if (operation === "setup") {
         const result = await setupEmail(
           pool,
+          credentialLockDatabase(),
           provider,
           input,
           request.cookies.get(setupCookie)?.value ?? "",

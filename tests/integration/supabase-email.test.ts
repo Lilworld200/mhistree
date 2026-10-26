@@ -14,7 +14,7 @@ import { transaction } from "@/lib/db/client";
 import { testDatabase } from "../helpers/postgres";
 import { NextRequest } from "next/server";
 import { POST } from "@/app/api/auth/[operation]/route";
-import { database } from "@/lib/db/client";
+import { database, credentialLockDatabase } from "@/lib/db/client";
 import { sealFlow, recoveryCookie } from "@/lib/auth/flow-cookie";
 import { removeContact } from "@/features/patient/account/server";
 
@@ -64,6 +64,7 @@ function fixture(subject = randomUUID()) {
 async function enroll(f: ReturnType<typeof fixture>) {
   return signupEmail(
     db.pool,
+    db.lockPool,
     f.provider,
     {
       email: f.email,
@@ -80,6 +81,7 @@ it("requires email/password and creates no patient record before verified provid
   await expect(
     signupEmail(
       db.pool,
+      db.lockPool,
       f.provider,
       { displayName: "No credentials", requestKey: secret() },
       randomUUID(),
@@ -135,6 +137,7 @@ it("setup approval binds the original staff-created person rather than creating 
   );
   await signupEmail(
     db.pool,
+    db.lockPool,
     f.provider,
     {
       email: f.email,
@@ -176,6 +179,7 @@ it("reset retires app sessions, rejects replay and pre-reset callback tokens", a
   );
   await resetEmailPassword(
     db.pool,
+    db.lockPool,
     f.provider,
     f.token,
     "New-synthetic-password-456!",
@@ -188,6 +192,7 @@ it("reset retires app sessions, rejects replay and pre-reset callback tokens", a
   await expect(
     resetEmailPassword(
       db.pool,
+      db.lockPool,
       f.provider,
       f.token,
       "New-synthetic-password-456!",
@@ -212,6 +217,7 @@ it("password-authenticated proofs cannot reset by email; primary login contact c
   await expect(
     resetEmailPassword(
       db.pool,
+      db.lockPool,
       f.provider,
       f.token,
       "New-synthetic-password-456!",
@@ -244,6 +250,7 @@ it("provider failure during reset denies old sessions and remains explicitly ret
   await expect(
     resetEmailPassword(
       db.pool,
+      db.lockPool,
       f.provider,
       f.token,
       "New-synthetic-password-456!",
@@ -374,6 +381,7 @@ it.runIf(process.env.MHISTREE_LIVE_AUTH_TEST === "1")(
       const { error } = await admin.auth.admin.signOut(updated.token, "global");
       expect(error).toBeNull();
     } finally {
+      await credentialLockDatabase().end();
       await database().end();
       const { error } = await admin.auth.admin.deleteUser(subject);
       if (error) throw new Error("Synthetic Supabase test-user cleanup failed");

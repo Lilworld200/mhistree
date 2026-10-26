@@ -164,18 +164,15 @@ export async function listWork(
   session: string,
   context: ActingContext,
 ) {
-  return withAccess(
-    pool,
-    session,
-    context,
-    async (a) =>
-      (
-        await a.tx.query(
-          "select * from mhistree.clinical_work where original_context=$1 order by updated_at desc,id limit 100",
-          [a.contextId],
-        )
-      ).rows,
-  );
+  return withAccess(pool, session, context, listWorkInAccess);
+}
+export async function listWorkInAccess(a: AccessTransaction) {
+  return (
+    await a.tx.query(
+      "select * from mhistree.clinical_work where original_context=$1 order by updated_at desc,id limit 100",
+      [a.contextId],
+    )
+  ).rows;
 }
 export async function editWork(
   pool: Pool,
