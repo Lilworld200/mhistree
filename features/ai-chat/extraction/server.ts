@@ -69,10 +69,21 @@ export const extractedItem = z
 const envelope = z
   .object({
     items: z.array(z.unknown()).max(30),
-    clarifications: z.array(z.string().max(500)).max(20),
-    patientMatch: z.enum(["match", "mismatch", "uncertain", "not-applicable"]),
+    clarifications: z
+      .array(
+        z.union([
+          z.string().max(500),
+          z.object({ text: z.string().max(500) }).transform((o) => o.text),
+          z.object({ question: z.string().max(500) }).transform((o) => o.question),
+        ]),
+      )
+      .max(20)
+      .default([]),
+    patientMatch: z
+      .enum(["match", "mismatch", "uncertain", "not-applicable"])
+      .default("not-applicable"),
   })
-  .strict();
+  .passthrough();
 type SavedItem = {
   key: string;
   sourceKey: string;
@@ -209,7 +220,8 @@ export function validateExtraction(
     )
       continue;
     if (
-      !content.includes(item.quote) ||
+      (!content.includes(item.quote) &&
+        !content.toLowerCase().replace(/[^a-z0-9]/g, "").includes(item.quote.toLowerCase().replace(/[^a-z0-9]/g, ""))) ||
       (item.timePhrase &&
         !content.toLowerCase().includes(item.timePhrase.toLowerCase()))
     ) {
@@ -412,8 +424,9 @@ async function extractReport(
         ],
         { json: true, purpose: "extraction" },
       );
+      const cleanRaw = raw.trim().replace(/^```(?:json)?\s*|\s*```$/gi, "").trim();
       output = validateExtraction(
-        JSON.parse(raw),
+        JSON.parse(cleanRaw),
         prepared.source.content,
         Boolean(prepared.job.document_source_id),
         prepared.context,
@@ -637,10 +650,14 @@ async function extractReport(
   } catch (error) {
     aiDebugError("extraction.failed", error);
     try {
+      const issueMsg =
+        error instanceof Error
+          ? error.message
+          : "Extraction failed. The original is retained.";
       await withAccess(pool, session, { kind: "patient" }, (a) =>
         a.tx.query(
-          "update mhistree.extraction_jobs set state='failed',issues='[\"Extraction failed. The original is retained.\"]',lease_until=null where id=$1 and lease_id=$2",
-          [jobId, lease],
+          "update mhistree.extraction_jobs set state='failed',issues=$3,lease_until=null where id=$1 and lease_id=$2",
+          [jobId, lease, JSON.stringify([issueMsg])],
         ),
       );
     } catch {}
