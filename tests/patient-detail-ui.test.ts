@@ -170,6 +170,8 @@ it("provides patient-scoped AI conversation and retains a failed question for re
       question: "What reports relate to jogging?",
       purpose: "question",
       includeOwnNotes: false,
+      conversation: true,
+      timezone: expect.any(String),
     },
   });
   expect(document.querySelector('[role="dialog"]')?.textContent).toContain(

@@ -276,7 +276,7 @@ export function WorkspaceView({
             {suggestion && (
               <label>
                 <input type="checkbox" name="useAi" />
-                Retain this AI suggestion’s provenance (clinical draft only)
+                Retain this AI suggestion’s provenance (draft or private note)
               </label>
             )}
             <Btn type="submit" disabled={busy}>
@@ -291,7 +291,7 @@ export function WorkspaceView({
               <p>{w.body.text}</p>
               <small>Work ID {w.id}</small>
               {w.ai_provenance ? (
-                <p>AI-assisted draft; human review required.</p>
+                <p>AI-assisted work; human review required.</p>
               ) : null}
               {w.state === "paused" ? (
                 <form

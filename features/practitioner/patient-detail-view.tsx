@@ -1,4 +1,5 @@
 "use client";
+import { PatientAssistant } from "./patient-assistant";
 import { PatientActionButton } from "./patient-action-button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -74,141 +75,6 @@ function ClinicalRecord({ record }: { record: DisplayRecord }) {
         </small>
       </details>
     </article>
-  );
-}
-function PatientAssistant({
-  connectionId,
-  summary = false,
-}: {
-  connectionId: string;
-  summary?: boolean;
-}) {
-  const [question, setQuestion] = useState(""),
-    [busy, setBusy] = useState(false),
-    [error, setError] = useState("");
-  const [turns, setTurns] = useState<
-    {
-      question: string;
-      text: string;
-      limitations: string[];
-      evidenceIds: string[];
-    }[]
-  >([]);
-  const end = useRef<HTMLDivElement | null>(null);
-  async function send(text: string, purpose = "question") {
-    if (busy || !text.trim()) return;
-    setBusy(true);
-    setError("");
-    try {
-      const response = await api<{
-        text: string;
-        limitations: string[];
-        evidenceIds: string[];
-      }>("/api/practitioner/workspace", {
-        connectionId,
-        action: "ai",
-        data: { question: text, purpose, includeOwnNotes: false },
-      });
-      setTurns((old) => [...old, { question: text, ...response }]);
-      setQuestion("");
-      end.current?.scrollIntoView?.({ block: "nearest" });
-    } catch (e) {
-      setError(errorMessage(e));
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="patient-assistant">
-      <p className="sharing-help">
-        Ask about this patient&apos;s currently shared records. AI responses
-        require your review and do not become clinical entries.
-      </p>
-      {summary && (
-        <Btn
-          icon="spark"
-          disabled={busy}
-          onClick={() =>
-            void send(
-              "Summarize this patient's authorized history and persistent health details. Distinguish today's reports from older history, medication use from prescriptions, and preserve uncertainty and dates.",
-              "summary",
-            )
-          }
-        >
-          Generate AI summary
-        </Btn>
-      )}
-      {!turns.length && !summary && (
-        <div className="patient-assistant-empty">
-          <Icon n="chat" s={28} />
-          <h3>Explore the patient&apos;s record</h3>
-          <p>
-            Ask about reported symptoms, medication history or changes over
-            time.
-          </p>
-        </div>
-      )}
-      <div
-        className="patient-assistant-turns"
-        aria-label="Patient AI conversation"
-        aria-live="polite"
-      >
-        {turns.map((turn, index) => (
-          <div key={index}>
-            <p className="patient-ai-question">{turn.question}</p>
-            <article className="patient-ai-response">
-              <small>AI assistance · Human review required</small>
-              <p>{turn.text}</p>
-              {turn.limitations.map((text, i) => (
-                <p className="sharing-help" key={i}>
-                  {text}
-                </p>
-              ))}
-              <details>
-                <summary>{turn.evidenceIds.length} supporting records</summary>
-                {turn.evidenceIds.length ? (
-                  <p>
-                    Evidence is drawn from the current authorized record. Review
-                    the shared history alongside this response.
-                  </p>
-                ) : (
-                  <p>No finalized supporting record was cited.</p>
-                )}
-              </details>
-            </article>
-          </div>
-        ))}
-        <div ref={end} />
-      </div>
-      <form
-        className="patient-ai-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send(question);
-        }}
-      >
-        <label className="sr-only" htmlFor="patient-ai-question">
-          Ask about this patient
-        </label>
-        <textarea
-          id="patient-ai-question"
-          placeholder="Ask about this patient..."
-          value={question}
-          maxLength={3000}
-          required
-          onChange={(event) => setQuestion(event.target.value)}
-          disabled={busy}
-        />
-        <Btn kind="dark" type="submit" disabled={busy || !question.trim()}>
-          {busy ? "Thinking..." : "Send"}
-        </Btn>
-      </form>
-      {error && (
-        <p role="alert">
-          {error} Your question has been kept so you can try again.
-        </p>
-      )}
-    </div>
   );
 }
 function SharedHistory({
@@ -510,7 +376,7 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
             {tile(
               "ai",
               "spark",
-              "Ask questions about this patient's authorized records.",
+              "Explore shared records and, when permitted, review and save care or private notes.",
             )}
             {data.messages !== null &&
               tile(
@@ -624,13 +490,22 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
                         onDenied={refresh}
                       />
                     </section>
-                    <PatientAssistant connectionId={connectionId} summary />
+                    <PatientAssistant
+                      connectionId={connectionId}
+                      summary
+                      writableCategories={data.permissions.write}
+                      onSaved={refresh}
+                      onDenied={refresh}
+                    />
                   </>
                 )}
                 {panel === "ai" && (
                   <PatientAssistant
                     key={data.revision}
                     connectionId={connectionId}
+                    writableCategories={data.permissions.write}
+                    onSaved={refresh}
+                    onDenied={refresh}
                   />
                 )}
                 {(panel === "work" ||

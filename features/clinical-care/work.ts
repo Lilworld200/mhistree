@@ -5,6 +5,7 @@ import {
   withAccess,
   type ActingContext,
   authorize,
+  type AccessTransaction,
 } from "@/features/access/server";
 import { contributionInput, category } from "@/features/health-records/schema";
 import { DomainError } from "@/lib/errors";
@@ -36,115 +37,127 @@ export async function saveWork(
   context: ActingContext,
   input: unknown,
 ) {
+  return withAccess(pool, session, context, (a) => saveWorkInAccess(a, input));
+}
+/** Compose reviewed AI work and finalization in the same authorized transaction. */
+export async function saveWorkInAccess(a: AccessTransaction, input: unknown) {
+  const context = a.context;
   const d = workInput.parse(input);
-  if (context.kind !== "direct" && context.kind !== "organization" && context.kind !== "initial-care")
+  if (
+    context.kind !== "direct" &&
+    context.kind !== "organization" &&
+    context.kind !== "initial-care"
+  )
     throw new DomainError("ACCESS_DENIED");
   if (
     (context.kind !== "organization" || d.kind !== "draft") &&
     d.teamAccountIds.length
   )
     throw new DomainError("ACCESS_DENIED");
-  return withAccess(pool, session, context, async (a) => {
-    await authorize(
-      a,
-      {
-        patientPersonId: d.patientPersonId,
-        originPersonId: d.patientPersonId,
-        category: d.category,
-        visibility: "private",
-        authorAccountId: a.actor.accountId,
-        originalContext: a.contextId,
-        originalOrganizationId:
-          context.kind === "organization" || context.kind === "initial-care" ? context.organizationId : null,
-      },
-      "write",
-    );
-    await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
-      `work:${d.requestKey}`,
-    ]);
-    const existing = (
-      await a.tx.query(
-        "select * from mhistree.clinical_work where request_key=$1",
-        [d.requestKey],
-      )
-    ).rows[0];
-    if (existing) {
-      if (
-        existing.author_account_id !== a.actor.accountId ||
-        JSON.stringify(contributionInput.shape.body.parse(existing.body)) !==
-          JSON.stringify(d.body) ||
-        JSON.stringify(
-          contributionInput.shape.occurredAt.parse(existing.occurred_at),
-        ) !== JSON.stringify(d.occurredAt) ||
-        existing.category !== d.category ||
-        existing.timezone !== d.timezone ||
-        (existing.due_at?.toISOString() ?? null) !==
-          (d.dueAt ? new Date(d.dueAt).toISOString() : null) ||
-        JSON.stringify(existing.team_account_ids) !==
-          JSON.stringify(d.teamAccountIds) ||
-        (existing.ai_provenance?.runId ?? null) !== (d.aiRunId ?? null) ||
-        existing.patient_person_id !== d.patientPersonId ||
-        existing.kind !== d.kind ||
-        existing.original_context !== a.contextId
-      )
-        throw new DomainError("VERSION_CONFLICT");
-      return existing;
-    }
-    const row = (
-      await a.tx.query(
-        "insert into mhistree.clinical_work(patient_person_id,author_account_id,connection_id,original_context,organization_id,kind,category,body,occurred_at,timezone,due_at,team_account_ids,request_key,initial_care_basis_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *",
-        [
-          d.patientPersonId,
-          a.actor.accountId,
-          context.kind === "initial-care" ? null : context.connectionId,
-          a.contextId,
-          context.kind === "organization" || context.kind === "initial-care" ? context.organizationId : null,
-          d.kind,
-          d.category,
-          JSON.stringify(d.body),
-          JSON.stringify(d.occurredAt),
-          d.timezone,
-          d.dueAt,
-          d.teamAccountIds,
-          d.requestKey,
-          context.kind === "initial-care" ? context.basisId : null,
-        ],
-      )
-    ).rows[0];
-    if (d.aiRunId) {
-      if (context.kind === "initial-care") throw new DomainError("ACCESS_DENIED");
-      const run = (
-        await a.tx.query(
-          "select id,purpose from mhistree.practitioner_ai_runs where id=$1 and account_id=$2 and connection_id=$3",
-          [d.aiRunId, a.actor.accountId, context.connectionId],
-        )
-      ).rows[0];
-      if (!run || d.kind !== "draft") throw new DomainError("ACCESS_DENIED");
-      await a.tx.query(
-        "update mhistree.clinical_work set ai_provenance=$2 where id=$1",
-        [
-          row.id,
-          JSON.stringify({
-            runId: run.id,
-            purpose: run.purpose,
-            origin: "AI suggestion reviewed by human",
-          }),
-        ],
-      );
-    }
+  await authorize(
+    a,
+    {
+      patientPersonId: d.patientPersonId,
+      originPersonId: d.patientPersonId,
+      category: d.category,
+      visibility: "private",
+      authorAccountId: a.actor.accountId,
+      originalContext: a.contextId,
+      originalOrganizationId:
+        context.kind === "organization" || context.kind === "initial-care"
+          ? context.organizationId
+          : null,
+    },
+    "write",
+  );
+  await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
+    `work:${d.requestKey}`,
+  ]);
+  const existing = (
     await a.tx.query(
-      "insert into mhistree.clinical_work_versions(work_id,version,actor_account_id,body,state) values($1,1,$2,$3,'draft')",
-      [row.id, a.actor.accountId, JSON.stringify(d.body)],
+      "select * from mhistree.clinical_work where request_key=$1",
+      [d.requestKey],
+    )
+  ).rows[0];
+  if (existing) {
+    if (
+      existing.author_account_id !== a.actor.accountId ||
+      JSON.stringify(contributionInput.shape.body.parse(existing.body)) !==
+        JSON.stringify(d.body) ||
+      JSON.stringify(
+        contributionInput.shape.occurredAt.parse(existing.occurred_at),
+      ) !== JSON.stringify(d.occurredAt) ||
+      existing.category !== d.category ||
+      existing.timezone !== d.timezone ||
+      (existing.due_at?.toISOString() ?? null) !==
+        (d.dueAt ? new Date(d.dueAt).toISOString() : null) ||
+      JSON.stringify(existing.team_account_ids) !==
+        JSON.stringify(d.teamAccountIds) ||
+      (existing.ai_provenance?.runId ?? null) !== (d.aiRunId ?? null) ||
+      existing.patient_person_id !== d.patientPersonId ||
+      existing.kind !== d.kind ||
+      existing.original_context !== a.contextId
+    )
+      throw new DomainError("VERSION_CONFLICT");
+    return existing;
+  }
+  const row = (
+    await a.tx.query(
+      "insert into mhistree.clinical_work(patient_person_id,author_account_id,connection_id,original_context,organization_id,kind,category,body,occurred_at,timezone,due_at,team_account_ids,request_key,initial_care_basis_id) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) returning *",
+      [
+        d.patientPersonId,
+        a.actor.accountId,
+        context.kind === "initial-care" ? null : context.connectionId,
+        a.contextId,
+        context.kind === "organization" || context.kind === "initial-care"
+          ? context.organizationId
+          : null,
+        d.kind,
+        d.category,
+        JSON.stringify(d.body),
+        JSON.stringify(d.occurredAt),
+        d.timezone,
+        d.dueAt,
+        d.teamAccountIds,
+        d.requestKey,
+        context.kind === "initial-care" ? context.basisId : null,
+      ],
+    )
+  ).rows[0];
+  if (d.aiRunId) {
+    if (context.kind === "initial-care") throw new DomainError("ACCESS_DENIED");
+    const run = (
+      await a.tx.query(
+        "select id,purpose from mhistree.practitioner_ai_runs where id=$1 and account_id=$2 and connection_id=$3",
+        [d.aiRunId, a.actor.accountId, context.connectionId],
+      )
+    ).rows[0];
+    if (!run || !["draft", "private-note"].includes(d.kind))
+      throw new DomainError("ACCESS_DENIED");
+    await a.tx.query(
+      "update mhistree.clinical_work set ai_provenance=$2 where id=$1",
+      [
+        row.id,
+        JSON.stringify({
+          runId: run.id,
+          purpose: run.purpose,
+          origin: "AI suggestion reviewed by human",
+        }),
+      ],
     );
-    await appendEvent(a.tx, {
-      actorAccountId: a.actor.accountId,
-      personId: d.patientPersonId,
-      contextId: a.contextId,
-      referenceId: row.id,
-      action: "clinical.work.saved",
-    });
-    return row;
+  }
+  await a.tx.query(
+    "insert into mhistree.clinical_work_versions(work_id,version,actor_account_id,body,state) values($1,1,$2,$3,'draft')",
+    [row.id, a.actor.accountId, JSON.stringify(d.body)],
+  );
+  await appendEvent(a.tx, {
+    actorAccountId: a.actor.accountId,
+    personId: d.patientPersonId,
+    contextId: a.contextId,
+    referenceId: row.id,
+    action: "clinical.work.saved",
   });
+  return row;
 }
 export async function listWork(
   pool: Pool,

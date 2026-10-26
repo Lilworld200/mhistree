@@ -21,6 +21,6 @@ export function medicationPresentation(
   return {
     useStatus: use.useStatus,
     explanation:
-      "Patient-reported use; a prescription does not prove use or fulfillment.",
+      "Recorded medication use; a prescription does not prove use or fulfillment. See the entry for its source.",
   };
 }

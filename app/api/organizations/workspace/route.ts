@@ -5,6 +5,7 @@ import { database } from "@/lib/db/client";
 import { organizationWorkspace } from "@/features/organizations/care";
 import { saveWork, editWork } from "@/features/clinical-care/work";
 import { finalizeEntry } from "@/features/clinical-care/entries";
+import { savePractitionerProposal } from "@/features/clinical-care/ai-entry";
 import {
   createServiceRequest,
   changeServiceRequest,
@@ -74,6 +75,7 @@ export async function POST(r: NextRequest) {
           "appointment",
           "read",
           "ai",
+          "ai-save",
         ]),
         data: z.unknown(),
       })
@@ -100,6 +102,9 @@ export async function POST(r: NextRequest) {
           question: z.string(),
           purpose: z.enum(["summary", "question", "assessment", "draft"]),
           includeOwnNotes: z.boolean(),
+          conversation: z.boolean().optional(),
+          previousRunId: z.uuid().optional(),
+          timezone: z.string().optional(),
         })
         .strict()
         .parse(d.data);
@@ -118,6 +123,7 @@ export async function POST(r: NextRequest) {
         save: saveWork,
         edit: editWork,
         finalize: finalizeEntry,
+        "ai-save": savePractitionerProposal,
         request: createServiceRequest,
         "request-transition": changeServiceRequest,
         result: publishResult,

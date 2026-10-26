@@ -4487,6 +4487,14 @@ textarea:focus-visible {
 .patient-ai-question { margin:0 0 12px 24px; background:var(--ink); color:var(--card); padding:16px 20px; border-radius:22px 22px 4px 22px; font-size:13px; line-height:1.8; white-space:pre-wrap; overflow-wrap:anywhere; }
 .patient-ai-response { padding:20px; background:var(--shell); border-radius:22px 22px 22px 4px; font-size:14px; line-height:1.9; overflow-wrap:anywhere; }
 .patient-ai-response > p { white-space:pre-wrap; }
+.patient-ai-review { margin-top:14px; padding:18px; border:1px solid var(--bs); border-radius:22px; background:var(--card); font-size:13px; line-height:1.7; overflow-wrap:anywhere; }
+.patient-ai-review h4 { margin:0 0 12px; }
+.patient-ai-review label { display:grid; gap:8px; font-weight:700; }
+.patient-ai-review textarea { width:100%; min-width:0; min-height:110px; padding:14px; resize:vertical; border:1px solid var(--bs); border-radius:18px; background:var(--shell); color:var(--ink); font:inherit; font-size:16px; font-weight:400; }
+.patient-ai-review textarea:focus-visible { outline:2px solid var(--hero2); outline-offset:3px; }
+.patient-ai-review blockquote { margin:10px 0; padding-left:12px; border-left:2px solid var(--bs); }
+.patient-ai-review-actions { display:flex; flex-wrap:wrap; gap:10px; }
+.patient-ai-review-actions .btn { height:auto; min-height:50px; white-space:normal; padding-block:12px; text-align:center; }
 .patient-ai-response small,.patient-ai-response details { font-size:11px; color:var(--ink3); }
 .patient-assistant-empty { text-align:center; padding:36px 16px; color:var(--ink2); }
 .patient-assistant-empty svg { margin:auto; }
