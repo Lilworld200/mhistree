@@ -191,9 +191,7 @@ export function WorkspaceView({
       {section !== "all" && <p role="status">{message}</p>}
       {(section === "all" || section === "work") && (
         <>
-          <h2 id="private-work">
-            Private notes, reminders and clinical drafts
-          </h2>
+          <h2 id="private-work">Care notes</h2>
           <p>
             Private work is not patient-facing. Suspected findings must remain
             labeled suspected. Finalization requires deliberate human review.

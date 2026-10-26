@@ -1,6 +1,8 @@
 "use client";
+import { PatientActionButton } from "./patient-action-button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { Btn } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
 import { SidePanel } from "@/components/ui/side-panel";
@@ -32,14 +34,7 @@ type Detail = {
   requests: unknown[];
   messages: unknown | null;
 };
-type Panel =
-  | "summary"
-  | "medications"
-  | "history"
-  | "ai"
-  | "work"
-  | "requests"
-  | "messages";
+type Panel = "summary" | "ai" | "work" | "requests" | "messages";
 function ClinicalRecord({ record }: { record: DisplayRecord }) {
   return (
     <article className="patient-clinical-record" id={`event-${record.id}`}>
@@ -323,10 +318,8 @@ function SharedHistory({
 }
 const titles: Record<Panel, string> = {
   summary: "Health summary",
-  medications: "Medications & prescriptions",
-  history: "Shared history",
   ai: "Ask Mhistree",
-  work: "Care notes & drafts",
+  work: "Care notes",
   requests: "Requests & results",
   messages: "Care inbox",
 };
@@ -409,11 +402,20 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
   }
   return (
     <section className="patient-page patient-detail-page">
-      <div className="patient-detail-toolbar">
-        <Btn asChild icon="arrowLeft">
+      <MobileTopbarActions>
+        <Btn asChild sm icon="arrowLeft">
           <Link href="/clinician/patients">Back to My patients</Link>
         </Btn>
-        <Btn onClick={() => void refresh()}>Refresh</Btn>
+      </MobileTopbarActions>
+      <div className="patient-detail-toolbar">
+        <Btn asChild icon="arrowLeft" className="patient-detail-back">
+          <Link href="/clinician/patients">Back to My patients</Link>
+        </Btn>
+        <div className="patient-detail-actions">
+          <span className="patient-detail-refresh">
+            <Btn onClick={() => void refresh()}>Refresh</Btn>
+          </span>
+        </div>
       </div>
       {!data ? (
         <div className="card patient-detail-empty">
@@ -425,80 +427,91 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
         </div>
       ) : (
         <>
-          <header className="card patient-identity-card">
-            <span
-              className="sharing-avatar patient-detail-avatar"
-              aria-hidden="true"
+          <div className="patient-profile-folder">
+            <div
+              className="patient-folder-tab"
+              role="group"
+              aria-label="Patient record tools"
             >
-              {data.patient.display_name
-                .split(/\s+/)
-                .slice(0, 2)
-                .map((n) => n[0])
-                .join("")}
-            </span>
-            <div className="patient-identity-main">
-              <p className="patient-detail-eyebrow">Direct connection</p>
-              <h1>{data.patient.display_name}</h1>
-              <dl>
-                <div>
-                  <dt>Date of birth</dt>
-                  <dd>
-                    {data.patient.birth_date
-                      ? new Date(data.patient.birth_date).toLocaleDateString(
-                          "en-GB",
-                          { timeZone: "Africa/Lagos" },
-                        )
-                      : "Not recorded"}
-                  </dd>
-                </div>
-                {data.patient.mhistree_id && (
-                  <div>
-                    <dt>Mhistree ID</dt>
-                    <dd>{data.patient.mhistree_id}</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          </header>
-          <article className="card patient-detail-overview">
-            <PatientSnapshot overview={data.overview} summaryOnly />
-          </article>
-          <div className="patient-section-grid">
-            {tile(
-              "summary",
-              "pulse",
-              "A focused view of the patient's shared health record.",
-            )}
-            {(data.permissions.read.includes("medication-use") ||
-              data.permissions.read.includes("prescription")) &&
-              tile(
-                "medications",
-                "heart",
-                "Reported medication use and professional prescriptions, kept distinct.",
+              <PatientActionButton
+                icon="pulse"
+                label={titles.summary}
+                onClick={(event) => {
+                  trigger.current = event.currentTarget;
+                  setPanel("summary");
+                }}
+              />
+              {(data.permissions.read.includes("result") ||
+                data.requests.length > 0) && (
+                <PatientActionButton
+                  icon="doc"
+                  label={titles.requests}
+                  onClick={(event) => {
+                    trigger.current = event.currentTarget;
+                    setPanel("requests");
+                  }}
+                />
               )}
-            {tile(
-              "history",
-              "doc",
-              "Browse shared reports, documents and finalized care.",
-            )}
+            </div>
+            <article className="card patient-profile-card">
+              <header className="patient-identity-card">
+                {(data.permissions.write.length > 0 ||
+                  data.work.length > 0) && (
+                  <PatientActionButton
+                    icon="edit"
+                    label={titles.work}
+                    onClick={(event) => {
+                      trigger.current = event.currentTarget;
+                      setPanel("work");
+                    }}
+                  />
+                )}
+                <span
+                  className="sharing-avatar patient-detail-avatar"
+                  aria-hidden="true"
+                >
+                  {data.patient.display_name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((n) => n[0])
+                    .join("")}
+                </span>
+                <div className="patient-identity-main">
+                  <p className="patient-detail-eyebrow">Direct connection</p>
+                  <h1>{data.patient.display_name}</h1>
+                  <dl>
+                    <div>
+                      <dt>Date of birth</dt>
+                      <dd>
+                        {data.patient.birth_date
+                          ? new Date(
+                              data.patient.birth_date,
+                            ).toLocaleDateString("en-GB", {
+                              timeZone: "Africa/Lagos",
+                            })
+                          : "Not recorded"}
+                      </dd>
+                    </div>
+                    {data.patient.mhistree_id && (
+                      <div>
+                        <dt>Mhistree ID</dt>
+                        <dd>{data.patient.mhistree_id}</dd>
+                      </div>
+                    )}
+                  </dl>
+                </div>
+              </header>
+              <div className="patient-detail-overview">
+                <PatientSnapshot overview={data.overview} summaryOnly />
+              </div>
+            </article>
+          </div>
+          <div className="patient-section-grid">
             {tile(
               "ai",
               "spark",
               "Ask questions about this patient's authorized records.",
             )}
-            {(data.permissions.write.length > 0 || data.work.length > 0) &&
-              tile(
-                "work",
-                "edit",
-                "Private notes, reminders and reviewed clinical drafts.",
-              )}
-            {(data.permissions.read.includes("result") ||
-              data.requests.length > 0) &&
-              tile(
-                "requests",
-                "doc",
-                "Review service requests and returned results.",
-              )}
             {data.messages !== null &&
               tile(
                 "messages",
@@ -544,55 +557,75 @@ export function PatientDetailView({ connectionId }: { connectionId: string }) {
                     {!data.overview.summary.length && (
                       <p>No finalized reports shared yet.</p>
                     )}
+                    {(data.permissions.read.includes("medication-use") ||
+                      data.permissions.read.includes("prescription")) && (
+                      <section
+                        className="patient-summary-medications"
+                        aria-label="Medications and prescriptions"
+                      >
+                        {data.permissions.read.includes("medication-use") && (
+                          <>
+                            <h3>Reported medication use</h3>
+                            <p className="sharing-help">
+                              Last-known reports retain their dates and
+                              uncertainty. A prescription does not prove current
+                              use.
+                            </p>
+                            {data.state
+                              .filter((r) => r.category === "medication-use")
+                              .map((record) => (
+                                <ClinicalRecord
+                                  key={record.id}
+                                  record={record}
+                                />
+                              ))}
+                            {!data.state.some(
+                              (r) => r.category === "medication-use",
+                            ) && <p>No medication-use records shared.</p>}
+                          </>
+                        )}
+                        {data.permissions.read.includes("prescription") && (
+                          <>
+                            <h3>Professional prescriptions</h3>
+                            {data.overview.prescriptions.map((item) => (
+                              <article
+                                className="patient-clinical-record"
+                                key={item.id}
+                              >
+                                <p>{item.text}</p>
+                                <small>
+                                  Recorded{" "}
+                                  {new Date(item.recordedAt).toLocaleDateString(
+                                    "en-GB",
+                                    { timeZone: "Africa/Lagos" },
+                                  )}
+                                </small>
+                              </article>
+                            ))}
+                            {!data.overview.prescriptions.length && (
+                              <p>No prescriptions shared.</p>
+                            )}
+                          </>
+                        )}
+                        <p className="sharing-help">
+                          Older prescriptions and medication history are
+                          available in Shared history below.
+                        </p>
+                      </section>
+                    )}
+                    <section
+                      className="patient-summary-history"
+                      aria-label="Shared history"
+                    >
+                      <h3>Shared history</h3>
+                      <SharedHistory
+                        connectionId={connectionId}
+                        categories={data.permissions.read}
+                        onDenied={refresh}
+                      />
+                    </section>
                     <PatientAssistant connectionId={connectionId} summary />
                   </>
-                )}
-                {panel === "medications" && (
-                  <>
-                    <h3>Reported medication use</h3>
-                    <p className="sharing-help">
-                      Last-known reports retain their dates and uncertainty. A
-                      prescription does not prove current use.
-                    </p>
-                    {data.state
-                      .filter((r) => r.category === "medication-use")
-                      .map((record) => (
-                        <ClinicalRecord key={record.id} record={record} />
-                      ))}
-                    {!data.state.some(
-                      (r) => r.category === "medication-use",
-                    ) && <p>No medication-use records shared.</p>}
-                    <h3>Professional prescriptions</h3>
-                    {data.overview.prescriptions.map((item) => (
-                      <article
-                        className="patient-clinical-record"
-                        key={item.id}
-                      >
-                        <p>{item.text}</p>
-                        <small>
-                          Recorded{" "}
-                          {new Date(item.recordedAt).toLocaleDateString(
-                            "en-GB",
-                            { timeZone: "Africa/Lagos" },
-                          )}
-                        </small>
-                      </article>
-                    ))}
-                    {!data.overview.prescriptions.length && (
-                      <p>No prescriptions shared.</p>
-                    )}
-                    <p className="sharing-help">
-                      For older prescriptions and medication history, use Shared
-                      history.
-                    </p>
-                  </>
-                )}
-                {panel === "history" && (
-                  <SharedHistory
-                    connectionId={connectionId}
-                    categories={data.permissions.read}
-                    onDenied={refresh}
-                  />
                 )}
                 {panel === "ai" && (
                   <PatientAssistant

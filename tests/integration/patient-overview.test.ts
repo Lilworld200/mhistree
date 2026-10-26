@@ -281,7 +281,9 @@ it("organization previews remain within their assignment scope and independent o
   expect(rows).toHaveLength(1);
   expect(rows[0].overview!.summary[0].text).toContain("headache");
   expect(rows[0].overview!.medications).toHaveLength(0);
-  expect(rows[0].overview!.historyCounts?.map((c) => c.category)).toEqual([
-    "symptom",
-  ]);
+  expect(
+    rows[0].overview!.historyCounts?.map(
+      (c: { category: string }) => c.category,
+    ),
+  ).toEqual(["symptom"]);
 });

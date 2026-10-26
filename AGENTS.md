@@ -1,3 +1,7 @@
+Owner button-radius refinement (2026-10-26): Care notes, Health summary and Requests & results use fully rounded pill corners (999px radius) on desktop and mobile, matching the existing button family.
+
+Owner folder-card refinement (2026-10-26): put Health summary and permission-gated Requests & results in an attached folder-style tab at the top left of the merged patient card. Keep Care notes as a glass icon-and-text button at the top right inside the card; it need not be circular. Tighten the card inner spacing. This supersedes the circular icon and separate Requests & results tile presentation; existing access and panel behavior remain unchanged.
+
 # Mhistree: portable product specification and agent rules
 
 Revision: 2026-10-14. Governing source: Mhistree_AI_Agent_Rebuild_Playbook.pdf, implementation edition 2026-10-08, 49 pages, with subsequent explicit owner decisions recorded below.
@@ -172,6 +176,12 @@ Patients revoke an organization as a whole, not individual internal assignments.
 - Explain that previously delivered/downloaded copies cannot be recalled; do not claim remote deletion.
 
 Apply these rules to records, files, AI, messages, appointments, drafts, and results. Staff removal, organization suspension, narrowing, and merges invalidate affected effective access without revoking unrelated valid direct connections.
+
+Owner practitioner patient UI decision (2026-10-25, refined2026-10-26): /clinician/patients uses a single column of full clickable patient cards on mobile and desktop. Active cards show initials/profile name and direct/organization context without redundant Connected/Assigned pills, scope chips or separate Open patient record buttons. Show a concise authorized overview: today's accepted chat-derived reports when available, otherwise a broader shared-record overview; permitted last-reported medication use, separate prescriptions and recent finalized results may follow. Do not expose excluded facts, raw private chats, unaccepted extraction, private notes or drafts. Keep reported/confirmed meaning, dates, medication uncertainty and overview limits explicit. Selecting a direct patient opens a detailed patient profile, not a dashboard or a long form dump, with scoped records, medications, patient-specific practitioner AI and existing care tools; include Back to My patients.
+
+Owner patient-profile toolbar refinement (2026-10-26): combine identity (connection/name/DOB/Mhistree ID) and record overview in one card. Above it, use new glass icon-and-text Health summary, Medications & prescriptions and Care notes controls, replacing those former large section tiles. Desktop groups them next to Refresh; mobile places Back to My patients in the top-right app bar and removes Refresh. Keep permission-based visibility, accessible names/focus and existing clinical operations. This is presentation, not expanded consent or autonomous AI care.
+
+Owner refinement (2026-10-26): Health summary is the single entry for the report overview, authorized medication use/prescriptions and category-filtered, paginated Shared history. Remove separate Medications and Shared history actions. Care notes uses a fully circular glass icon button at the top-right inside the merged patient profile card, with an accessible name. Keep permission checks and focus return.
 
 ## 5. Health information, time, and corrections
 

@@ -4512,3 +4512,51 @@ textarea:focus-visible {
 .patient-overview-card a { color:inherit; text-decoration:none; }
 .patient-overview-card a::after { content:""; position:absolute; inset:0; border-radius:inherit; }
 .patient-overview-card:focus-within { outline:2px solid var(--hero2); outline-offset:4px; }
+
+/* Patient-profile toolbar: glass icon actions replace the former large tiles. */
+.patient-detail-toolbar { align-items:center; gap:14px; }
+.patient-detail-toolbar > .btn { flex-shrink:0; }
+.patient-detail-actions { display:flex; align-items:center; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-left:auto; }
+.patient-detail-refresh { display:flex; }
+.patient-icon-action { position:relative; display:inline-flex; align-items:center; justify-content:center; gap:9px; min-height:50px; padding:10px 15px; border:1px solid rgba(255,255,255,.72); border-radius:999px; background:linear-gradient(155deg,rgba(255,255,255,.75),rgba(255,255,255,.18)),var(--shell); color:var(--ink); box-shadow:0 5px 12px rgba(30,35,42,.08),inset 0 1px 1px rgba(255,255,255,.95),inset 0 -1px 2px rgba(40,45,52,.06); backdrop-filter:blur(12px); font:inherit; font-size:12px; font-weight:750; line-height:1.4; cursor:pointer; transition:transform .15s ease,box-shadow .15s ease; }
+.patient-icon-action:hover { transform:translateY(-1px); box-shadow:0 7px 15px rgba(30,35,42,.13),inset 0 1px 1px rgba(255,255,255,.95); }
+.patient-icon-action:active { transform:translateY(1px); }
+.patient-icon-action:focus-visible { outline:2px solid var(--hero2); outline-offset:4px; }
+.patient-action-icon { display:grid; place-items:center; flex-shrink:0; }
+.patient-action-mobile-label { display:none; }
+.patient-profile-folder { min-width:0; isolation:isolate; }
+.patient-folder-tab { display:flex; align-items:center; gap:8px; width:fit-content; max-width:100%; padding:10px 14px 26px; margin-bottom:-16px; border:1px solid var(--bs); border-bottom:0; border-radius:24px 24px 0 0; background:var(--shell); }
+.patient-profile-card { position:relative; overflow:hidden; }
+.patient-profile-card .patient-identity-card { position:relative; padding:22px 166px 22px 22px; gap:18px; }
+.patient-profile-card .patient-identity-card > .patient-icon-action { position:absolute; top:16px; right:16px; min-height:44px; border-radius:999px; }
+.patient-profile-card .patient-identity-card dl { margin-top:14px; }
+.patient-summary-medications,.patient-summary-history { margin-top:24px; padding-top:8px; border-top:1px solid var(--bs); }
+.patient-profile-card .patient-detail-overview { padding:20px 22px; margin:0; border-top:1px solid var(--bs); }
+[data-theme="dark"] .patient-icon-action { border-color:rgba(255,255,255,.12); background:linear-gradient(155deg,rgba(255,255,255,.1),transparent),var(--shell); box-shadow:0 5px 12px rgba(0,0,0,.3),inset 0 1px 1px rgba(255,255,255,.1); }
+@media(max-width:980px) {
+ .patient-detail-toolbar { justify-content:flex-end; gap:10px; align-items:stretch; }
+ .patient-detail-toolbar > .patient-detail-back { display:none; }
+ .patient-detail-actions { display:flex; flex-wrap:nowrap; gap:6px; margin:0; align-items:stretch; }
+ .patient-detail-refresh { display:none; }
+ .patient-icon-action { flex:0 1 66px; min-width:0; flex-direction:column; gap:6px; min-height:70px; padding:9px 5px; border-radius:999px; font-size:10px; line-height:1.3; }
+ .patient-action-desktop-label { display:none; }
+ .patient-action-mobile-label { display:block; overflow-wrap:normal; }
+ .patient-detail-toolbar { margin-bottom:0; }
+ .patient-folder-tab { gap:6px; padding:8px 10px 24px; border-radius:22px 22px 0 0; }
+ .patient-folder-tab .patient-icon-action,.patient-profile-card .patient-icon-action { flex:0 1 auto; flex-direction:row; gap:7px; min-height:44px; padding:10px; font-size:11px; border-radius:999px; }
+ .patient-profile-card .patient-identity-card { padding:16px; padding-top:72px; gap:12px; }
+ .patient-profile-card .patient-identity-card > .patient-icon-action { top:12px; right:12px; }
+ .patient-profile-card .patient-detail-overview { padding:16px; }
+}
+@media(prefers-reduced-motion:reduce) { .patient-icon-action { transition:none; } }
+
+@media(min-width:981px) and (max-width:1200px) {
+ .patient-detail-actions { gap:8px; flex-wrap:nowrap; }
+ .patient-icon-action { gap:7px; padding-inline:10px; font-size:11px; }
+}
+
+@media(max-width:980px) {
+ .patient-detail-toolbar { gap:8px; }
+ .patient-detail-actions { gap:5px; }
+ .patient-icon-action { min-width:44px; }
+}

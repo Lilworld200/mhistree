@@ -101,10 +101,10 @@ export function PatientsView({
     }
   }
   async function refresh() {
-    setError("");
     try {
       const next = await api<DirectPatient[]>("/api/practitioner/patients");
       setRows(next);
+      setError("");
       router.refresh();
     } catch (e) {
       setRows([]);

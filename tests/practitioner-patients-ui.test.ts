@@ -185,3 +185,22 @@ it("active cards are single clickable surfaces without status/scope pills or an 
   expect(card.querySelector("button")).toBeNull();
   expect(host.textContent).not.toContain("Open patient record");
 });
+
+it("a failed refresh clears patient previews and does not restore them while a retry is pending", async () => {
+  await mount();
+  request.mockRejectedValueOnce(new Error("ACCESS_DENIED"));
+  await act(async () => button("Refresh connections").click());
+  expect(host.querySelector(".patient-overview-card")).toBeNull();
+  expect(host.textContent).toContain("ACCESS_DENIED");
+  let finish!: (value: unknown) => void;
+  request.mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await act(async () => button("Refresh connections").click());
+  expect(host.querySelector(".patient-overview-card")).toBeNull();
+  await act(async () => finish(rows));
+  expect(host.querySelector(".patient-overview-card")).not.toBeNull();
+});
