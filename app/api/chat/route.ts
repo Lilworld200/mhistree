@@ -47,7 +47,7 @@ async function chatRequest(request: NextRequest) {
         data: z.unknown(),
       })
       .strict()
-      .parse(await jsonBody(request));
+      .parse(await jsonBody(request, 131072));
     const pool = database(),
       session = sessionFrom(request);
     aiDebug("chat.http.action", { reason: input.action });

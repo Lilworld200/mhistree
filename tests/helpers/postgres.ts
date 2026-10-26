@@ -1,4 +1,3 @@
-import EmbeddedPostgres from "embedded-postgres";
 import { Pool } from "pg";
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile } from "node:fs/promises";
@@ -9,6 +8,9 @@ import { pathToFileURL } from "node:url";
 import { spawn } from "node:child_process";
 
 export async function testDatabase() {
+  if (process.platform === "android")
+    return (await import("./termux-postgres")).termuxTestDatabase();
+  const { default: EmbeddedPostgres } = await import("embedded-postgres");
   const socket = createServer();
   await new Promise<void>((res) => socket.listen(0, "127.0.0.1", res));
   const address = socket.address();

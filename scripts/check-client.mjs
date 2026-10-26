@@ -17,7 +17,7 @@ for (const file of await files(".next/static")) {
   if (!file.endsWith(".js")) continue;
   const text = await readFile(file, "utf8");
   if (
-    /SUPABASE_SERVICE_ROLE_KEY|CLERK_SECRET_KEY|DATABASE_URL|AUTH_CLIENT_SECRET|GEMINI_API_KEY|MHISTREE_SECRET_CANARY/.test(
+    /SUPABASE_SERVICE_ROLE_KEY|CLERK_SECRET_KEY|DATABASE_URL|AUTH_CLIENT_SECRET|GEMINI_API_KEY|AUTH_FLOW_COOKIE_KEY|MHISTREE_SECRET_CANARY/.test(
       text,
     )
   )

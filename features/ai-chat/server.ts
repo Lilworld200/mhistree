@@ -12,6 +12,7 @@ import { retrieveEvidence } from "./retrieval";
 import { patientChatPolicy } from "./patient-prompt";
 import { aiDebug, debugMessage, debugRef, withAIDebug } from "@/lib/ai/debug";
 import { practitionerDiscovery } from "./practitioner-discovery";
+import { verifiedTranscript } from "./speech/server";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -26,8 +27,14 @@ const sendInput = z
     requestKey: z.uuid(),
     content: z.string().min(1).max(10000),
     timezone,
+    inputMethod: z.enum(["text", "microphone"]).default("text"),
+    transcriptionToken: z.string().min(1).max(65536).optional(),
   })
-  .strict();
+  .strict()
+  .refine(
+    (data) =>
+      (data.inputMethod === "microphone") === Boolean(data.transcriptionToken),
+  );
 export async function createConversation(
   pool: Pool,
   session: string,
@@ -84,7 +91,7 @@ export async function conversationHistory(
       throw new DomainError("ACCESS_DENIED");
     const rows = (
       await a.tx.query(
-        "select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51",
+        `select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,coalesce(to_jsonb(m)->>'input_method','text') as "inputMethod",to_jsonb(m)->'transcription' as transcription,(select coalesce(to_jsonb(p)->>'input_method','text') from mhistree.chat_messages p where p.id=m.reply_to) as "replyInputMethod",g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51`,
         [id, before ?? null],
       )
     ).rows;
@@ -108,6 +115,23 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
   const data = sendInput.parse(input);
   await consumeAttempt(pool, "chat.send", digest(session), 30);
   return withAccess(pool, session, { kind: "patient" }, async (a) => {
+    const receipt = data.transcriptionToken
+      ? await verifiedTranscript(
+          data.transcriptionToken,
+          a.actor.accountId,
+          a.actor.sessionId,
+        )
+      : null;
+    const transcription = receipt
+      ? {
+          id: receipt.id,
+          text: receipt.text,
+          model: receipt.model,
+          capturedAt: receipt.capturedAt,
+          audioSha256: receipt.audioSha256,
+          durationSeconds: receipt.durationSeconds,
+        }
+      : null;
     await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
       `chat:${data.conversationId}`,
     ]);
@@ -129,14 +153,18 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
       if (
         existing.content !== data.content ||
         existing.conversation_id !== data.conversationId ||
-        existing.timezone !== data.timezone
+        existing.timezone !== data.timezone ||
+        (existing.input_method ?? "text") !== data.inputMethod ||
+        (existing.transcription?.id ?? null) !== (transcription?.id ?? null)
       )
         throw new DomainError("VERSION_CONFLICT");
       return { messageId: existing.id as string };
     }
     const id = randomUUID();
-    await a.tx.query(
-      "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key) values($1,$2,$3,$4,'patient',$5,$6,$7)",
+    const inserted = await a.tx.query(
+      data.inputMethod === "microphone"
+        ? "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key,input_method,transcription) values($1,$2,$3,$4,'patient',$5,$6,$7,$8,$9) on conflict do nothing returning id"
+        : "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key) values($1,$2,$3,$4,'patient',$5,$6,$7) on conflict do nothing returning id",
       [
         id,
         data.conversationId,
@@ -145,8 +173,12 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
         data.content,
         data.timezone,
         data.requestKey,
+        ...(data.inputMethod === "microphone"
+          ? [data.inputMethod, transcription]
+          : []),
       ],
     );
+    if (!inserted.rowCount) throw new DomainError("VERSION_CONFLICT");
     await a.tx.query(
       "insert into mhistree.chat_generations(message_id) values($1)",
       [id],

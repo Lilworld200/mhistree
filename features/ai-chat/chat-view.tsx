@@ -8,6 +8,8 @@ import { ExtractionStatus } from "./extraction/status-view";
 import { notifyRecordsChanged } from "@/features/health-records/record-updates";
 import { Icon, Logo } from "@/components/ui/icons";
 import { useChatNavigation } from "@/components/layout/chat-navigation";
+import { useVoiceChat } from "./speech/use-voice-chat";
+import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
 type Message = {
@@ -18,6 +20,10 @@ type Message = {
   timezone: string;
   state: string | null;
   sequence: string;
+  reply_to?: string;
+  replyInputMethod?: "text" | "microphone";
+  inputMethod?: "text" | "microphone";
+  transcription?: { text: string; model: string; capturedAt: string } | null;
 };
 type History = { items: Message[]; nextCursor: string | null };
 export function ChatView() {
@@ -39,12 +45,34 @@ export function ChatView() {
     [processing, setProcessing] = useState(0),
     [processingError, setProcessingError] = useState(""),
     [processingRevision, setProcessingRevision] = useState(0);
-  const request = useRef<{ key: string; text: string } | null>(null),
+  const [voiceDraft, setVoiceDraft] = useState<TranscriptDraft | null>(null);
+  const voice = useVoiceChat(
+    (draft) => {
+      setVoiceDraft(draft);
+      setText((previous) =>
+        previous ? `${previous}\n${draft.text}` : draft.text,
+      );
+      document.getElementById("chat-message")?.focus();
+    },
+    () => {
+      setVoiceDraft(null);
+      setText("");
+      setHistory({ items: [], nextCursor: null });
+      setError(
+        "Your session or speech access ended. Please sign in again if needed.",
+      );
+    },
+  );
+  const resetVoice = voice.reset;
+  const request = useRef<{ key: string; text: string; token?: string } | null>(
+      null,
+    ),
     locked = useRef(false),
     current = useRef("");
   async function load(id: string) {
     const result = await api<History>(`/api/chat?id=${id}`);
     if (current.current === id) setHistory(result);
+    return result;
   }
   useEffect(() => {
     void api<{ id: string; created_at: string }[]>("/api/chat")
@@ -74,6 +102,9 @@ export function ChatView() {
       setSelected(requested.id);
       setError("");
       request.current = null;
+      resetVoice();
+      setVoiceDraft(null);
+      setText("");
       setHistory({ items: [], nextCursor: null });
       if (requested.id)
         void load(requested.id).catch((e) => setError(errorMessage(e)));
@@ -81,16 +112,18 @@ export function ChatView() {
     return () => {
       active = false;
     };
-  }, [requested]);
+  }, [requested, resetVoice]);
   useEffect(() => {
     const area = scrollRef.current;
     if (area) area.scrollTop = area.scrollHeight;
   }, [history.items.length, generating]);
-  async function generate(id: string, conversation: string) {
+  async function generate(id: string, conversation: string, readAloud = false) {
     setGenerating(id);
     setError("");
+    let succeeded = false;
     try {
       await api("/api/chat", { action: "generate", data: { id } });
+      succeeded = true;
     } catch (e) {
       setError(
         e instanceof Error &&
@@ -100,7 +133,16 @@ export function ChatView() {
       );
     } finally {
       setGenerating("");
-      await load(conversation).catch((e) => setError(errorMessage(e)));
+      const page = await load(conversation).catch((e) => {
+        setError(errorMessage(e));
+        return null;
+      });
+      if (succeeded && readAloud && page && current.current === conversation) {
+        const reply = page.items.find(
+          (m) => m.role === "assistant" && m.reply_to === id,
+        );
+        if (reply) void voice.play(reply.id);
+      }
     }
   }
   async function processReport(messageId: string) {
@@ -129,7 +171,15 @@ export function ChatView() {
   }
   async function send(e: React.FormEvent) {
     e.preventDefault();
-    if (locked.current || generating || !text.trim()) return;
+    if (
+      locked.current ||
+      generating ||
+      voice.recording !== "idle" ||
+      !text.trim()
+    )
+      return;
+    voice.stopPlayback();
+    const spoken = voiceDraft;
     locked.current = true;
     setBusy(true);
     setError("");
@@ -142,8 +192,16 @@ export function ChatView() {
         setSelected(id);
         setConversations(await api("/api/chat"));
       }
-      if (!request.current || request.current.text !== text)
-        request.current = { key: crypto.randomUUID(), text };
+      if (
+        !request.current ||
+        request.current.text !== text ||
+        request.current.token !== spoken?.token
+      )
+        request.current = {
+          key: crypto.randomUUID(),
+          text,
+          token: spoken?.token,
+        };
       const result = await api<{ messageId: string }>("/api/chat", {
         action: "send",
         data: {
@@ -151,15 +209,19 @@ export function ChatView() {
           requestKey: request.current.key,
           content: text,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          ...(spoken
+            ? { inputMethod: "microphone", transcriptionToken: spoken.token }
+            : {}),
         },
       });
       setText("");
+      setVoiceDraft(null);
       request.current = null;
       // A display refresh must not prevent a saved message from receiving a reply.
       await load(id).catch(() => {});
       // Extraction is durable and independently retryable; it must never gate a reply.
       void processReport(result.messageId);
-      await generate(result.messageId, id);
+      await generate(result.messageId, id, Boolean(spoken));
     } catch (error) {
       setError(errorMessage(error));
     } finally {
@@ -279,6 +341,24 @@ export function ChatView() {
                   {m.role === "patient" ? "You" : "Mhistree AI interpretation"}
                 </span>
                 <p className="message-content">{m.content}</p>
+                {m.role === "assistant" &&
+                  (m.replyInputMethod === "microphone" ||
+                    history.items.some(
+                      (p) =>
+                        p.id === m.reply_to && p.inputMethod === "microphone",
+                    )) && (
+                    <Btn
+                      sm
+                      className="chat-reply-playback"
+                      disabled={
+                        voice.recording !== "idle" ||
+                        voice.playback === "loading"
+                      }
+                      onClick={() => void voice.play(m.id)}
+                    >
+                      Play reply
+                    </Btn>
+                  )}
                 <details className="message-meta">
                   <summary>
                     {m.role === "patient"
@@ -288,7 +368,14 @@ export function ChatView() {
                   <small>
                     {new Date(m.captured_at).toLocaleString()} · captured in{" "}
                     {m.timezone}
+                    {m.inputMethod === "microphone" &&
+                      " · Microphone transcript reviewed before sending"}
                   </small>
+                  {m.transcription && (
+                    <p className="muted">
+                      Original machine transcript: {m.transcription.text}
+                    </p>
+                  )}
                 </details>
                 {m.state && m.state !== "succeeded" && (
                   <p className="message-status">
@@ -297,7 +384,13 @@ export function ChatView() {
                       <Btn
                         sm
                         disabled={Boolean(generating)}
-                        onClick={() => void generate(m.id, selected)}
+                        onClick={() =>
+                          void generate(
+                            m.id,
+                            selected,
+                            m.inputMethod === "microphone",
+                          )
+                        }
                       >
                         Retry reply
                       </Btn>
@@ -360,6 +453,73 @@ export function ChatView() {
           />
         </details>
       </div>
+      <div className="chat-speech-controls" aria-label="Voice message controls">
+        {voice.recording !== "idle" && (
+          <div role="status">
+            <span>
+              {voice.recording === "starting"
+                ? "Opening microphone…"
+                : voice.recording === "recording"
+                  ? "Listening… stops after 5 seconds of silence (60 seconds maximum)."
+                  : "Converting speech to text…"}
+            </span>
+            {voice.recording === "recording" && (
+              <Btn sm onClick={voice.stopRecording}>
+                Stop recording
+              </Btn>
+            )}
+            <Btn sm onClick={voice.cancelRecording}>
+              Cancel recording
+            </Btn>
+          </div>
+        )}
+        {voiceDraft && (
+          <div>
+            <p className="muted" role="status">
+              Review your transcript below, especially medicine names and doses,
+              then press Send. Your reply will be read aloud.
+            </p>
+            <Btn
+              sm
+              onClick={() => {
+                setVoiceDraft(null);
+                request.current = null;
+              }}
+            >
+              Use as typed message
+            </Btn>
+          </div>
+        )}
+        {voice.replyId && (
+          <div>
+            <span role="status">
+              {voice.playback === "loading"
+                ? "Preparing spoken reply…"
+                : voice.playback === "playing"
+                  ? "Reading reply aloud…"
+                  : "Spoken reply ready"}
+            </span>
+            {voice.playback === "playing" || voice.playback === "loading" ? (
+              <Btn sm onClick={voice.stopPlayback}>
+                Stop playback
+              </Btn>
+            ) : (
+              <Btn
+                sm
+                disabled={voice.recording !== "idle"}
+                onClick={() => void voice.play(voice.replyId)}
+              >
+                Play reply
+              </Btn>
+            )}
+          </div>
+        )}
+        {voice.error && (
+          <p role="status" className="ui-notice">
+            {voice.error}
+          </p>
+        )}
+      </div>
       <form onSubmit={send} className="composer">
         <IconBtn
           icon="clip"
@@ -370,8 +530,19 @@ export function ChatView() {
         <IconBtn
           icon="mic"
           size={44}
-          title="Voice input unavailable"
-          disabled
+          title={
+            voice.enabled
+              ? "Record a voice message"
+              : "Voice messages unavailable"
+          }
+          disabled={
+            !voice.enabled ||
+            busy ||
+            Boolean(generating) ||
+            voice.recording !== "idle" ||
+            Boolean(voiceDraft)
+          }
+          onClick={() => void voice.beginRecording()}
         />
         <label className="sr-only" htmlFor="chat-message">
           Message Mhistree
@@ -401,7 +572,12 @@ export function ChatView() {
           className="btn btn-dark send"
           type="submit"
           aria-label="Send message"
-          disabled={busy || Boolean(generating) || !text.trim()}
+          disabled={
+            busy ||
+            Boolean(generating) ||
+            voice.recording !== "idle" ||
+            !text.trim()
+          }
         >
           <Icon n="up" s={17} />
         </button>
