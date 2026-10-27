@@ -83,7 +83,7 @@ export function failure(error: unknown) {
       }),
     );
   const status =
-    code === "DATABASE_PERMISSION_DENIED"
+    code === "DATABASE_PERMISSION_DENIED" || code === "DATABASE_SCHEMA_REQUIRED"
       ? 500
       : code === "AUTH_REQUIRED" || code === "SESSION_RETIRED"
         ? 401

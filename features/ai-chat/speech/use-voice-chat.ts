@@ -50,7 +50,9 @@ export function useVoiceChat(
     setError(
       code === "RATE_LIMITED"
         ? "Speech usage is temporarily limited. You can keep chatting by text."
-        : fallback,
+        : code === "CONFIGURATION_REQUIRED"
+          ? "Speech needs setup by the app owner. Your written messages are still available."
+          : fallback,
     );
   }
   // These resource cleanup methods must keep their identity across renders.
@@ -175,7 +177,8 @@ export function useVoiceChat(
         },
         controller.signal,
         (level) => {
-          if (!controller.signal.aborted && active.current) setInputLevel(level);
+          if (!controller.signal.aborted && active.current)
+            setInputLevel(level);
         },
       );
       if (controller.signal.aborted) {

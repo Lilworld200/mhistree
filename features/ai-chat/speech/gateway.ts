@@ -5,6 +5,7 @@ import { DomainError } from "@/lib/errors";
 export const transcriptionModel = "gemini-3.5-transcribe";
 export const speechModel = "gemini-3.8-flash-lite-tts";
 export interface SpeechGateway {
+  readonly transcriptionModel?: string;
   transcribe(wav: Uint8Array, signal?: AbortSignal): Promise<string>;
   synthesize(text: string, signal?: AbortSignal): Promise<Uint8Array>;
 }
@@ -28,6 +29,7 @@ const interaction = z.object({
 });
 /** One provider attempt per explicit action: speech never replays expensive requests automatically. */
 export class GeminiSpeechGateway implements SpeechGateway {
+  readonly transcriptionModel = transcriptionModel;
   constructor(private key: string) {}
   private async request(body: object, signal?: AbortSignal) {
     let response: Response;

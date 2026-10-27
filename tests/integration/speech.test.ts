@@ -24,6 +24,7 @@ const wav = new Uint8Array(
   wavFromSamples([new Float32Array(16000).fill(0.1)], 16000),
 );
 const adapter: SpeechGateway = {
+  transcriptionModel: "whisper-large-v3-turbo",
   transcribe: vi.fn(async () => "I took five, no, ten milligrams."),
   synthesize: vi.fn(async () => wav),
 };
@@ -33,7 +34,8 @@ beforeAll(async () => {
   other = await staffFixture(db.pool);
   conversation = randomUUID();
   await createConversation(db.pool, patient.session, conversation);
-  vi.stubEnv("GEMINI_API_KEY", "synthetic");
+  vi.stubEnv("AI_PROVIDER", "groq");
+  vi.stubEnv("GROQ_API_KEY", "synthetic");
   vi.stubEnv("AUTH_FLOW_COOKIE_KEY", "ab".repeat(32));
 });
 afterAll(async () => {
@@ -71,7 +73,7 @@ it("saves original machine wording alongside reviewed text, replays once and exc
   expect(saved.content).toBe(input.content);
   expect(saved.inputMethod).toBe("microphone");
   expect(saved.transcription.text).toBe(draft.text);
-  expect(saved.transcription.model).toBe("gemini-3.5-transcribe");
+  expect(saved.transcription.model).toBe("whisper-large-v3-turbo");
   expect(saved.transcription.sessionId).toBeUndefined();
   expect(
     (

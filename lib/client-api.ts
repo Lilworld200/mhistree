@@ -21,6 +21,8 @@ export function errorMessage(error: unknown) {
           "Earlier conversation memory is still preparing. Retry preparation or choose to continue with existing memory.",
         DATABASE_PERMISSION_DENIED:
           "This service could not access required data. Please contact Mhistree support. Your saved information is retained.",
+        DATABASE_SCHEMA_REQUIRED:
+          "The database needs an application update before this action can finish. Please contact Mhistree support. Your saved information is retained.",
         DATABASE_UNAVAILABLE:
           "The database connection is temporarily unavailable. Please try again. Your unsaved input is retained.",
         EMAIL_DELIVERY_UNAVAILABLE:

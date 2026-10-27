@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requestGemini } from "./request";
 import { DomainError } from "@/lib/errors";
 import { aiDebug, withAIDebug } from "./debug";
+import { GroqGateway } from "./groq";
 export type AIMessage = { role: "user" | "assistant"; content: string };
 export interface AIGateway {
   readonly modelName?: string;
@@ -159,6 +160,11 @@ export class GeminiGateway implements AIGateway {
   }
 }
 export function aiGateway(): AIGateway {
+  if ((process.env.AI_PROVIDER ?? "groq") === "groq") {
+    const key = process.env.GROQ_API_KEY?.trim();
+    if (!key) throw new DomainError("CONFIGURATION_REQUIRED");
+    return new GroqGateway(key);
+  }
   const config = z
     .object({
       AI_PROVIDER: z.literal("gemini"),

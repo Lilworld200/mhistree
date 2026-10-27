@@ -5,6 +5,7 @@ import { withAccess } from "@/features/access/server";
 import { DomainError } from "@/lib/errors";
 import { openFlow, sealFlow } from "@/lib/auth/flow-cookie";
 import { speechConfiguration } from "./config";
+import { GroqSpeechGateway } from "./groq-gateway";
 import {
   GeminiSpeechGateway,
   transcriptionModel,
@@ -72,9 +73,12 @@ export async function transcribeRecording(
   if (recording.silent) return { text: "", token: "" };
   const config = speechConfiguration();
   const capturedAt = new Date().toISOString();
-  const text = await (
-    gateway ?? new GeminiSpeechGateway(config.GEMINI_API_KEY)
-  ).transcribe(bytes, signal);
+  const provider =
+    gateway ??
+    (config.provider === "groq"
+      ? new GroqSpeechGateway(config.key)
+      : new GeminiSpeechGateway(config.key));
+  const text = await provider.transcribe(bytes, signal);
   await authorizeSpeech(pool, session);
   signal?.throwIfAborted();
   if (!text.trim()) return { text: "", token: "" };
@@ -83,7 +87,7 @@ export async function transcribeRecording(
     accountId: actor.accountId,
     sessionId: actor.sessionId,
     text,
-    model: transcriptionModel,
+    model: provider.transcriptionModel ?? transcriptionModel,
     capturedAt,
     audioSha256: createHash("sha256").update(bytes).digest("hex"),
     durationSeconds: recording.durationSeconds,
@@ -137,7 +141,10 @@ export async function synthesizeReply(
   if (text.length > 10000) throw new DomainError("VALIDATION_FAILED");
   const config = speechConfiguration();
   const audio = await (
-    gateway ?? new GeminiSpeechGateway(config.GEMINI_API_KEY)
+    gateway ??
+    (config.provider === "groq"
+      ? new GroqSpeechGateway(config.key)
+      : new GeminiSpeechGateway(config.key))
   ).synthesize(text, signal);
   await authorizeSpeech(pool, session);
   if ((await read()) !== text) throw new DomainError("ACCESS_REVOKED");
