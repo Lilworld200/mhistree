@@ -4559,3 +4559,42 @@ textarea:focus-visible {
 }
 .chat-speech-controls .btn,
 .chat-reply-playback { min-height: 44px; }
+
+.voice-recording-panel {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 0 0 100px;
+  height: 44px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--bs);
+  border-radius: 999px;
+  background: var(--card);
+  box-shadow: var(--sh1);
+}
+.voice-recording-panel .voice-recording-cancel {
+  position: absolute;
+  top: -26px;
+  left: 6px;
+  color: var(--red);
+}
+.voice-recording-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  width: 36px;
+  color: var(--ink);
+}
+.voice-recording-visual span {
+  width: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  transition: height 100ms ease-out;
+}
+.voice-recording-stop { flex-shrink: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .voice-recording-visual span { transition: none; }
+}

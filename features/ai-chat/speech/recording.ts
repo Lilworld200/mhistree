@@ -15,7 +15,10 @@ export class SilenceDetector {
     if (energy > Math.max(0.012, this.noise * 3)) {
       this.lastActive = now;
       this.activeFrames += samples.length / sampleRate;
-    } else this.noise = this.noise * 0.98 + Math.min(energy, 0.01) * 0.02;
+      return Math.min(1, energy / 0.2);
+    }
+    this.noise = this.noise * 0.98 + Math.min(energy, 0.01) * 0.02;
+    return 0;
   }
   get heardSpeech() {
     return this.activeFrames >= 0.15;
@@ -74,6 +77,7 @@ export async function startMicrophone(
   onDone: (wav: ArrayBuffer | null) => void,
   onError: (message: string) => void,
   signal: AbortSignal,
+  onLevel?: (level: number) => void,
 ): Promise<MicrophoneSession> {
   if (
     !navigator.mediaDevices?.getUserMedia ||
@@ -159,7 +163,8 @@ export async function startMicrophone(
       }
       if (data instanceof Float32Array) {
         chunks.push(data);
-        detector.push(data, performance.now(), context.sampleRate);
+        const level = detector.push(data, performance.now(), context.sampleRate);
+        onLevel?.(level);
       }
     };
     node.onprocessorerror = () => {

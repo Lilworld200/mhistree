@@ -26,6 +26,7 @@ export function useVoiceChat(
     "idle" | "starting" | "recording" | "transcribing"
   >("idle");
   const [error, setError] = useState("");
+  const [inputLevel, setInputLevel] = useState(0);
   const [playback, setPlayback] = useState<
     "idle" | "loading" | "playing" | "ready"
   >("idle");
@@ -66,7 +67,10 @@ export function useVoiceChat(
       capture.current = null;
       recorder.current?.cancel();
       recorder.current = null;
-      if (active.current) setRecording("idle");
+      if (active.current) {
+        setRecording("idle");
+        setInputLevel(0);
+      }
     };
     const reset = () => {
       cancelRecording();
@@ -114,6 +118,7 @@ export function useVoiceChat(
     stopPlayback();
     setError("");
     setRecording("starting");
+    setInputLevel(0);
     const controller = new AbortController();
     capture.current = controller;
     try {
@@ -169,6 +174,9 @@ export function useVoiceChat(
           }
         },
         controller.signal,
+        (level) => {
+          if (!controller.signal.aborted && active.current) setInputLevel(level);
+        },
       );
       if (controller.signal.aborted) {
         recorder.current.cancel();
@@ -278,6 +286,7 @@ export function useVoiceChat(
   return {
     enabled,
     recording,
+    inputLevel: recording === "recording" ? inputLevel : 0,
     error,
     playback,
     replyId,

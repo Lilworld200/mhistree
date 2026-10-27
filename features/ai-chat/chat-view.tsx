@@ -9,6 +9,7 @@ import { notifyRecordsChanged } from "@/features/health-records/record-updates";
 import { Icon, Logo } from "@/components/ui/icons";
 import { useChatNavigation } from "@/components/layout/chat-navigation";
 import { useVoiceChat } from "./speech/use-voice-chat";
+import { RecordingControls } from "./speech/recording-controls";
 import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
@@ -587,25 +588,6 @@ export function ChatView() {
         </details>
       </div>
       <div className="chat-speech-controls" aria-label="Voice message controls">
-        {voice.recording !== "idle" && (
-          <div role="status">
-            <span>
-              {voice.recording === "starting"
-                ? "Opening microphone…"
-                : voice.recording === "recording"
-                  ? "Listening… stops after 5 seconds of silence (60 seconds maximum)."
-                  : "Converting speech to text…"}
-            </span>
-            {voice.recording === "recording" && (
-              <Btn sm onClick={voice.stopRecording}>
-                Stop recording
-              </Btn>
-            )}
-            <Btn sm onClick={voice.cancelRecording}>
-              Cancel recording
-            </Btn>
-          </div>
-        )}
         {voiceDraft && (
           <div>
             <p className="muted" role="status">
@@ -701,7 +683,14 @@ export function ChatView() {
           title="Attach a document"
           onClick={() => router.push("/documents")}
         />
-        <IconBtn
+        {voice.recording !== "idle" ? (
+          <RecordingControls
+            state={voice.recording}
+            level={voice.inputLevel}
+            onStop={voice.stopRecording}
+            onCancel={voice.cancelRecording}
+          />
+        ) : <IconBtn
           icon="mic"
           size={44}
           title={
@@ -717,7 +706,7 @@ export function ChatView() {
             Boolean(voiceDraft)
           }
           onClick={() => void voice.beginRecording()}
-        />
+        />}
         <label className="sr-only" htmlFor="chat-message">
           Message Mhistree
         </label>

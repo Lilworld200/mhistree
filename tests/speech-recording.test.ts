@@ -8,7 +8,11 @@ import { validateRecording } from "@/features/ai-chat/speech/server";
 it("stops after five seconds of inactivity, but resets the timer for audio activity", () => {
   const detector = new SilenceDetector(1000);
   expect(detector.shouldStop(5999)).toBe(false);
-  detector.push(new Float32Array(8000).fill(0.2), 5000, 16000);
+  const quiet = detector.push(new Float32Array(8000).fill(0.02), 4000, 16000);
+  const loud = detector.push(new Float32Array(8000).fill(0.2), 5000, 16000);
+  expect(loud).toBeGreaterThan(quiet);
+  expect(loud).toBeLessThanOrEqual(1);
+  expect(detector.push(new Float32Array(8000), 5500, 16000)).toBe(0);
   expect(detector.heardSpeech).toBe(true);
   expect(detector.shouldStop(9999)).toBe(false);
   expect(detector.shouldStop(10000)).toBe(true);

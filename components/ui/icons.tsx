@@ -19,6 +19,7 @@ const PATHS = {
   down: "M12 5v14M19 12l-7 7-7-7",
   search: "M11 3a8 8 0 1 0 0 16 8 8 0 0 0 0-16zM21 21l-4.3-4.3",
   x: "M18 6L6 18M6 6l12 12",
+  stop: "M6 6h12v12H6z",
   check: "M20 6L9 17l-5-5",
   alert:
     "M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0zM12 9v4M12 17h.01",
@@ -72,7 +73,7 @@ export function Icon({
       strokeLinejoin="round"
       aria-hidden="true"
     >
-      <path d={PATHS[n]} />
+      <path d={PATHS[n]} fill={n === "stop" ? "currentColor" : "none"} />
     </svg>
   );
 }
