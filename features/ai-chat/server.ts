@@ -13,6 +13,14 @@ import { patientChatPolicy } from "./patient-prompt";
 import { aiDebug, debugMessage, debugRef, withAIDebug } from "@/lib/ai/debug";
 import { practitionerDiscovery } from "./practitioner-discovery";
 import { verifiedTranscript } from "./speech/server";
+import {
+  linkPreviousConversation,
+  memoryReady,
+  recallMemory,
+  recallMemoryInAccess,
+} from "./memory";
+import { conversationPreview } from "./conversation";
+import { continuityPolicy, timeAnchor } from "./temporal";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -39,35 +47,48 @@ export async function createConversation(
   pool: Pool,
   session: string,
   id: string,
+  previousConversationId?: string,
 ) {
   z.uuid().parse(id);
   return withAccess(pool, session, { kind: "patient" }, async (access) => {
+    await access.tx.query(
+      "select pg_advisory_xact_lock(hashtextextended($1,0))",
+      [`chat-create:${id}`],
+    );
     await access.tx.query(
       "insert into mhistree.conversations(id,person_id,account_id) values($1,$2,$3) on conflict do nothing",
       [id, access.actor.personId, access.actor.accountId],
     );
     const row = (
       await access.tx.query(
-        "select id from mhistree.conversations where id=$1",
-        [id],
+        "select id from mhistree.conversations where id=$1 and account_id=$2",
+        [id, access.actor.accountId],
       )
     ).rows[0];
     if (!row) throw new DomainError("ACCESS_DENIED");
+    if (previousConversationId)
+      await linkPreviousConversation(access, id, previousConversationId);
     return row;
   });
 }
 export async function listConversations(pool: Pool, session: string) {
-  return withAccess(
-    pool,
-    session,
-    { kind: "patient" },
-    async (a) =>
-      (
-        await a.tx.query(
-          "select id,created_at from mhistree.conversations order by created_at desc,id desc limit 30",
-        )
-      ).rows,
-  );
+  return withAccess(pool, session, { kind: "patient" }, async (a) => {
+    const rows = (
+      await a.tx.query(
+        `select c.id,c.created_at,t.title,
+      (select m.content from mhistree.chat_messages m where m.conversation_id=c.id and m.role='patient' order by m.sequence limit 1) preview
+      from mhistree.conversations c left join mhistree.chat_titles t on t.conversation_id=c.id
+      where c.account_id=$1 order by c.created_at desc,c.id desc limit 30`,
+        [a.actor.accountId],
+      )
+    ).rows;
+    return rows.map((r) => ({
+      id: r.id,
+      created_at: r.created_at,
+      title: r.title ?? conversationPreview(r.preview ?? ""),
+      titleReady: Boolean(r.title),
+    }));
+  });
 }
 export async function conversationHistory(
   pool: Pool,
@@ -98,6 +119,7 @@ export async function conversationHistory(
     const more = rows.length > 50;
     const page = rows.slice(0, 50);
     return {
+      memoryReady: await memoryReady(a, id),
       items: page.reverse(),
       nextCursor: more ? page[0].sequence : null,
     };
@@ -202,10 +224,19 @@ export async function generateReply(
   messageId: string,
   gateway: AIGateway,
   signal?: AbortSignal,
+  continueWithoutMemory = false,
 ) {
   return withAIDebug(
     { operation: "chat.reply", messageRef: debugRef(messageId) },
-    () => generatePatientReply(pool, session, messageId, gateway, signal),
+    () =>
+      generatePatientReply(
+        pool,
+        session,
+        messageId,
+        gateway,
+        signal,
+        continueWithoutMemory,
+      ),
   );
 }
 async function generatePatientReply(
@@ -214,6 +245,7 @@ async function generatePatientReply(
   messageId: string,
   gateway: AIGateway,
   signal?: AbortSignal,
+  continueWithoutMemory = false,
 ) {
   z.uuid().parse(messageId);
   const lease = randomUUID();
@@ -229,6 +261,11 @@ async function generatePatientReply(
         )
       ).rows[0];
       if (!message) throw new DomainError("ACCESS_DENIED");
+      if (
+        !continueWithoutMemory &&
+        !(await memoryReady(a, message.conversation_id))
+      )
+        throw new DomainError("MEMORY_PREPARATION_REQUIRED");
       const claim = await a.tx.query(
         "update mhistree.chat_generations set state='running',attempts=attempts+1,lease_id=$2,lease_until=clock_timestamp()+interval '60 seconds',error_code=null,updated_at=clock_timestamp() where message_id=$1 and attempts<5 and (state in ('queued','failed') or (state='running' and lease_until<clock_timestamp())) returning message_id",
         [messageId, lease],
@@ -236,7 +273,7 @@ async function generatePatientReply(
       if (!claim.rowCount) return null;
       const history = (
         await a.tx.query(
-          "select role,content,captured_at,timezone from mhistree.chat_messages where conversation_id=$1 and sequence<=$2 order by sequence desc limit 20",
+          "select id,role,content,captured_at,timezone from mhistree.chat_messages where conversation_id=$1 and sequence<=$2 order by sequence desc limit 20",
           [message.conversation_id, message.sequence],
         )
       ).rows.reverse();
@@ -249,9 +286,18 @@ async function generatePatientReply(
   }
   aiDebug("chat.reply.claimed", { messageCount: prepared.history.length });
   try {
+    const now = new Date();
+    const memory = await recallMemory(
+      pool,
+      session,
+      prepared.message.conversation_id,
+      prepared.message.content,
+      prepared.history.map((m) => m.id),
+    );
+    const currentTime = timeAnchor(now, prepared.message.timezone, now);
     const messages: AIMessage[] = prepared.history.map((m) => ({
       role: m.role === "patient" ? "user" : "assistant",
-      content: `Captured ${new Date(m.captured_at).toISOString()} (${m.timezone})\n${m.content}`,
+      content: `Source capture: ${JSON.stringify(timeAnchor(m.captured_at, m.timezone, now))}\n${m.content}`,
     }));
     const evidence = await retrieveEvidence(
       pool,
@@ -262,10 +308,19 @@ async function generatePatientReply(
     );
     const discovery = await practitionerDiscovery(pool, session);
     const reply = await gateway.generate(
-      `${patientChatPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ ...evidence, ...discovery })}`,
+      `${patientChatPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ currentTime, privateMemory: memory, limitedMemory: continueWithoutMemory, ...evidence, ...discovery })}`,
       messages,
       { signal },
     );
+    const currentMemory = await recallMemory(
+      pool,
+      session,
+      prepared.message.conversation_id,
+      prepared.message.content,
+      prepared.history.map((m) => m.id),
+    );
+    if (currentMemory.fingerprint !== memory.fingerprint)
+      throw new DomainError("ACCESS_REVOKED");
     const currentEvidence = await retrieveEvidence(
       pool,
       session,
@@ -293,6 +348,14 @@ async function generatePatientReply(
       session,
       { kind: "patient" },
       async (a) => {
+        const publicationMemory = await recallMemoryInAccess(
+          a,
+          prepared.message.conversation_id,
+          prepared.message.content,
+          prepared.history.map((m) => m.id),
+        );
+        if (publicationMemory.fingerprint !== memory.fingerprint)
+          throw new DomainError("ACCESS_REVOKED");
         const done = await a.tx.query(
           "update mhistree.chat_generations set state='succeeded',lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running' returning message_id",
           [messageId, lease],

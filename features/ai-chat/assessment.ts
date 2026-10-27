@@ -32,6 +32,7 @@ export async function retryPatientReply(
   id: string,
   gateway: AIGateway,
   signal?: AbortSignal,
+  continueWithoutMemory = false,
 ) {
   z.uuid().parse(id);
   const row = await withAccess(
@@ -58,7 +59,14 @@ export async function retryPatientReply(
       },
       gateway,
     );
-  return generateReply(pool, session, id, gateway, signal);
+  return generateReply(
+    pool,
+    session,
+    id,
+    gateway,
+    signal,
+    continueWithoutMemory,
+  );
 }
 export async function requestAssessment(
   pool: Pool,

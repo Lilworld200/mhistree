@@ -17,6 +17,8 @@ export function errorMessage(error: unknown) {
   return (
     (
       {
+        MEMORY_PREPARATION_REQUIRED:
+          "Earlier conversation memory is still preparing. Retry preparation or choose to continue with existing memory.",
         DATABASE_PERMISSION_DENIED:
           "This service could not access required data. Please contact Mhistree support. Your saved information is retained.",
         DATABASE_UNAVAILABLE:

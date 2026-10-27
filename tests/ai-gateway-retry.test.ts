@@ -93,3 +93,17 @@ it("routes clinician and extraction requests to their configured models", async 
   expect(fetch.mock.calls[0][0]).toContain("clinician-model:generateContent");
   expect(fetch.mock.calls[1][0]).toContain("extract-model:generateContent");
 });
+
+it("uses a small output allowance for titles while retaining the configured patient model", async () => {
+  const fetch = vi.fn().mockImplementation(() => Promise.resolve(response()));
+  vi.stubGlobal("fetch", fetch);
+  await gateway.generate(
+    "title",
+    [{ role: "user", content: "Synthetic opening" }],
+    { maxOutputTokens: 256 },
+  );
+  expect(gateway.modelName).toBe("patient-model");
+  expect(
+    JSON.parse(fetch.mock.calls[0][1].body).generationConfig.maxOutputTokens,
+  ).toBe(256);
+});

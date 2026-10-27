@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Btn, IconBtn } from "@/components/ui/button";
@@ -11,6 +11,8 @@ import { useChatNavigation } from "@/components/layout/chat-navigation";
 import { useVoiceChat } from "./speech/use-voice-chat";
 import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
+
+import type { Conversation } from "./conversation";
 
 type Message = {
   id: string;
@@ -25,7 +27,11 @@ type Message = {
   inputMethod?: "text" | "microphone";
   transcription?: { text: string; model: string; capturedAt: string } | null;
 };
-type History = { items: Message[]; nextCursor: string | null };
+type History = {
+  items: Message[];
+  nextCursor: string | null;
+  memoryReady?: boolean;
+};
 export function ChatView() {
   const router = useRouter();
   const chatNavigation = useChatNavigation();
@@ -33,9 +39,7 @@ export function ChatView() {
   const setNavigation = chatNavigation?.setNavigation;
   const initialRequest = useRef(requested);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [conversations, setConversations] = useState<
-      { id: string; created_at: string }[]
-    >([]),
+  const [conversations, setConversations] = useState<Conversation[]>([]),
     [selected, setSelected] = useState(""),
     [history, setHistory] = useState<History>({ items: [], nextCursor: null }),
     [text, setText] = useState(""),
@@ -45,6 +49,15 @@ export function ChatView() {
     [processing, setProcessing] = useState(0),
     [processingError, setProcessingError] = useState(""),
     [processingRevision, setProcessingRevision] = useState(0);
+  const [memoryState, setMemoryState] = useState<"" | "preparing" | "failed">(
+    "",
+  );
+  const preparation = useRef<{ id: string; promise: Promise<void> } | null>(
+    null,
+  );
+  const limitedMemory = useRef(new Set<string>());
+  const naming = useRef(new Set<string>());
+  const created = useRef(new Set<string>());
   const [voiceDraft, setVoiceDraft] = useState<TranscriptDraft | null>(null);
   const voice = useVoiceChat(
     (draft) => {
@@ -69,13 +82,92 @@ export function ChatView() {
     ),
     locked = useRef(false),
     current = useRef("");
-  async function load(id: string) {
-    const result = await api<History>(`/api/chat?id=${id}`);
-    if (current.current === id) setHistory(result);
-    return result;
-  }
+  const startPreparation = useCallback(function startPreparation(
+    id: string,
+    previousConversationId?: string,
+    create = false,
+  ) {
+    if (preparation.current?.id === id) return preparation.current.promise;
+    setMemoryState("preparing");
+    const promise = (async () => {
+      if (create) {
+        await api("/api/chat", {
+          action: "create",
+          data: {
+            id,
+            ...(previousConversationId ? { previousConversationId } : {}),
+          },
+        });
+        created.current.add(id);
+        void api<Conversation[]>("/api/chat")
+          .then(setConversations)
+          .catch(() => {});
+      }
+      for (;;) {
+        if (current.current !== id) return;
+        const result = await api<{ state: string }>("/api/chat", {
+          action: "prepare-memory",
+          data: { id },
+        });
+        if (result.state === "ready") break;
+        if (!["pending", "running"].includes(result.state))
+          throw new Error("PROVIDER_UNAVAILABLE");
+        if (result.state === "running")
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+      if (current.current === id) setMemoryState("");
+    })().catch((e) => {
+      if (current.current === id) {
+        if (
+          e instanceof Error &&
+          [
+            "AUTH_REQUIRED",
+            "SESSION_RETIRED",
+            "ACCESS_DENIED",
+            "ACCESS_REVOKED",
+          ].includes(e.message)
+        ) {
+          setHistory({ items: [], nextCursor: null });
+          setConversations([]);
+          setMemoryState("");
+          setError(errorMessage(e));
+        } else setMemoryState("failed");
+      }
+      throw e;
+    });
+    preparation.current = { id, promise };
+    return promise;
+  }, []);
+  const load = useCallback(
+    async (id: string) => {
+      const result = await api<History>(`/api/chat?id=${id}`);
+      if (current.current === id) {
+        setHistory(result);
+        if (
+          result.memoryReady === false &&
+          preparation.current?.id !== id &&
+          !limitedMemory.current.has(id)
+        )
+          void startPreparation(id).catch(() => {});
+        if (
+          result.items.filter((m) => m.role === "patient").length >= 2 &&
+          !naming.current.has(id)
+        ) {
+          naming.current.add(id);
+          void api("/api/chat", { action: "title", data: { id } })
+            .then(() => api<Conversation[]>("/api/chat"))
+            .then(setConversations)
+            .catch(() => {
+              naming.current.delete(id);
+            });
+        }
+      }
+      return result;
+    },
+    [startPreparation],
+  );
   useEffect(() => {
-    void api<{ id: string; created_at: string }[]>("/api/chat")
+    void api<Conversation[]>("/api/chat")
       .then((items) => {
         setConversations(items);
         if (items[0] && !initialRequest.current) {
@@ -85,7 +177,7 @@ export function ChatView() {
         }
       })
       .catch((e) => setError(errorMessage(e)));
-  }, []);
+  }, [load]);
   useEffect(() => {
     setNavigation?.({
       conversations,
@@ -101,18 +193,27 @@ export function ChatView() {
       current.current = requested.id;
       setSelected(requested.id);
       setError("");
+      setMemoryState("");
+      preparation.current = null;
       request.current = null;
       resetVoice();
       setVoiceDraft(null);
       setText("");
       setHistory({ items: [], nextCursor: null });
-      if (requested.id)
+      if (requested.newConversation) {
+        void startPreparation(
+          requested.id,
+          requested.previousConversationId,
+          true,
+        ).catch(() => {});
+      } else if (requested.id) {
         void load(requested.id).catch((e) => setError(errorMessage(e)));
+      }
     });
     return () => {
       active = false;
     };
-  }, [requested, resetVoice]);
+  }, [requested, resetVoice, load, startPreparation]);
   useEffect(() => {
     const area = scrollRef.current;
     if (area) area.scrollTop = area.scrollHeight;
@@ -122,7 +223,15 @@ export function ChatView() {
     setError("");
     let succeeded = false;
     try {
-      await api("/api/chat", { action: "generate", data: { id } });
+      await api("/api/chat", {
+        action: "generate",
+        data: {
+          id,
+          ...(limitedMemory.current.has(conversation)
+            ? { continueWithoutMemory: true }
+            : {}),
+        },
+      });
       succeeded = true;
     } catch (e) {
       setError(
@@ -193,6 +302,27 @@ export function ChatView() {
         setConversations(await api("/api/chat"));
       }
       if (
+        requested?.id === id &&
+        requested.newConversation &&
+        !created.current.has(id)
+      ) {
+        await api("/api/chat", {
+          action: "create",
+          data: {
+            id,
+            ...(requested.previousConversationId
+              ? { previousConversationId: requested.previousConversationId }
+              : {}),
+          },
+        });
+        created.current.add(id);
+      }
+      if (preparation.current?.id === id && !limitedMemory.current.has(id)) {
+        await preparation.current.promise;
+        // Navigation during preparation must not send the captured draft to another conversation.
+        if (current.current !== id) return;
+      }
+      if (
         !request.current ||
         request.current.text !== text ||
         request.current.token !== spoken?.token
@@ -217,6 +347,9 @@ export function ChatView() {
       setText("");
       setVoiceDraft(null);
       request.current = null;
+      void api<Conversation[]>("/api/chat")
+        .then(setConversations)
+        .catch(() => {});
       // A display refresh must not prevent a saved message from receiving a reply.
       await load(id).catch(() => {});
       // Extraction is durable and independently retryable; it must never gate a reply.
@@ -520,6 +653,47 @@ export function ChatView() {
           </p>
         )}
       </div>
+      {memoryState === "preparing" && (
+        <p className="muted" role="status">
+          Remembering your earlier conversation… You can keep typing.
+        </p>
+      )}
+      {memoryState === "failed" && (
+        <div className="ui-notice" role="alert">
+          <p>
+            Earlier conversation memory could not finish preparing. Your draft
+            is still here.
+          </p>
+          <Btn
+            sm
+            onClick={() => {
+              const previous =
+                requested?.id === selected
+                  ? requested.previousConversationId
+                  : undefined;
+              preparation.current = null;
+              void startPreparation(
+                selected,
+                previous,
+                Boolean(
+                  requested?.id === selected && requested.newConversation,
+                ),
+              ).catch(() => {});
+            }}
+          >
+            Retry memory preparation
+          </Btn>
+          <Btn
+            sm
+            onClick={() => {
+              limitedMemory.current.add(selected);
+              setMemoryState("");
+            }}
+          >
+            Continue with existing memory
+          </Btn>
+        </div>
+      )}
       <form onSubmit={send} className="composer">
         <IconBtn
           icon="clip"

@@ -188,12 +188,11 @@ function Navigation({
                   }}
                 >
                   <Icon n="chat" s={14} />
-                  <span className="ell">
-                    {new Date(conversation.created_at).toLocaleDateString(
-                      undefined,
-                      { month: "short", day: "numeric" },
-                    )}{" "}
-                    conversation
+                  <span
+                    className="ell"
+                    title={`${conversation.title || "New conversation"} · ${new Date(conversation.created_at).toLocaleDateString()}`}
+                  >
+                    {conversation.title || "New conversation"}
                   </span>
                 </button>
               ))}

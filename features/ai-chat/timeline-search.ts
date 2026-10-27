@@ -90,7 +90,7 @@ export async function searchTimelineInAccess(
       `
     with authorized as materialized (
       select e.id,e.logical_id,e.version,e.category,e.body,e.source_id,e.source_status,e.source_spans,e.status,
-        e.occurred_at,e.recorded_at,e.author_account_id,s.captured_at,s.chat_message_id,s.parent_source_id,
+        e.occurred_at,e.recorded_at,e.author_account_id,s.captured_at,s.source_timezone,s.chat_message_id,s.parent_source_id,
         coalesce(e.occurred_at->>'at',e.occurred_at->>'from')::timestamptz event_date,
         concat_ws(' ',e.body->>'text',e.body->>'bodySite',array_to_string(e.source_spans,' ')) searchable
       from mhistree.record_heads h join mhistree.contributions e on e.id=h.current_id

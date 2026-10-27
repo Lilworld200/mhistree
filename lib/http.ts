@@ -89,7 +89,9 @@ export function failure(error: unknown) {
         ? 401
         : code === "ACCESS_DENIED" || code === "ACCESS_REVOKED"
           ? 403
-          : code === "VERSION_CONFLICT" || code === "IDENTITY_REVIEW_REQUIRED"
+          : code === "VERSION_CONFLICT" ||
+              code === "MEMORY_PREPARATION_REQUIRED" ||
+              code === "IDENTITY_REVIEW_REQUIRED"
             ? 409
             : code === "RATE_LIMITED"
               ? 429

@@ -15,6 +15,7 @@ export type Evidence = {
   status: string;
   eventTime: unknown;
   capturedAt: string;
+  sourceTimezone?: string;
   spans: string[];
   contextLinks: string[];
   version: number;
@@ -66,6 +67,7 @@ export async function retrieveEvidence(
       status: row.status,
       eventTime: row.occurred_at,
       capturedAt: row.captured_at.toISOString(),
+      sourceTimezone: row.source_timezone,
       spans: row.source_spans.slice(0, 3),
       contextLinks: row.body.contextLinks,
       version: row.version,

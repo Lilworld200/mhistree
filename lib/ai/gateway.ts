@@ -5,10 +5,12 @@ import { DomainError } from "@/lib/errors";
 import { aiDebug, withAIDebug } from "./debug";
 export type AIMessage = { role: "user" | "assistant"; content: string };
 export interface AIGateway {
+  readonly modelName?: string;
   generate(
     system: string,
     messages: AIMessage[],
     options?: {
+      maxOutputTokens?: number;
       json?: boolean;
       signal?: AbortSignal;
       purpose?: "chat" | "extraction" | "clinician";
@@ -25,10 +27,14 @@ export class GeminiGateway implements AIGateway {
       clinicianModel?: string;
     },
   ) {}
+  get modelName() {
+    return this.config.chatModel;
+  }
   async generate(
     system: string,
     messages: AIMessage[],
     options: {
+      maxOutputTokens?: number;
       json?: boolean;
       signal?: AbortSignal;
       purpose?: "chat" | "extraction" | "clinician";
@@ -76,7 +82,10 @@ export class GeminiGateway implements AIGateway {
               parts: [{ text: m.content }],
             })),
             generationConfig: {
-              maxOutputTokens: 4096,
+              maxOutputTokens: Math.min(
+                4096,
+                Math.max(128, options.maxOutputTokens ?? 4096),
+              ),
               temperature: 0.2,
               ...(options.json ? { responseMimeType: "application/json" } : {}),
             },

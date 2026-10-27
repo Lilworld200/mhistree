@@ -1,7 +1,13 @@
 "use client";
 import { createContext, useContext, useState } from "react";
 
-type Conversation = { id: string; created_at: string };
+import type { Conversation } from "@/features/ai-chat/conversation";
+type Selection = {
+  id: string;
+  revision: number;
+  previousConversationId?: string;
+  newConversation?: boolean;
+};
 type Navigation = {
   conversations: Conversation[];
   selected: string;
@@ -10,7 +16,7 @@ type Navigation = {
 const Context = createContext<{
   navigation: Navigation;
   setNavigation: React.Dispatch<React.SetStateAction<Navigation>>;
-  requested: { id: string; revision: number } | null;
+  requested: Selection | null;
   select: (id: string) => void;
 } | null>(null);
 export function ChatNavigationProvider({
@@ -23,10 +29,7 @@ export function ChatNavigationProvider({
     selected: "",
     busy: false,
   });
-  const [requested, setRequested] = useState<{
-    id: string;
-    revision: number;
-  } | null>(null);
+  const [requested, setRequested] = useState<Selection | null>(null);
   return (
     <Context.Provider
       value={{
@@ -35,7 +38,13 @@ export function ChatNavigationProvider({
         requested,
         select: (id) =>
           setRequested((previous) => ({
-            id,
+            id: id || crypto.randomUUID(),
+            ...(!id
+              ? {
+                  newConversation: true,
+                  previousConversationId: navigation.selected || undefined,
+                }
+              : {}),
             revision: (previous?.revision ?? 0) + 1,
           })),
       }}
