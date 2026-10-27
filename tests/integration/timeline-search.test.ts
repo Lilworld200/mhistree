@@ -158,13 +158,14 @@ describe("timeline search throughout chat", () => {
       ).rows[0].links,
     ).toEqual([]);
   });
-  it("always searches before reply and passes dated uncertainty instructions into the real generation owner", async () => {
+  it("selectively searches before a health reply and keeps internal lineage out of the provider projection", async () => {
     const sent = await send("My belly is getting better");
     const gateway: AIGateway = {
       generate: async (system) => {
-        expect(system).toContain(stomach);
+        expect(system).not.toContain(stomach);
+        expect(system).toContain("stomach ache");
         expect(system).toContain("2026-10-12");
-        expect(system).toContain("before treating it as the same episode");
+        expect(system).toContain("before treating reports as the same episode");
         expect(system).toContain("topic-match");
         expect(system).toContain(
           "identifiers/source lineage are internal only",
@@ -182,6 +183,64 @@ describe("timeline search throughout chat", () => {
         -1,
       )?.content,
     ).not.toContain(stomach);
+  });
+  it("keeps greetings lean and strips echoed metadata before storage and history", async () => {
+    const sent = await send("Hello there");
+    await generateReply(db.pool, patient.session, sent.messageId, {
+      generate: async (system, messages) => {
+        expect(system).not.toContain("stomach ache on Monday");
+        expect(system).toContain('"evidence":[]');
+        expect(messages[0].content).toBe("Hello there");
+        return 'Source capture: {"capturedAt":"2026-10-27","elapsedSeconds":-14}\nHello!';
+      },
+    });
+    expect(
+      (await conversationHistory(db.pool, patient.session, sent.id)).items.at(
+        -1,
+      )?.content,
+    ).toBe("Hello!");
+    const saved = (
+      await db.pool.query(
+        "select content from mhistree.chat_messages where conversation_id=$1 and role='assistant'",
+        [sent.id],
+      )
+    ).rows[0];
+    expect(saved.content).toBe("Hello!");
+  });
+  it("retrieves stress aliases and a requested local date without unrelated records", async () => {
+    const stress = await add(
+      "felt stressed after working",
+      "symptom",
+      "2026-10-16T23:30:00Z",
+    );
+    const options = {
+      selective: true,
+      broad: false,
+      timezone: "Africa/Lagos",
+      now: new Date("2026-10-27T12:00:00Z"),
+    };
+    const recalled = await retrieveEvidence(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      patient.personId,
+      "I'm still feeling stress",
+      options,
+    );
+    expect(recalled.evidence.map((e) => e.id)).toContain(stress);
+    expect(recalled.evidence.map((e) => e.id)).not.toContain(stomach);
+    const dated = await retrieveEvidence(
+      db.pool,
+      patient.session,
+      { kind: "patient" },
+      patient.personId,
+      "What happened on October 17?",
+      options,
+    );
+    expect(dated.evidence.map((e) => e.id)).toContain(stress);
+    expect(dated.evidence.map((e) => e.id)).toContain(run);
+    expect(dated.evidence.map((e) => e.id)).not.toContain(stomach);
+    expect(JSON.stringify(dated.evidence).length).toBeLessThanOrEqual(6000);
   });
   it("does not promote an old activity as a recent possible cause", async () => {
     const oldRun = await add(

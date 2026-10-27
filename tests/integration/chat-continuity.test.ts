@@ -9,7 +9,11 @@ import {
   conversationHistory,
   listConversations,
 } from "@/features/ai-chat/server";
-import { prepareMemory, recallMemory } from "@/features/ai-chat/memory";
+import {
+  linkPreviousConversation,
+  prepareMemory,
+  recallMemory,
+} from "@/features/ai-chat/memory";
 import { generateTitle } from "@/features/ai-chat/titles";
 import { withAccess } from "@/features/access/server";
 import {
@@ -46,7 +50,7 @@ describe("private patient continuity and topic titles", () => {
   const summarize: AIGateway = {
     modelName: "synthetic-small-model",
     generate: async (_system, messages) => {
-      const sources = JSON.parse(messages[0].content);
+      const sources = JSON.parse(messages[0].content).messages;
       return JSON.stringify({
         items: sources.map(
           (s: { id: string; role: string; content: string }) => ({
@@ -118,7 +122,7 @@ describe("private patient continuity and topic titles", () => {
     expect(
       (
         await db.pool.query(
-          "select count(*)::int count from mhistree.chat_memory_chunks where conversation_id=$1",
+          "select count(*)::int count from mhistree.chat_session_summaries where conversation_id=$1",
           [old],
         )
       ).rows[0].count,
@@ -157,13 +161,13 @@ describe("private patient continuity and topic titles", () => {
     expect(
       (
         await db.pool.query(
-          "select * from mhistree.chat_memory_chunks where conversation_id=$1",
+          "select * from mhistree.chat_session_summaries where conversation_id=$1",
           [unrelated],
         )
       ).rowCount,
     ).toBe(0);
   });
-  it("chunks long chats durably and prevents duplicate work across tabs", async () => {
+  it("uses one bounded summary and prevents duplicate work across tabs", async () => {
     const old = await chat();
     for (let i = 0; i < 3; i++) await say(old, `${i} ${"x".repeat(8500)}`);
     const next = await chat(old);
@@ -183,21 +187,20 @@ describe("private patient continuity and topic titles", () => {
       await prepareMemory(db.pool, patient.session, next, summarize),
     ).toEqual({ state: "running" });
     release();
-    expect(await pending).toEqual({ state: "pending" });
+    expect(await pending).toEqual({ state: "ready" });
     expect(
-      await prepareMemory(db.pool, patient.session, next, summarize),
-    ).toEqual({ state: "pending" });
-    expect(
-      await prepareMemory(db.pool, patient.session, next, summarize),
+      await prepareMemory(db.pool, patient.session, next, {
+        generate: async () => {
+          throw new Error("must not repeat");
+        },
+      }),
     ).toEqual({ state: "ready" });
-    expect(
-      (
-        await db.pool.query(
-          "select count(*)::int count from mhistree.chat_memory_chunks where conversation_id=$1",
-          [old],
-        )
-      ).rows[0].count,
-    ).toBe(3);
+    const stored = await db.pool.query(
+      "select * from mhistree.chat_session_summaries where conversation_id=$1",
+      [old],
+    );
+    expect(stored.rowCount).toBe(1);
+    expect(stored.rows[0].bounded).toBe(true);
   });
   it("rejects invented citations and assistant advice labeled as a patient report", async () => {
     const old = await chat();
@@ -209,7 +212,7 @@ describe("private patient continuity and topic titles", () => {
     await expect(
       prepareMemory(db.pool, patient.session, next, {
         generate: async (_s, m) => {
-          const rows = JSON.parse(m[0].content);
+          const rows = JSON.parse(m[0].content).messages;
           return JSON.stringify({
             items: [
               {
@@ -232,7 +235,7 @@ describe("private patient continuity and topic titles", () => {
                 text: "Invented",
                 citations: [
                   {
-                    messageId: JSON.parse(m[0].content)[0].id,
+                    messageId: JSON.parse(m[0].content).messages[0].id,
                     quote: "not actually said",
                   },
                 ],
@@ -242,25 +245,62 @@ describe("private patient continuity and topic titles", () => {
       }),
     ).rejects.toThrow("PROVIDER_UNAVAILABLE");
   });
-  it("carries unfinished preparation through successive empty new chats without cycles", async () => {
+  it("updates a single dated snapshot when returning through older chats; unchanged navigation costs no model call", async () => {
     const old = await chat();
-    await say(old, "Life context from the departing chat");
-    const middle = await chat(old);
-    const newest = await chat(middle);
+    await say(old, "I prefer short replies");
+    const newer = await chat(old);
+    await prepareMemory(db.pool, patient.session, newer, summarize);
+    await say(newer, "I spent the day coding");
+    await withAccess(db.pool, patient.session, { kind: "patient" }, (a) =>
+      linkPreviousConversation(a, old, newer),
+    );
+    await prepareMemory(db.pool, patient.session, old, summarize);
+    await say(old, "I prefer short replies with examples");
     expect(
-      await prepareMemory(db.pool, patient.session, newest, summarize),
-    ).toEqual({ state: "pending" });
+      (await recallMemory(db.pool, patient.session, old, "Hello")).items.some(
+        (i) => i.text.includes("coding"),
+      ),
+    ).toBe(true);
+    await say(old, "Thanks for listening");
     expect(
-      await prepareMemory(db.pool, patient.session, newest, summarize),
-    ).toEqual({ state: "ready" });
+      (await recallMemory(db.pool, patient.session, old, "Hello")).items,
+    ).toHaveLength(0);
     expect(
       (
-        await recallMemory(db.pool, patient.session, newest, "Life context")
-      ).items.some((i) => i.text.includes("departing chat")),
+        await recallMemory(
+          db.pool,
+          patient.session,
+          old,
+          "Remember my coding project?",
+        )
+      ).items.some((i) => i.text.includes("coding")),
     ).toBe(true);
-    await expect(
-      createConversation(db.pool, patient.session, old, newest),
-    ).rejects.toThrow("VERSION_CONFLICT");
+    await withAccess(db.pool, patient.session, { kind: "patient" }, (a) =>
+      linkPreviousConversation(a, newer, old),
+    );
+    await prepareMemory(db.pool, patient.session, newer, summarize);
+    const stored = (
+      await db.pool.query(
+        "select * from mhistree.chat_session_summaries where conversation_id=$1",
+        [old],
+      )
+    ).rows;
+    expect(stored).toHaveLength(1);
+    expect(
+      stored[0].items.map((i: { text: string }) => i.text).join(" "),
+    ).toContain("with examples");
+    expect(stored[0].source_from).toBeInstanceOf(Date);
+    expect(stored[0].source_through).toBeInstanceOf(Date);
+    await withAccess(db.pool, patient.session, { kind: "patient" }, (a) =>
+      linkPreviousConversation(a, newer, old),
+    );
+    expect(
+      await prepareMemory(db.pool, patient.session, newer, {
+        generate: async () => {
+          throw new Error("unchanged must not summarize");
+        },
+      }),
+    ).toEqual({ state: "ready" });
   });
   it("validates root-array JSON summaries just like wrapped items", async () => {
     const old = await chat();
@@ -297,7 +337,7 @@ describe("private patient continuity and topic titles", () => {
     ).rejects.toThrow("ACCESS_DENIED");
     await withAccess(db.pool, other.session, { kind: "patient" }, async (a) => {
       for (const table of [
-        "chat_memory_chunks",
+        "chat_session_summaries",
         "chat_memory_jobs",
         "chat_memory_links",
         "chat_titles",
@@ -318,7 +358,7 @@ describe("private patient continuity and topic titles", () => {
           }),
         ]);
         expect(
-          (await a.tx.query("select * from mhistree.chat_memory_chunks"))
+          (await a.tx.query("select * from mhistree.chat_session_summaries"))
             .rowCount,
         ).toBe(0);
       },
@@ -482,7 +522,7 @@ describe("private patient continuity and topic titles", () => {
     expect(
       (
         await db.pool.query(
-          "select * from mhistree.chat_memory_chunks where conversation_id=$1",
+          "select * from mhistree.chat_session_summaries where conversation_id=$1",
           [old],
         )
       ).rowCount,

@@ -39,6 +39,7 @@ export function ChatNavigationProvider({
         select: (id) =>
           setRequested((previous) => ({
             id: id || crypto.randomUUID(),
+            previousConversationId: navigation.selected || undefined,
             ...(!id
               ? {
                   newConversation: true,

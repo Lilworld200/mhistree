@@ -21,6 +21,8 @@ import {
 } from "./memory";
 import { conversationPreview } from "./conversation";
 import { continuityPolicy, timeAnchor } from "./temporal";
+import { boundedHistory, contextPlan } from "./context-plan";
+import { replyText } from "./reply-text";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -120,7 +122,10 @@ export async function conversationHistory(
     const page = rows.slice(0, 50);
     return {
       memoryReady: await memoryReady(a, id),
-      items: page.reverse(),
+      items: page.reverse().map((m) => ({
+        ...m,
+        content: m.role === "assistant" ? replyText(m.content) : m.content,
+      })),
       nextCursor: more ? page[0].sequence : null,
     };
   });
@@ -295,23 +300,43 @@ async function generatePatientReply(
       prepared.history.map((m) => m.id),
     );
     const currentTime = timeAnchor(now, prepared.message.timezone, now);
-    const messages: AIMessage[] = prepared.history.map((m) => ({
+    const history = boundedHistory(prepared.history);
+    const plan = contextPlan(prepared.message.content);
+    const messages: AIMessage[] = history.map((m) => ({
       role: m.role === "patient" ? "user" : "assistant",
-      content: `Source capture: ${JSON.stringify(timeAnchor(m.captured_at, m.timezone, now))}\n${m.content}`,
+      content: m.role === "patient" ? m.content : replyText(m.content),
     }));
-    const evidence = await retrieveEvidence(
-      pool,
-      session,
-      { kind: "patient" },
-      prepared.personId,
-      prepared.message.content,
-    );
+    const readEvidence = () =>
+      plan.timeline
+        ? retrieveEvidence(
+            pool,
+            session,
+            { kind: "patient" },
+            prepared.personId,
+            prepared.message.content,
+            {
+              selective: true,
+              broad: plan.broad,
+              timezone: prepared.message.timezone,
+              now,
+            },
+          )
+        : Promise.resolve({
+            evidence: [],
+            gaps: [],
+            bounded: true,
+            asOf: now.toISOString(),
+          });
+    const evidence = await readEvidence();
     const discovery = await practitionerDiscovery(pool, session);
-    const reply = await gateway.generate(
-      `${patientChatPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ currentTime, privateMemory: memory, limitedMemory: continueWithoutMemory, ...evidence, ...discovery })}`,
-      messages,
-      { signal },
+    const reply = replyText(
+      await gateway.generate(
+        `${patientChatPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ currentTime, privateMemory: { items: (continueWithoutMemory ? [] : memory.items).map((i) => ({ kind: i.kind, text: i.text, dates: i.sources.map((s) => ({ at: s.capturedAt, zone: s.timezone })) })) }, sourceDates: history.map((m, index) => ({ index, at: m.captured_at, zone: m.timezone })), limitedMemory: continueWithoutMemory, ...evidence, evidence: evidence.evidence.map((e) => ({ text: e.text, category: e.category, status: e.status, eventTime: e.eventTime, capturedAt: e.capturedAt, timezone: e.sourceTimezone, relevance: e.relevance })), ...discovery })}`,
+        messages,
+        { signal, maxOutputTokens: 1024 },
+      ),
     );
+    if (!reply) throw new DomainError("PROVIDER_UNAVAILABLE");
     const currentMemory = await recallMemory(
       pool,
       session,
@@ -321,13 +346,7 @@ async function generatePatientReply(
     );
     if (currentMemory.fingerprint !== memory.fingerprint)
       throw new DomainError("ACCESS_REVOKED");
-    const currentEvidence = await retrieveEvidence(
-      pool,
-      session,
-      { kind: "patient" },
-      prepared.personId,
-      prepared.message.content,
-    );
+    const currentEvidence = await readEvidence();
     const currentIds = new Set(currentEvidence.evidence.map((e) => e.id));
     if (evidence.evidence.some((e) => !currentIds.has(e.id)))
       throw new DomainError("ACCESS_REVOKED");

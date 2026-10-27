@@ -1,4 +1,5 @@
 import "server-only";
+import { replyText } from "../reply-text";
 import type { Pool } from "pg";
 import { createHash, randomUUID } from "node:crypto";
 import { withAccess } from "@/features/access/server";
@@ -125,7 +126,7 @@ export async function speechPlaybackAccess(
       )
     ).rows[0];
     if (!row) throw new DomainError("ACCESS_DENIED");
-    return row.content as string;
+    return replyText(row.content as string);
   });
 }
 export async function synthesizeReply(
@@ -138,7 +139,7 @@ export async function synthesizeReply(
   await authorizeSpeech(pool, session);
   const read = () => speechPlaybackAccess(pool, session, messageId);
   const text = await read();
-  if (text.length > 10000) throw new DomainError("VALIDATION_FAILED");
+  if (!text || text.length > 10000) throw new DomainError("VALIDATION_FAILED");
   const config = speechConfiguration();
   const audio = await (
     gateway ??

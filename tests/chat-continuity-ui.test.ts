@@ -38,9 +38,18 @@ afterEach(async () => {
 function Controls() {
   const chat = useChatNavigation();
   return createElement(
-    "button",
-    { onClick: () => chat?.select("") },
-    "Start new chat",
+    "div",
+    null,
+    createElement(
+      "button",
+      { onClick: () => chat?.select("older-conversation") },
+      "Open older chat",
+    ),
+    createElement(
+      "button",
+      { onClick: () => chat?.select("") },
+      "Start new chat",
+    ),
   );
 }
 async function mount() {
@@ -138,7 +147,7 @@ describe("New chat memory preparation", () => {
     await type("My draft survives");
     expect(host.textContent).toContain("could not finish preparing");
     expect(host.querySelector("textarea")!.value).toBe("My draft survives");
-    await click("Continue with existing memory");
+    await click("Continue without earlier memory");
     await submit();
     expect(apiMock).toHaveBeenCalledWith("/api/chat", {
       action: "generate",
@@ -162,5 +171,24 @@ describe("New chat memory preparation", () => {
       action: "generate",
       data: { id: "new-message" },
     });
+  });
+  it("prepares the departing chat when selecting an older saved conversation", async () => {
+    responses(async () => ({ state: "ready" }));
+    await mount();
+    await click("Open older chat");
+    expect(apiMock).toHaveBeenCalledWith("/api/chat", {
+      action: "depart",
+      data: {
+        id: "older-conversation",
+        previousConversationId: "old-conversation",
+      },
+    });
+    expect(apiMock).toHaveBeenCalledWith("/api/chat", {
+      action: "prepare-memory",
+      data: { id: "older-conversation" },
+    });
+    expect(apiMock.mock.calls.some(([, d]) => d?.action === "create")).toBe(
+      false,
+    );
   });
 });

@@ -82,8 +82,8 @@ export async function extractionContext(
       )
     : [];
   const timelineCandidates = candidates
-    .filter((e) => !reports.some((r) => r.id === e.id))
-    .slice(0, 8)
+    .filter((e) => e.match_score > 0 && !reports.some((r) => r.id === e.id))
+    .slice(0, 4)
     .map((e) => ({
       eventId: e.id,
       text: recordNarrative(e).slice(0, 600),
@@ -116,9 +116,9 @@ export async function extractionContext(
 export function modelExtractionContext(context: ExtractionContext | undefined) {
   if (!context) return null;
   const projection = {
-    previousPatientMessages: [...context.messages],
-    possibleTimelineContext: [...(context.timelineCandidates ?? [])],
-    previousReports: context.reports.map((r) => ({
+    previousPatientMessages: context.messages.slice(-4),
+    possibleTimelineContext: (context.timelineCandidates ?? []).slice(0, 4),
+    previousReports: context.reports.slice(0, 6).map((r) => ({
       eventId: r.id,
       category: r.category,
       text: (r.body.reportStyle
@@ -139,7 +139,7 @@ export function modelExtractionContext(context: ExtractionContext | undefined) {
   };
   // Keep a valid structured payload within an explicit character budget. Remove
   // oldest context, never trim a JSON string into malformed or misleading data.
-  while (JSON.stringify(projection).length > 16000) {
+  while (JSON.stringify(projection).length > 6000) {
     if (projection.previousPatientMessages.length)
       projection.previousPatientMessages.shift();
     else if (projection.possibleTimelineContext.length)

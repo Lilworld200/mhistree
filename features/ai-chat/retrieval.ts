@@ -5,6 +5,7 @@ import { z } from "zod";
 import { recordNarrative } from "@/features/health-records/narrative";
 import { aiDebug } from "@/lib/ai/debug";
 import { searchTimelineInAccess } from "./timeline-search";
+import { recallDay } from "./context-plan";
 export type Evidence = {
   id: string;
   sourceId: string;
@@ -32,23 +33,41 @@ export async function retrieveEvidence(
   context: ActingContext,
   patientPersonId: string,
   question: string,
+  options?: { selective: boolean; broad: boolean; timezone: string; now: Date },
 ) {
   z.uuid().parse(patientPersonId);
   z.string().max(10000).parse(question);
   return withAccess(pool, session, context, async (a) => {
-    const rows = await searchTimelineInAccess(a, patientPersonId, question);
-    const priorSources = rows.length
-      ? (
-          await a.tx.query(
-            `select current.id current_id,prior.source_id,prior.version,prior.source_spans
+    const day = options
+      ? recallDay(question, options.timezone, options.now)
+      : null;
+    const candidates = await searchTimelineInAccess(
+      a,
+      patientPersonId,
+      question,
+      undefined,
+      options
+        ? { day, broad: options.broad, timezone: options.timezone }
+        : undefined,
+    );
+    const rows = options?.selective
+      ? candidates
+          .filter((r) => day || options.broad || r.match_score > 0)
+          .slice(0, 6)
+      : candidates;
+    const priorSources =
+      rows.length && !options?.selective
+        ? (
+            await a.tx.query(
+              `select current.id current_id,prior.source_id,prior.version,prior.source_spans
        from mhistree.contributions current
        cross join lateral (select source_id,version,source_spans from mhistree.contributions
          where logical_id=current.logical_id and version<current.version order by version desc limit 5) prior
        where current.id=any($1::uuid[])`,
-            [rows.map((r) => r.id)],
-          )
-        ).rows
-      : [];
+              [rows.map((r) => r.id)],
+            )
+          ).rows
+        : [];
     const allEvidence: Evidence[] = rows.map((row) => ({
       id: row.id,
       relevance:
@@ -86,7 +105,7 @@ export async function retrieveEvidence(
     let contextSize = 2;
     for (const item of allEvidence) {
       const size = JSON.stringify(item).length + 1;
-      if (contextSize + size > 24000) break;
+      if (contextSize + size > (options?.selective ? 6000 : 24000)) break;
       evidence.push(item);
       contextSize += size;
     }

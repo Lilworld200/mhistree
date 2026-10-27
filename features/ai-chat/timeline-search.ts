@@ -10,6 +10,14 @@ import { aiDebug } from "@/lib/ai/debug";
 
 // Search vocabulary only: a match never establishes a diagnosis, cause or episode.
 const concepts = {
+  stress: [
+    "stress",
+    "stressed",
+    "stressful",
+    "anxiety",
+    "anxious",
+    "overwhelmed",
+  ],
   abdomen: ["belly", "stomach", "stomachache", "tummy", "abdomen", "abdominal"],
   lowerLimb: [
     "leg",
@@ -81,6 +89,7 @@ export async function searchTimelineInAccess(
   patientPersonId: string,
   question: string,
   before?: Date,
+  selection?: { day: string | null; broad: boolean; timezone: string },
 ) {
   z.uuid().parse(patientPersonId);
   z.string().max(10000).parse(question);
@@ -97,6 +106,12 @@ export async function searchTimelineInAccess(
       join mhistree.sources s on s.id=e.source_id
       where mhistree.canonical_person(e.patient_person_id)=mhistree.canonical_person($1)
         and e.visibility='finalized' and ($5::timestamptz is null or s.captured_at<$5)
+        and ($6::date is null
+          or ((e.occurred_at->>'at')::timestamptz >= ($6::date::timestamp at time zone $7)
+            and (e.occurred_at->>'at')::timestamptz < (($6::date+1)::timestamp at time zone $7))
+          or ((e.occurred_at->>'from')::timestamptz < (($6::date+1)::timestamp at time zone $7)
+            and (e.occurred_at->>'to')::timestamptz > ($6::date::timestamp at time zone $7))
+          or (e.occurred_at->>'precision'='unknown' and (s.captured_at at time zone $7)::date=$6::date))
     ), ranked as (
       select *,case when searchable ~* $3 then 3
         when $2<>'' and to_tsvector('english',searchable) @@ to_tsquery('english',$2) then 2
@@ -104,11 +119,11 @@ export async function searchTimelineInAccess(
           and event_date between coalesce($5::timestamptz,clock_timestamp())-interval '14 days'
             and coalesce($5::timestamptz,clock_timestamp()) then 1 else 0 end match_score from authorized
     ), selected as (
-      (select id,0 lane from ranked where match_score>0 order by match_score desc,event_date desc nulls last,captured_at desc,id desc limit 16)
+      (select id,0 lane from ranked where match_score>0 or $6::date is not null order by match_score desc,event_date desc nulls last,captured_at desc,id desc limit 16)
       union all
-      (select id,1 lane from ranked where category in ('medication-use','allergy','baseline','ongoing') order by recorded_at desc,id desc limit 8)
+      (select id,1 lane from ranked where ($8::boolean or $9::boolean) and category in ('medication-use','allergy','baseline','ongoing') order by recorded_at desc,id desc limit 8)
       union all
-      (select id,2 lane from ranked order by captured_at desc,id desc limit 8)
+      (select id,2 lane from ranked where ($8::boolean or $9::boolean) order by captured_at desc,id desc limit 8)
     ), choices as (select id,min(lane)::int search_lane from selected group by id)
       select r.*,s.search_lane from choices s join ranked r on r.id=s.id
       order by search_lane,match_score desc,event_date desc nulls last,captured_at desc,id desc`,
@@ -118,6 +133,10 @@ export async function searchTimelineInAccess(
         terms.aliases,
         terms.related,
         before ?? null,
+        selection?.day ?? null,
+        selection?.timezone ?? "UTC",
+        !selection,
+        selection?.broad ?? false,
       ],
     )
   ).rows;

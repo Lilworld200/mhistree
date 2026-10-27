@@ -18,6 +18,8 @@ import {
 } from "@/features/ai-chat/server";
 import { retryPatientReply } from "@/features/ai-chat/assessment";
 import { aiDebug, aiDebugError, withAIDebug } from "@/lib/ai/debug";
+import { withAccess } from "@/features/access/server";
+import { linkPreviousConversation } from "@/features/ai-chat/memory";
 import { prepareMemory } from "@/features/ai-chat/memory";
 import { generateTitle } from "@/features/ai-chat/titles";
 export const maxDuration = 120;
@@ -48,6 +50,7 @@ async function chatRequest(request: NextRequest) {
       .object({
         action: z.enum([
           "create",
+          "depart",
           "send",
           "generate",
           "cancel",
@@ -63,6 +66,16 @@ async function chatRequest(request: NextRequest) {
     aiDebug("chat.http.action", { reason: input.action });
     if (input.action === "send")
       return success(await sendMessage(pool, session, input.data));
+    if (input.action === "depart") {
+      const data = z
+        .object({ id: z.uuid(), previousConversationId: z.uuid() })
+        .strict()
+        .parse(input.data);
+      await withAccess(pool, session, { kind: "patient" }, (a) =>
+        linkPreviousConversation(a, data.id, data.previousConversationId),
+      );
+      return success({ state: "linked" });
+    }
     if (input.action === "create") {
       const data = z
         .object({ id: z.uuid(), previousConversationId: z.uuid().optional() })

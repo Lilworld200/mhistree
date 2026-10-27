@@ -13,6 +13,7 @@ import { RecordingControls } from "./speech/recording-controls";
 import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
+import { replyText } from "./reply-text";
 import type { Conversation } from "./conversation";
 
 type Message = {
@@ -103,6 +104,12 @@ export function ChatView() {
         void api<Conversation[]>("/api/chat")
           .then(setConversations)
           .catch(() => {});
+      }
+      if (!create && previousConversationId && previousConversationId !== id) {
+        await api("/api/chat", {
+          action: "depart",
+          data: { id, previousConversationId },
+        });
       }
       for (;;) {
         if (current.current !== id) return;
@@ -208,6 +215,14 @@ export function ChatView() {
           true,
         ).catch(() => {});
       } else if (requested.id) {
+        if (
+          requested.previousConversationId &&
+          requested.previousConversationId !== requested.id
+        )
+          void startPreparation(
+            requested.id,
+            requested.previousConversationId,
+          ).catch(() => {});
         void load(requested.id).catch((e) => setError(errorMessage(e)));
       }
     });
@@ -474,7 +489,9 @@ export function ChatView() {
                 <span className="sr-only">
                   {m.role === "patient" ? "You" : "Mhistree AI interpretation"}
                 </span>
-                <p className="message-content">{m.content}</p>
+                <p className="message-content">
+                  {m.role === "assistant" ? replyText(m.content) : m.content}
+                </p>
                 {m.role === "assistant" &&
                   (m.replyInputMethod === "microphone" ||
                     history.items.some(
@@ -672,7 +689,7 @@ export function ChatView() {
               setMemoryState("");
             }}
           >
-            Continue with existing memory
+            Continue without earlier memory
           </Btn>
         </div>
       )}
@@ -690,23 +707,25 @@ export function ChatView() {
             onStop={voice.stopRecording}
             onCancel={voice.cancelRecording}
           />
-        ) : <IconBtn
-          icon="mic"
-          size={44}
-          title={
-            voice.enabled
-              ? "Record a voice message"
-              : "Voice messages unavailable"
-          }
-          disabled={
-            !voice.enabled ||
-            busy ||
-            Boolean(generating) ||
-            voice.recording !== "idle" ||
-            Boolean(voiceDraft)
-          }
-          onClick={() => void voice.beginRecording()}
-        />}
+        ) : (
+          <IconBtn
+            icon="mic"
+            size={44}
+            title={
+              voice.enabled
+                ? "Record a voice message"
+                : "Voice messages unavailable"
+            }
+            disabled={
+              !voice.enabled ||
+              busy ||
+              Boolean(generating) ||
+              voice.recording !== "idle" ||
+              Boolean(voiceDraft)
+            }
+            onClick={() => void voice.beginRecording()}
+          />
+        )}
         <label className="sr-only" htmlFor="chat-message">
           Message Mhistree
         </label>
