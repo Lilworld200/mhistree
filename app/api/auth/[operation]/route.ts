@@ -1,6 +1,8 @@
 import { credentialLockDatabase } from "@/lib/db/client";
 import {
   withAuthDebug,
+  authDebugOperation,
+  authDebugSuccess,
   authDebugStage,
   authDebugError,
 } from "@/lib/auth/temporary-debug";
@@ -51,6 +53,7 @@ export async function POST(
       authDebugStage("auth.origin-check");
       mutationGuard(request);
       const { operation } = await params;
+      authDebugOperation(operation);
       authDebugStage(`auth.${operation}.parse-body`);
       const input = await jsonBody(request);
       authDebugStage("auth.database-config");
@@ -93,9 +96,11 @@ export async function POST(
           .object({ email: z.email().max(254) })
           .strict()
           .parse(input);
-        return emailResponse(
+        const response = await emailResponse(
           await resendVerification(pool, provider, email, rate),
         );
+        authDebugSuccess(operation);
+        return response;
       }
       if (operation === "signup") {
         const { entry, ...credentials } = z
@@ -115,6 +120,7 @@ export async function POST(
           ...flowCookieOptions(),
           maxAge: entry ? 3600 : 0,
         });
+        authDebugSuccess(operation);
         return response;
       }
       if (operation === "reset-email") {
@@ -122,9 +128,11 @@ export async function POST(
           .object({ email: z.email().max(254) })
           .strict()
           .parse(input);
-        return emailResponse(
+        const response = await emailResponse(
           await requestEmailReset(pool, provider, email, rate),
         );
+        authDebugSuccess(operation);
+        return response;
       }
       if (operation === "reset-password") {
         const { password } = z
@@ -154,15 +162,16 @@ export async function POST(
           ...flowCookieOptions(),
           maxAge: 0,
         });
+        authDebugSuccess(operation);
         return response;
       }
       if (operation === "redeem") {
         const result = await redeemCredential(
           pool,
           z
-            .object({ code: z.string().min(1).max(200) })
-            .strict()
-            .parse(input).code,
+          .object({ code: z.string().min(1).max(200) })
+          .strict()
+          .parse(input).code,
           rate,
         );
         const response = success({ next: "setup" });
@@ -170,6 +179,7 @@ export async function POST(
           ...cookieOptions(),
           maxAge: 600,
         });
+        authDebugSuccess(operation);
         return response;
       }
       if (operation === "setup") {
@@ -186,6 +196,7 @@ export async function POST(
           ...cookieOptions(),
           maxAge: 0,
         });
+        authDebugSuccess(operation);
         return response;
       }
       if (operation === "login") {
@@ -217,6 +228,7 @@ export async function POST(
           ...cookieOptions(),
           expires: result.expiresAt,
         });
+        authDebugSuccess(operation);
         return response;
       }
       if (operation === "logout") {
@@ -234,12 +246,14 @@ export async function POST(
           ...cookieOptions(),
           maxAge: 0,
         });
+        authDebugSuccess(operation);
         return response;
       }
       throw new DomainError("ACCESS_DENIED");
     } catch (error) {
-      authDebugError(error);
-      return failure(error);
+      const response = failure(error);
+      authDebugError(error, response.status);
+      return response;
     }
   });
 }

@@ -191,7 +191,13 @@ export function AccountEntry({
             </p>
           </>
         )}
-        <form key={mode} onSubmit={submit} className="account-form">
+        <form
+          key={mode}
+          method="post"
+          action={`/api/auth/${mode}`}
+          onSubmit={submit}
+          className="account-form"
+        >
           {mode === "signup" && (
             <>
               <AuthField

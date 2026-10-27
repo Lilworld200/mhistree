@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createElement } from "react";
 import { createRoot } from "react-dom/client";
 import { flushSync } from "react-dom";
+import { renderToStaticMarkup } from "react-dom/server";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
@@ -25,6 +26,21 @@ vi.mock("next/image", () => ({
 import { AccountEntry } from "@/features/patient/account/entry";
 
 describe("account entry navigation layout", () => {
+  it.each(["login", "signup", "redeem", "setup"] as const)(
+    "%s cannot fall back to putting credentials in a GET URL before hydration",
+    (initialMode) => {
+      const host = document.createElement("div");
+      host.innerHTML = renderToStaticMarkup(
+        createElement(AccountEntry, { initialMode }),
+      );
+      const form = host.querySelector("form")!;
+      expect(form.method).toBe("post");
+      expect(form.getAttribute("action")).toBe(`/api/auth/${initialMode}`);
+      expect(
+        host.querySelector('input[name="password"]')?.getAttribute("type"),
+      ).not.toBe("text");
+    },
+  );
   it("renders Forgot password on the left and account switch on the right on the same row", () => {
     const host = document.createElement("div");
     document.body.append(host);

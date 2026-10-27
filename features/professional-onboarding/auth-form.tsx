@@ -86,6 +86,8 @@ export function ProfessionalAuthForm({
             </p>
           </div>
           <form
+            method="post"
+            action="/api/auth/resend-verification"
             className="pro-form"
             onSubmit={async (e) => {
               e.preventDefault();
@@ -126,7 +128,12 @@ export function ProfessionalAuthForm({
         </>
       ) : (
         <>
-          <form className="pro-form" onSubmit={submit}>
+          <form
+            method="post"
+            action="/api/auth/signup"
+            className="pro-form"
+            onSubmit={submit}
+          >
             {
               <ProfessionalField
                 label={

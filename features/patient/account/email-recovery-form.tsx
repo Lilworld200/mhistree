@@ -13,6 +13,8 @@ export function EmailRecoveryForm() {
     <details className="recovery-option" open>
       <summary>Reset by email</summary>
       <form
+        method="post"
+        action="/api/auth/reset-email"
         className="account-form"
         onSubmit={async (event) => {
           event.preventDefault();

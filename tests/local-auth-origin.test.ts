@@ -4,6 +4,20 @@ import { proxy } from "@/proxy";
 import { mutationGuard } from "@/lib/http";
 
 afterEach(() => vi.unstubAllEnvs());
+it("rejects native form POSTs without accepting URL-encoded credentials", () => {
+  vi.stubEnv("APP_ORIGIN", "http://127.0.0.1:3000");
+  expect(() =>
+    mutationGuard(
+      new Request("http://127.0.0.1:3000/api/auth/login", {
+        method: "POST",
+        headers: {
+          origin: "http://127.0.0.1:3000",
+          "content-type": "application/x-www-form-urlencoded",
+        },
+      }),
+    ),
+  ).toThrow("ACCESS_DENIED");
+});
 it("canonicalizes local auth navigation before signup and preserves its query", () => {
   vi.stubEnv("APP_ORIGIN", "http://127.0.0.1:3101");
   const response = proxy(

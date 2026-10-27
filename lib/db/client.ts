@@ -1,5 +1,6 @@
 import "server-only";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { resolve as pathResolve } from "node:path";
 import { Pool, type PoolClient } from "pg";
 import { databaseEnvironment } from "../env";
 import { createHash } from "node:crypto";
@@ -30,6 +31,25 @@ export function releaseConnection(client: PoolClient, destroy = false) {
     destroy || Boolean((client as MonitoredClient)[healthKey]?.broken),
   );
 }
+function loadSslCa(env: {
+  DATABASE_SSL_CA?: string;
+  DATABASE_SSL_CA_FILE?: string;
+}): string | undefined {
+  if (env.DATABASE_SSL_CA) return env.DATABASE_SSL_CA;
+  const filePath = env.DATABASE_SSL_CA_FILE ?? "config/certs/supabase-ca.crt";
+  const resolved = pathResolve(process.cwd(), filePath);
+  if (existsSync(resolved)) {
+    try {
+      return readFileSync(resolved, "utf8");
+    } catch {
+      throw new DomainError("CONFIGURATION_REQUIRED");
+    }
+  }
+  if (env.DATABASE_SSL_CA_FILE) {
+    throw new DomainError("CONFIGURATION_REQUIRED");
+  }
+  return undefined;
+}
 function pools() {
   const env = databaseEnvironment();
   const fingerprint = createHash("sha256")
@@ -40,6 +60,7 @@ function pools() {
       throw new DomainError("CONFIGURATION_REQUIRED"); // Restart after connection configuration changes.
     return registry.__mhistreeDatabasePools;
   }
+  const ca = env.DATABASE_SSL === "local" ? undefined : loadSslCa(env);
   const config = {
     connectionString: env.DATABASE_URL,
     ssl:
@@ -47,9 +68,7 @@ function pools() {
         ? false
         : {
             rejectUnauthorized: true,
-            ...(env.DATABASE_SSL_CA_FILE
-              ? { ca: readFileSync(env.DATABASE_SSL_CA_FILE, "utf8") }
-              : {}),
+            ...(ca ? { ca } : {}),
           },
     connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 30000,

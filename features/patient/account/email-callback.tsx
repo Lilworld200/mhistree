@@ -20,6 +20,8 @@ export function EmailCallback({ recovery = false }: { recovery?: boolean }) {
         {!recovery && !error && <p role="status">Verifying your email…</p>}
         {recovery && ready && !done && (
           <form
+            method="post"
+            action="/api/auth/reset-password"
             className="account-form"
             onSubmit={async (event) => {
               event.preventDefault();
