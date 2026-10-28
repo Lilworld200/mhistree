@@ -70,3 +70,35 @@ it("requires clarification for the ambiguous practitioner medicine name para", a
     }),
   ).toContain("Clarify medication name.");
 });
+
+it("recognizes explicit contracted patient use without importing a recommended regimen", () => {
+  expect(
+    medicationStatement(
+      "I've been taking Paracetamol for two weeks.",
+      "Paracetamol",
+    ),
+  ).toBe("taking");
+  expect(
+    medicationStatement(
+      "Yes, I've started taking it.",
+      "Paracetamol",
+      "Have you started taking Paracetamol?",
+    ),
+  ).toBe("taking");
+  expect(
+    medicationStatement("I've stopped taking Paracetamol.", "Paracetamol"),
+  ).toBe("stopped");
+  expect(
+    medicationStatement(
+      "Yes, I've started taking it.",
+      "Paracetamol",
+      "Would you like to ask your doctor?",
+    ),
+  ).toBeNull();
+  expect(
+    medicationStatement(
+      "I've been thinking about taking Paracetamol.",
+      "Paracetamol",
+    ),
+  ).toBeNull();
+});

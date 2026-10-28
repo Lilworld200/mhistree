@@ -79,6 +79,8 @@ async function input(
 async function mount(items: unknown[] = [turn]) {
   request.mockImplementation(
     async (_path: string, body?: { action: string }) => {
+      if (_path.startsWith("/api/care/inbox"))
+        return { findings: [], jobs: [] };
       if (!body) return { items, nextCursor: null };
       if (body.action === "ai-review") return version;
       if (body.action === "ai-review-confirm")
@@ -122,7 +124,9 @@ afterEach(async () => {
 });
 it("reloads saved conversation and shows a single card with condition and prescription fields", async () => {
   await mount();
-  expect(request.mock.calls[0][0]).toContain("view=ai-chat");
+  expect(
+    request.mock.calls.some(([path]) => path.includes("view=ai-chat")),
+  ).toBe(true);
   expect(host.textContent).toContain(turn.question);
   expect(host.querySelectorAll('[aria-label="Review findings"]')).toHaveLength(
     1,

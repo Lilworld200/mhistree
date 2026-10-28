@@ -60,7 +60,9 @@ export function careTime(value: string, timezone?: string) {
   }).format(new Date(value));
 }
 export const patientWorkspace = (connectionId: string, section?: string) =>
-  `/clinician/patients/${connectionId}${section ? `#${section}` : ""}`;
+  section === "care-text-inbox"
+    ? `/clinician/inbox?connection=${connectionId}`
+    : `/clinician/patients/${connectionId}${section ? `#${section}` : ""}`;
 export function isCareAccessError(error: unknown) {
   return (
     error instanceof Error &&

@@ -7,7 +7,6 @@ import {
   type AccessTransaction,
 } from "@/features/access/server";
 import { correctedMessageIds } from "@/features/ai-chat/memory";
-import { captureMedicationCommitment } from "@/features/clinical-care/medication-recommendations";
 import { sourceInput } from "@/features/health-records/schema";
 import { verifiedTranscript } from "@/features/ai-chat/speech/server";
 import { sharedSummary } from "@/features/ai-chat/care-action-schema";
@@ -205,7 +204,7 @@ export async function sendCareMessageInAccess(
   }
   const row = (
     await a.tx.query(
-      "insert into mhistree.care_messages(thread_id,author_account_id,content,request_key,summary_attachment,origin_conversation_id,input_method,transcription,timezone,reply_to) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning id",
+      "insert into mhistree.care_messages(thread_id,author_account_id,content,request_key,summary_attachment,origin_conversation_id,input_method,transcription,timezone,reply_to,sender_context) values($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning id",
       [
         thread.id,
         a.actor.accountId,
@@ -217,6 +216,7 @@ export async function sendCareMessageInAccess(
         transcription,
         data.timezone,
         data.replyToMessageId ?? null,
+        JSON.stringify(a.context),
       ],
     )
   ).rows[0];
@@ -232,14 +232,17 @@ export async function sendCareMessageInAccess(
         data.recommendation.details,
       ],
     );
-  if (a.context.kind === "patient")
-    await captureMedicationCommitment(a, {
-      id: row.id,
-      threadId: thread.id,
-      source: "care",
-      content: data.content,
-      timezone: data.timezone,
-    });
+  await a.tx.query(
+    "insert into mhistree.care_analysis_jobs(message_id,account_id,patient_person_id,connection_id,acting_context,connection_revision) values($1,$2,$3,$4,$5,$6) on conflict(message_id) do nothing",
+    [
+      row.id,
+      a.actor.accountId,
+      c.patient_person_id,
+      c.id,
+      JSON.stringify(a.context),
+      c.revision,
+    ],
+  );
   await appendEvent(a.tx, {
     actorAccountId: a.actor.accountId,
     personId: c.patient_person_id,
@@ -277,7 +280,7 @@ export async function careMessagesInAccess(
   await requireCare(a, connectionId, "messages.send");
   const rows = (
     await a.tx.query(
-      "select m.id,m.content,m.author_account_id,m.sent_at,m.delivery_state,m.sequence::text,m.summary_attachment,m.origin_conversation_id,m.reply_to from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where t.connection_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51",
+      "select m.id,m.content,m.author_account_id,m.sent_at,m.delivery_state,m.sequence::text,m.summary_attachment,m.origin_conversation_id,m.reply_to,case when m.sender_context->>'kind'='patient' then 'patient' when m.sender_context->>'kind' in ('direct','organization') then 'practitioner' else 'unknown' end author_role from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where t.connection_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51",
       [connectionId, before ?? null],
     )
   ).rows;

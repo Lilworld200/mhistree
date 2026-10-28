@@ -1,3 +1,4 @@
+import { scheduleInboxAnalysis } from "@/features/messaging/schedule-analysis";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
@@ -23,7 +24,7 @@ import { linkPreviousConversation } from "@/features/ai-chat/memory";
 import { handoffSummary, prepareMemory } from "@/features/ai-chat/memory";
 import { invalidateCareConfirmation } from "@/features/ai-chat/care-delivery";
 import { generateTitle } from "@/features/ai-chat/titles";
-export const maxDuration = 120;
+export const maxDuration = 240;
 export async function GET(request: NextRequest) {
   try {
     const id = request.nextUrl.searchParams.get("id");
@@ -117,16 +118,16 @@ async function chatRequest(request: NextRequest) {
       .parse(input.data);
     if (input.action === "cancel")
       return success(await cancelReply(pool, session, id));
-    return success(
-      await retryPatientReply(
-        pool,
-        session,
-        id,
-        aiGateway(),
-        request.signal,
-        continueWithoutMemory,
-      ),
+    const result = await retryPatientReply(
+      pool,
+      session,
+      id,
+      aiGateway(),
+      request.signal,
+      continueWithoutMemory,
     );
+    scheduleInboxAnalysis(session, { kind: "patient" });
+    return success(result);
   } catch (error) {
     aiDebugError("chat.http.failed", error);
     return failure(error);

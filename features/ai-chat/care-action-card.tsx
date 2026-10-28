@@ -400,6 +400,11 @@ export function CareActionCard({
                 : d.state === "failed"
                   ? "Not saved — review and retry"
                   : "Pending"}
+              {d.state === "stored" && (
+                <Link href={`/inbox?connection=${d.connectionId}`}>
+                  Open conversation
+                </Link>
+              )}
             </li>
           ))}
         </ul>

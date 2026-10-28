@@ -1,3 +1,22 @@
+import { processInboxAnalysis } from "@/features/messaging/analysis";
+// Exercise delivery and subsequent patient capture in separate transactions,
+// as the new post-delivery processor does, without external provider requests.
+async function sendAndAnalyzeCareMessage(
+  ...args: Parameters<typeof storeCareMessage>
+) {
+  const result = await storeCareMessage(...args);
+  if (args[2].kind === "patient")
+    await processInboxAnalysis(
+      args[0],
+      args[1],
+      args[2],
+      (args[3] as { connectionId: string }).connectionId,
+      {
+        generate: async () => JSON.stringify({ items: [], clarifications: [] }),
+      },
+    );
+  return result;
+}
 import { correctPatientReport } from "@/features/health-records/corrections";
 import { directWorkspace } from "@/features/practitioner/workspace";
 import { medicationSafetyContext } from "@/features/ai-chat/health-context";
@@ -22,7 +41,10 @@ import {
   generateReply,
 } from "@/features/ai-chat/server";
 import { handoffSummary, prepareMemory } from "@/features/ai-chat/memory";
-import { sendCareMessage, careMessages } from "@/features/messaging/server";
+import {
+  sendCareMessage as storeCareMessage,
+  careMessages,
+} from "@/features/messaging/server";
 import {
   connectedChat,
   practitionerPresence,
@@ -79,6 +101,7 @@ it("shares an immutable reviewed copy, reuses handoff/departure summary and keep
           {
             kind: "patient-report",
             text: "Felt tired after a walk.",
+            healthRelevant: true,
             citations: [{ messageId: message.messageId, quote: text }],
           },
         ],
@@ -97,7 +120,7 @@ it("shares an immutable reviewed copy, reuses handoff/departure summary and keep
     originConversationId: f.id,
     summary,
   };
-  const saved = await sendCareMessage(
+  const saved = await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -105,7 +128,7 @@ it("shares an immutable reviewed copy, reuses handoff/departure summary and keep
   );
   expect(
     (
-      await sendCareMessage(
+      await sendAndAnalyzeCareMessage(
         db.pool,
         f.patient.session,
         { kind: "patient" },
@@ -130,7 +153,7 @@ it("shares an immutable reviewed copy, reuses handoff/departure summary and keep
   );
   expect(hidden.rowCount).toBe(0);
   await expect(
-    sendCareMessage(
+    sendAndAnalyzeCareMessage(
       db.pool,
       f.patient.session,
       { kind: "patient" },
@@ -142,7 +165,7 @@ it("places incoming replies once in the active session, preserves origins, ackno
   const f = await fixture();
   const second = randomUUID();
   await createConversation(db.pool, f.patient.session, second);
-  const outgoing = await sendCareMessage(
+  const outgoing = await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -164,11 +187,16 @@ it("places incoming replies once in the active session, preserves origins, ackno
     conversationId: second,
     active: true,
   });
-  const reply = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: "Synthetic practitioner reply.",
-  });
+  const reply = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: "Synthetic practitioner reply.",
+    },
+  );
   await connectedChat(db.pool, f.patient.session, {
     action: "sync",
     conversationId: f.id,
@@ -258,18 +286,23 @@ it("places incoming replies once in the active session, preserves origins, ackno
 });
 it("keeps recommendations separate, captures planned → taking → stopped as linked history and never infers use from a practitioner yes", async () => {
   const f = await fixture();
-  const msg = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: "Paracetamol: discuss the planned start.",
-    recommendation: {
-      name: "Paracetamol",
-      details: "discuss the planned start.",
-      reviewed: true,
+  const msg = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: "Paracetamol: discuss the planned start.",
+      recommendation: {
+        name: "Paracetamol",
+        details: "discuss the planned start.",
+        reviewed: true,
+      },
     },
-  });
+  );
   expect((await healthState(db.pool, f.patient.session)).items).toHaveLength(0);
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Yes",
@@ -313,7 +346,7 @@ it("keeps recommendations separate, captures planned → taking → stopped as l
 });
 it("records actual daily follow-up delivery and only resolves an exact unambiguous medication question", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: planned start discussion.",
@@ -323,7 +356,7 @@ it("records actual daily follow-up delivery and only resolves an exact unambiguo
       reviewed: true,
     },
   });
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: a second reviewed source for the same medicine.",
@@ -366,11 +399,16 @@ it("records actual daily follow-up delivery and only resolves an exact unambiguo
 it("links an inbox finding only after explicit reviewed publication; concurrent retries preserve one attachment", async () => {
   const f = await fixture(),
     text = "The patient has a confirmed latex allergy.";
-  const message = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: text,
-  });
+  const message = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: text,
+    },
+  );
   const run = await practitionerAssistance(
     db.pool,
     f.doctor.session,
@@ -482,7 +520,7 @@ it("shares the summary lease between concurrent handoff and departure preparatio
   ).toBe("ready");
   expect(calls).toBe(1);
   const before = calls;
-  await sendCareMessage(
+  await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -512,7 +550,7 @@ it("rejects foreign-origin connected-care HTTP requests before any database use"
 
 it("retains declined and dismissed recommendation sources without inferring taking", async () => {
   const f = await fixture();
-  const recommendation = await sendCareMessage(
+  const recommendation = await sendAndAnalyzeCareMessage(
     db.pool,
     f.doctor.session,
     f.context,
@@ -594,7 +632,7 @@ it("refuses a model upgrade of an explicitly suspected finding to a confirmed al
 
 it("reuses a captured medication commitment while extracting other reports from the same source", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -681,6 +719,7 @@ it("keeps an assistant question visibly distinct from patient reports in a revie
           {
             kind: "open-question",
             text: question,
+            healthRelevant: true,
             citations: [{ messageId: assistant.id, quote: question }],
           },
         ],
@@ -692,7 +731,7 @@ it("keeps an assistant question visibly distinct from patient reports in a revie
 
 it("binds a smart-apostrophe medication commitment and its start date to the exact preceding medicine question", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -745,7 +784,7 @@ it("binds a smart-apostrophe medication commitment and its start date to the exa
 
 it("queues a reply with no visible session and places it in the next opened session only once", async () => {
   const f = await fixture();
-  await sendCareMessage(
+  await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -756,11 +795,16 @@ it("queues a reply with no visible session and places it in the next opened sess
       originConversationId: f.id,
     },
   );
-  const reply = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: "A reply while no patient session is visible.",
-  });
+  const reply = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: "A reply while no patient session is visible.",
+    },
+  );
   expect(
     (
       await db.pool.query(
@@ -814,7 +858,7 @@ it("keeps recommendation source references immutable for the application runtime
 
 it("captures direct-care planned, exact-question taking and stopped reports from canonical patient sources without AI turns", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -824,34 +868,29 @@ it("captures direct-care planned, exact-question taking and stopped reports from
       reviewed: true,
     },
   });
-  const sync = await connectedChat(db.pool, f.patient.session, {
-    action: "sync",
-    conversationId: f.id,
-    active: true,
-  });
-  const recipient = {
-    connectionId: f.connectionId,
-    practitionerId: f.doctor.accountId,
-    connectionRevision: sync.recipients[0].revision,
+  const send = async (content: string) => {
+    const message = await sendAndAnalyzeCareMessage(
+      db.pool,
+      f.patient.session,
+      { kind: "patient" },
+      {
+        connectionId: f.connectionId,
+        requestKey: randomUUID(),
+        content,
+        timezone: "Africa/Lagos",
+        replyToMessageId: (
+          await careMessages(
+            db.pool,
+            f.patient.session,
+            { kind: "patient" },
+            f.connectionId,
+          )
+        ).items.at(-1)?.id,
+      },
+    );
+    return { messageId: message.id };
   };
-  const send = async (content: string) =>
-    connectedChat(db.pool, f.patient.session, {
-      action: "send",
-      conversationId: f.id,
-      recipient,
-      requestKey: randomUUID(),
-      content,
-      timezone: "Africa/Lagos",
-      replyToMessageId: (
-        await careMessages(
-          db.pool,
-          f.patient.session,
-          { kind: "patient" },
-          f.connectionId,
-        )
-      ).items.at(-1)?.id,
-    });
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "When, if at all, do you plan to start Paracetamol?",
@@ -870,7 +909,7 @@ it("captures direct-care planned, exact-question taking and stopped reports from
   expect(source.chat_message_id).toBeNull();
   expect(source.content).toBe("I’ll start taking it tomorrow.");
   expect(source.captured_at.toISOString()).toBe(source.sent_at.toISOString());
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Yes",
@@ -879,11 +918,16 @@ it("captures direct-care planned, exact-question taking and stopped reports from
     (await healthState(db.pool, f.patient.session)).items[0].body.medication
       .useStatus,
   ).toBe("not-started");
-  const question = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: "Have you started taking Paracetamol?",
-  });
+  const question = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: "Have you started taking Paracetamol?",
+    },
+  );
   const taking = await send("yes");
   expect(
     (await healthState(db.pool, f.patient.session)).items[0].body.medication
@@ -918,23 +962,28 @@ it("captures direct-care planned, exact-question taking and stopped reports from
 it("does not bind an unseen direct-care medicine question or a practitioner-authored source to the patient", async () => {
   const f = await fixture();
   for (const name of ["Paracetamol", "Ibuprofen"])
-    await sendCareMessage(db.pool, f.doctor.session, f.context, {
+    await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
       connectionId: f.connectionId,
       requestKey: randomUUID(),
       content: `${name}: discuss the plan.`,
       recommendation: { name, details: "discuss the plan.", reviewed: true },
     });
-  const seen = await sendCareMessage(db.pool, f.doctor.session, f.context, {
-    connectionId: f.connectionId,
-    requestKey: randomUUID(),
-    content: "Have you started taking Paracetamol?",
-  });
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  const seen = await sendAndAnalyzeCareMessage(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      connectionId: f.connectionId,
+      requestKey: randomUUID(),
+      content: "Have you started taking Paracetamol?",
+    },
+  );
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Have you started taking Ibuprofen?",
   });
-  await sendCareMessage(
+  await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -965,7 +1014,7 @@ it("does not bind an unseen direct-care medicine question or a practitioner-auth
 });
 it("preserves a long direct-care source and replays its bounded medication event once", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -984,7 +1033,7 @@ it("preserves a long direct-care source and replays its bounded medication event
     content,
     timezone: "Africa/Lagos",
   };
-  const first = await sendCareMessage(
+  const first = await sendAndAnalyzeCareMessage(
     db.pool,
     f.patient.session,
     { kind: "patient" },
@@ -992,7 +1041,7 @@ it("preserves a long direct-care source and replays its bounded medication event
   );
   expect(
     (
-      await sendCareMessage(
+      await sendAndAnalyzeCareMessage(
         db.pool,
         f.patient.session,
         { kind: "patient" },
@@ -1018,7 +1067,7 @@ it("preserves a long direct-care source and replays its bounded medication event
 
 it("records later use after refusal independently while keeping initiation follow-ups closed", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -1029,7 +1078,7 @@ it("records later use after refusal independently while keeping initiation follo
     },
   });
   const send = async (content: string) =>
-    sendCareMessage(
+    sendAndAnalyzeCareMessage(
       db.pool,
       f.patient.session,
       { kind: "patient" },
@@ -1089,7 +1138,7 @@ it("records later use after refusal independently while keeping initiation follo
 
 it("keeps corrections to the latest medication logical record visible in patient and practitioner current views", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -1134,7 +1183,7 @@ it("keeps corrections to the latest medication logical record visible in patient
 
 it("does not turn current use into a guessed start date and retains an explicitly reported actual start", async () => {
   const f = await fixture();
-  await sendCareMessage(db.pool, f.doctor.session, f.context, {
+  await sendAndAnalyzeCareMessage(db.pool, f.doctor.session, f.context, {
     connectionId: f.connectionId,
     requestKey: randomUUID(),
     content: "Paracetamol: discuss the plan.",
@@ -1145,7 +1194,7 @@ it("does not turn current use into a guessed start date and retains an explicitl
     },
   });
   const send = async (content: string) =>
-    sendCareMessage(
+    sendAndAnalyzeCareMessage(
       db.pool,
       f.patient.session,
       { kind: "patient" },

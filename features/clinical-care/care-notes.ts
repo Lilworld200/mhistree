@@ -73,7 +73,11 @@ export async function saveCareNoteInAccess(
   a: AccessTransaction,
   d: z.infer<typeof careNoteInput>,
   aiRunId?: string,
-  review?: { reviewId: string; approvalMessageId: string },
+  review?: {
+    reviewId: string;
+    approvalMessageId: string;
+    originCareMessageId?: string;
+  },
   occurredAt?: z.infer<typeof contributionInput.shape.occurredAt>,
 ) {
   const patient = await notePatient(a);
@@ -128,6 +132,7 @@ export async function saveCareNoteInAccess(
     status,
   });
   await syncReviewedMedication(a, {
+    originCareMessageId: review?.originCareMessageId,
     patientPersonId: patient,
     category: d.category,
     name: d.fields.name,

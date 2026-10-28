@@ -86,7 +86,7 @@ function Navigation({
         {close && (
           <Dialog.Close
             className="btn btn-icon"
-            style={{ width: 44, height: 44 }}
+            style={{ position: "absolute", top: 8, right: 8, width: 44, height: 44 }}
             aria-label="Close menu"
           >
             <Icon n="x" s={18} />
