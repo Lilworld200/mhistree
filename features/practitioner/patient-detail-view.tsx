@@ -336,6 +336,16 @@ export function PatientDetailView({
             </div>
             <article className="card patient-profile-card">
               <header className="patient-identity-card">
+                <span
+                  className="sharing-avatar patient-detail-avatar"
+                  aria-hidden="true"
+                >
+                  {data.patient.display_name
+                    .split(/\s+/)
+                    .slice(0, 2)
+                    .map((n) => n[0])
+                    .join("")}
+                </span>
                 {(data.capabilities?.work ??
                   (data.permissions.write.length > 0 ||
                     data.work.length > 0)) && (
@@ -348,16 +358,6 @@ export function PatientDetailView({
                     }}
                   />
                 )}
-                <span
-                  className="sharing-avatar patient-detail-avatar"
-                  aria-hidden="true"
-                >
-                  {data.patient.display_name
-                    .split(/\s+/)
-                    .slice(0, 2)
-                    .map((n) => n[0])
-                    .join("")}
-                </span>
                 <div className="patient-identity-main">
                   <p className="patient-detail-eyebrow">Direct connection</p>
                   <h1>{data.patient.display_name}</h1>

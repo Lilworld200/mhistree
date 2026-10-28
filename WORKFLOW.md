@@ -1,3 +1,9 @@
+## Patient identity card layout — 2026-10-28
+
+Owner's final layout places the profile image/initials at the top left, Care notes at the top right and the name/DOB/Mhistree ID below, left-aligned on both breakpoints. Refactored the patient identity header into a scoped two-row CSS grid; removed absolute Care notes positioning and the mobile reserved top strip. Today's report/overview, folder tools, permission checks and panel operations retain their existing placement and behavior. Read governing files, T21, identity-access contract, practitioner README and design references.
+
+Verification: existing patient-detail UI suite9/9 passed; TypeScript noEmit with incremental disabled passed; targeted ESLint passed. Synthetic browser card previews using current CSS confirmed aligned avatar/action top edges, identity beneath the avatar and no header overflow at desktop and390px mobile widths. This is an isolated layout preview, not an authenticated full-page/device certification. No database, provider, migration or deployment changes.
+
 ## Connected care, medication lifecycle and practitioner notes — 2026-10-28
 
 Implementation complete in the repository. Shared proposal review serves Care notes, Talk to Mhistree and own inbox findings; only reviewed publication attaches finalized entries. Recommendation disposition and actual use are independent. Private and direct-care medicine reports use original patient sources/clocks, exact displayed-question references and atomic linked history; later use remains reportable after refusal without reopening initiation follow-ups. Current projections follow logical records so corrections stay visible. Direct messages remain canonical care messages, with no AI reply, private transcript insertion or AI summary generation. Reviewed summary handoffs, per-view once-only placement, scoped presence, source-bound retries and unread acknowledgement retain current authority checks.

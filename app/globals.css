@@ -4515,9 +4515,11 @@ textarea:focus-visible {
 .patient-profile-folder { min-width:0; isolation:isolate; }
 .patient-folder-tab { display:flex; align-items:center; gap:8px; width:fit-content; max-width:100%; padding:10px 14px 26px; margin-bottom:-16px; border:1px solid var(--bs); border-bottom:0; border-radius:24px 24px 0 0; background:var(--shell); }
 .patient-profile-card { position:relative; overflow:hidden; }
-.patient-profile-card .patient-identity-card { position:relative; padding:22px 166px 22px 22px; gap:18px; }
-.patient-profile-card .patient-identity-card > .patient-icon-action { position:absolute; top:16px; right:16px; min-height:44px; border-radius:999px; }
-.patient-profile-card .patient-identity-card dl { margin-top:14px; }
+.patient-profile-card .patient-identity-card { display:grid; grid-template-columns:minmax(0,1fr) auto; grid-template-areas:"avatar action" "identity identity"; align-items:start; padding:22px; gap:18px 16px; }
+.patient-profile-card .patient-detail-avatar { grid-area:avatar; justify-self:start; }
+.patient-profile-card .patient-identity-main { grid-area:identity; text-align:left; }
+.patient-profile-card .patient-identity-card > .patient-icon-action { grid-area:action; justify-self:end; align-self:start; min-height:44px; max-width:100%; border-radius:999px; }
+.patient-profile-card .patient-identity-card dl { margin-top:16px; gap:16px 32px; }
 .patient-summary-medications,.patient-summary-history { margin-top:24px; padding-top:8px; border-top:1px solid var(--bs); }
 .patient-profile-card .patient-detail-overview { padding:20px 22px; margin:0; border-top:1px solid var(--bs); }
 [data-theme="dark"] .patient-icon-action { border-color:rgba(255,255,255,.12); background:linear-gradient(155deg,rgba(255,255,255,.1),transparent),var(--shell); box-shadow:0 5px 12px rgba(0,0,0,.3),inset 0 1px 1px rgba(255,255,255,.1); }
@@ -4532,8 +4534,8 @@ textarea:focus-visible {
  .patient-detail-toolbar { margin-bottom:0; }
  .patient-folder-tab { gap:6px; padding:8px 10px 24px; border-radius:22px 22px 0 0; }
  .patient-folder-tab .patient-icon-action,.patient-profile-card .patient-icon-action { flex:0 1 auto; flex-direction:row; gap:7px; min-height:44px; padding:10px; font-size:11px; border-radius:999px; }
- .patient-profile-card .patient-identity-card { padding:16px; padding-top:72px; gap:12px; }
- .patient-profile-card .patient-identity-card > .patient-icon-action { top:12px; right:12px; }
+ .patient-profile-card .patient-identity-card { padding:16px; gap:16px 12px; }
+ .patient-profile-card .patient-identity-card dl { gap:14px 24px; }
  .patient-profile-card .patient-detail-overview { padding:16px; }
 }
 @media(prefers-reduced-motion:reduce) { .patient-icon-action { transition:none; } }

@@ -46,6 +46,8 @@ Owner practitioner-notification decision (2026-10-26): use blue notification dot
 
 Owner repository cleanup decision (2026-10-26): remove the old reference-only legacy/ application. Historical code remains recoverable from Git; current source, migrations, original assets and authoritative design/playbook references remain at their active paths. Do not recreate or execute the retired application. This cleanup does not remove supported dependency paths such as pdfjs-dist/legacy or authorize database/data deletion.
 
+Owner patient-card layout refinement (2026-10-28): on /clinician/patients/[connectionId], place the profile image/initials at the top left and permission-gated Care notes at the top right. Place the name, date of birth and Mhistree ID left-aligned below the image on desktop and mobile. Keep today's report in its existing overview section and retain the folder tools and existing access/panel behavior. This supersedes the earlier same-turn suggestion to put the image at the right.
+
 # Mhistree: portable product specification and agent rules
 
 Owner NVIDIA research continuity instruction (2026-10-27): if a future NVIDIA provider switch is requested, read docs/tasks/nvidia-api-research-2026-10-27.md as the secondary guide after governing instructions. It records synthetic endpoint evidence, rate-limit/trial terms, Vercel testing clarification and candidate models. Revalidate dated findings; this instruction does not authorize a switch or real health-data egress.
