@@ -148,7 +148,11 @@ export class CompatibleGateway implements AIGateway {
             jsonInstruction.length +
             messages.reduce((sum, m) => sum + m.content.length, 0),
         });
-        const deadline = AbortSignal.timeout(45000);
+        // Reviewed multi-finding drafts take longer on the selected development
+        // model than ordinary replies. Keep one bounded request, without retrying.
+        const deadline = AbortSignal.timeout(
+          options.purpose === "clinician" ? 90000 : 45000,
+        );
         const signal = options.signal
           ? AbortSignal.any([options.signal, deadline])
           : deadline;

@@ -25,9 +25,47 @@ const response = (content = JSON.stringify(value), extra: object = {}) =>
     ...extra,
   });
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
   vi.restoreAllMocks();
+});
+it("allows a slower practitioner draft within its deadline while ordinary replies still time out without retries", async () => {
+  vi.useFakeTimers();
+  vi.spyOn(AbortSignal, "timeout").mockImplementation((milliseconds) => {
+    const controller = new AbortController();
+    setTimeout(() => controller.abort(), milliseconds);
+    return controller.signal;
+  });
+  const fetcher = vi.fn(
+    (_url: unknown, request: RequestInit) =>
+      new Promise<Response>((resolve, reject) => {
+        const timer = setTimeout(
+          () => resolve(response('{"text":"review"}')),
+          60000,
+        );
+        request.signal!.addEventListener("abort", () => {
+          clearTimeout(timer);
+          reject(new Error("deadline"));
+        });
+      }),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  const gateway = new CompatibleGateway(
+    "synthetic-key",
+    "nvidia",
+    "nvidia/test",
+  );
+  const ordinary = expect(
+    gateway.generate("policy", [], { json: true }),
+  ).rejects.toThrow("PROVIDER_UNAVAILABLE");
+  const practitioner = expect(
+    gateway.generate("policy", [], { json: true, purpose: "clinician" }),
+  ).resolves.toBe('{"text":"review"}');
+  await vi.advanceTimersByTimeAsync(60000);
+  await ordinary;
+  await practitioner;
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });
 it("selects each explicit provider and permits Groq rollback while keeping speech independent", () => {
   for (const provider of ["nvidia", "openrouter"]) {

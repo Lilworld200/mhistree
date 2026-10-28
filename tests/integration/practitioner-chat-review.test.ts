@@ -632,3 +632,104 @@ it("recovers eligible legacy direct history without rewriting stored runs", asyn
     (await practitionerChatHistory(db.pool, f.doctor.session, f.context)).items,
   ).toHaveLength(0);
 });
+
+it("prepares a mixed card when model narrative capitalizes a source-verified medicine, without accepting invented details", async () => {
+  const f = await fixture();
+  const text =
+    "I confirmed hypertension. I prescribe amlodipine 5 mg once daily.";
+  const prescription = {
+    ...proposal("prescription", "I prescribe amlodipine 5 mg once daily."),
+    body: { text: "Amlodipine 5 mg daily", bodySite: null, contextLinks: [] },
+    medicationDetails: {
+      name: "amlodipine",
+      dose: "5 mg",
+      frequency: "once daily",
+    },
+  };
+  const run = await suggest(f, text, [
+    {
+      ...proposal("ongoing", "I confirmed hypertension."),
+      body: {
+        text: "Hypertension confirmed",
+        bodySite: null,
+        contextLinks: [],
+        careDetails: { name: "hypertension", certainty: "confirmed" },
+      },
+    },
+    prescription,
+  ]);
+  expect(run.proposals).toHaveLength(2);
+  expect(run.proposals[1].body.text).toContain("amlodipine");
+  expect(run.proposals[1].body.text).toContain("once daily");
+  expect((await healthState(db.pool, f.patient.session)).items).toHaveLength(0);
+  const review = await preparePractitionerReview(
+    db.pool,
+    f.doctor.session,
+    f.context,
+    {
+      runId: run.id,
+      destination: "record",
+      timezone: "Africa/Lagos",
+      items: run.proposals.map((p) => ({
+        id: p.id,
+        fields: careNoteFields.parse(
+          p.category === "ongoing"
+            ? { name: "hypertension", certainty: "confirmed" }
+            : {
+                name: p.medicationDetails!.name,
+                dose: p.medicationDetails!.dose,
+                frequency: p.medicationDetails!.frequency,
+              },
+        ),
+      })),
+    },
+  );
+  expect(review.text).toContain("amlodipine");
+  expect(review.text).toContain("hypertension");
+  await confirmPractitionerReview(db.pool, f.doctor.session, f.context, {
+    reviewId: review.id,
+    reviewed: true,
+  });
+  const health = await healthState(db.pool, f.patient.session);
+  expect(health.items).toHaveLength(1);
+  expect(health.prescriptions).toHaveLength(1);
+  await expect(
+    suggest(f, text, [
+      {
+        ...prescription,
+        medicationDetails: { ...prescription.medicationDetails, dose: "10 mg" },
+      },
+    ]),
+  ).rejects.toThrow("PROVIDER_UNAVAILABLE");
+});
+
+it("reports malformed provider JSON/schema as service failure and retains no failed run", async () => {
+  const f = await fixture();
+  for (const output of [
+    "not JSON",
+    JSON.stringify({
+      text: "Review",
+      evidenceIds: [],
+      limitations: "missing context",
+      proposals: [],
+    }),
+  ]) {
+    await expect(
+      practitionerAssistance(
+        db.pool,
+        f.doctor.session,
+        {
+          connectionId: f.connection,
+          question: "Hello",
+          purpose: "question",
+          conversation: true,
+          includeOwnNotes: false,
+        },
+        { generate: async () => output },
+      ),
+    ).rejects.toThrow("PROVIDER_UNAVAILABLE");
+  }
+  expect(
+    (await practitionerChatHistory(db.pool, f.doctor.session, f.context)).items,
+  ).toHaveLength(0);
+});
