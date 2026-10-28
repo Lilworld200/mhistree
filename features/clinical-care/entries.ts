@@ -108,7 +108,7 @@ export async function finalizeEntryInAccess(
     body: row.body,
     occurredAt: row.occurred_at,
     status: d.status,
-    sourceSpans: [row.body.text],
+    sourceSpans: row.body.text.match(/[\s\S]{1,500}/g) ?? [row.body.text],
     ...(d.correction ? { correction: d.correction } : {}),
   });
   await a.tx.query(

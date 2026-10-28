@@ -1,3 +1,7 @@
+import {
+  saveCareNote,
+  privateNotes,
+} from "@/features/clinical-care/care-notes";
 import { withdrawRecommendation } from "@/features/clinical-care/medication-recommendations";
 import { withAccess } from "@/features/access/server";
 import { practitionerPresence } from "@/features/messaging/connected-chat";
@@ -39,6 +43,15 @@ export async function GET(r: NextRequest) {
       .parse(r.nextUrl.searchParams.get("connection"));
     const pool = database(),
       session = sessionFrom(r);
+    if (r.nextUrl.searchParams.get("view") === "private-notes")
+      return success(
+        await privateNotes(
+          pool,
+          session,
+          { kind: "direct", connectionId },
+          r.nextUrl.searchParams.get("cursor") ?? undefined,
+        ),
+      );
     if (r.nextUrl.searchParams.get("view") === "timeline")
       return success(
         await directTimeline(pool, session, connectionId, {
@@ -70,6 +83,7 @@ export async function POST(r: NextRequest) {
         connectionId: z.uuid(),
         action: z.enum([
           "save",
+          "save-note",
           "edit",
           "finalize",
           "request",
@@ -151,6 +165,7 @@ export async function POST(r: NextRequest) {
     return success(
       await {
         save: saveWork,
+        "save-note": saveCareNote,
         edit: editWork,
         finalize: finalizeEntry,
         "ai-save": savePractitionerProposal,

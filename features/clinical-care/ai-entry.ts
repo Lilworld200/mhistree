@@ -8,6 +8,7 @@ import {
   proposalGaps,
 } from "@/features/clinical-care/ai-proposal";
 import { saveWorkInAccess } from "./work";
+import { syncReviewedMedication } from "./medication-recommendations";
 import { finalizeEntryInAccess } from "./entries";
 
 /** A model can propose work, but only this explicit reviewed operation publishes it. */
@@ -88,39 +89,14 @@ export async function savePractitionerProposal(
       reviewed: true,
       status: proposal.status,
     });
-    if (
-      proposal.category === "prescription" &&
-      proposal.medicationDetails?.name
-    ) {
-      await a.tx.query(
-        "insert into mhistree.medication_recommendations(patient_person_id,author_account_id,connection_id,source_event_id,name,details) values($1,$2,$3,$4,$5,$6) on conflict(source_event_id,name) do nothing",
-        [
-          run.patient_person_id,
-          a.actor.accountId,
-          context.connectionId,
-          result.eventId,
-          proposal.medicationDetails.name,
-          d.text.slice(0, 2000),
-        ],
-      );
-    }
-    if (
-      proposal.category === "medication-use" &&
-      proposal.medicationDetails?.name &&
-      proposal.body.medication &&
-      ["taking", "stopped"].includes(proposal.body.medication.useStatus)
-    ) {
-      await a.tx.query(
-        "update mhistree.medication_recommendations set state=case when disposition is not null then disposition else $4 end,use_state=$4,followups_closed=true,latest_event_id=$5,version=version+1 where patient_person_id=$1 and connection_id=$2 and lower(name)=lower($3) and latest_event_id is distinct from $5",
-        [
-          run.patient_person_id,
-          context.connectionId,
-          proposal.medicationDetails.name,
-          proposal.body.medication.useStatus,
-          result.eventId,
-        ],
-      );
-    }
+    await syncReviewedMedication(a, {
+      patientPersonId: run.patient_person_id,
+      category: proposal.category,
+      name: proposal.medicationDetails?.name ?? undefined,
+      text: d.text,
+      eventId: result.eventId,
+      useStatus: proposal.body.medication?.useStatus,
+    });
     if (run.response.originCareMessageId) {
       const message = (
         await a.tx.query(

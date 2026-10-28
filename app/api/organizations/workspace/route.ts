@@ -1,3 +1,7 @@
+import {
+  saveCareNote,
+  privateNotes,
+} from "@/features/clinical-care/care-notes";
 import { withdrawRecommendation } from "@/features/clinical-care/medication-recommendations";
 import { practitionerPresence } from "@/features/messaging/connected-chat";
 import { NextRequest } from "next/server";
@@ -33,8 +37,17 @@ export async function GET(r: NextRequest) {
       JSON.parse(r.nextUrl.searchParams.get("context") ?? "null"),
     );
     const pool = database(),
-      session = sessionFrom(r),
-      data = await organizationWorkspace(pool, session, context);
+      session = sessionFrom(r);
+    if (r.nextUrl.searchParams.get("view") === "private-notes")
+      return success(
+        await privateNotes(
+          pool,
+          session,
+          context,
+          r.nextUrl.searchParams.get("cursor") ?? undefined,
+        ),
+      );
+    const data = await organizationWorkspace(pool, session, context);
     if (context.kind !== "organization")
       return success({ ...data, requests: [], messages: null });
     const canMessage = await withAccess(
@@ -68,6 +81,7 @@ export async function POST(r: NextRequest) {
         context: actingContextSchema,
         action: z.enum([
           "save",
+          "save-note",
           "edit",
           "finalize",
           "request",
@@ -149,6 +163,7 @@ export async function POST(r: NextRequest) {
     return success(
       await {
         save: saveWork,
+        "save-note": saveCareNote,
         edit: editWork,
         finalize: finalizeEntry,
         "ai-save": savePractitionerProposal,

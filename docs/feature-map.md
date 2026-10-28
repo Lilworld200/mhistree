@@ -1,3 +1,5 @@
+Care Notes form owner2026-10-28: features/clinical-care/care-notes-view.tsx (segmented modes, category fields, private history), care-note-schema.ts (shared typed validation/formatting), care-notes.ts (atomic saveCareNote/paginated privateNotes). Direct/organization workspace routes expose save-note and view=private-notes under existing access guards. Existing work/entries remain the sole clinical publication kernel. Evidence: tasks/care-notes-forms-2026-10-28.md.
+
 Reversible chat provider selection2026-10-28: lib/ai/compatible.ts and gateway.ts select explicit NVIDIA/OpenRouter/Groq chat with independent speech configuration; existing clinical/private/care boundaries unchanged. [Evidence/configuration](tasks/provider-selection-2026-10-28.md).
 
 Identity/episode repair2026-10-28: AI-chat profile-context and navigation-aware first-turn overview; extraction exact-question interpretation and new linked episode observations; shared health-record episode validation/derived state. [Evidence and remaining live gates](tasks/identity-timeline-episodes-2026-10-28.md).

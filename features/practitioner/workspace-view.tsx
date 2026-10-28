@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PatientAssistant } from "./patient-assistant";
+import { CareNotesView } from "@/features/clinical-care/care-notes-view";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
@@ -94,9 +95,6 @@ export function WorkspaceView({
     id: string;
     content: string;
   } | null>(null);
-  const [noteDestination, setNoteDestination] = useState<"note" | "record">(
-    "note",
-  );
   const endpoint = organizationContext
     ? "/api/organizations/workspace"
     : "/api/practitioner/workspace";
@@ -290,276 +288,188 @@ export function WorkspaceView({
       {(section === "all" || section === "work") && (
         <>
           <h2 id="private-work">Care notes</h2>
-          <p>
-            Private work is not patient-facing. Suspected findings must remain
-            labeled suspected. Finalization requires deliberate human review.
-          </p>
-          <nav className="sharing-tabs" aria-label="Care note destination">
-            <Btn
-              onClick={() => setNoteDestination("note")}
-              aria-pressed={noteDestination === "note"}
-            >
-              Private note
-            </Btn>
-            {organizationContext?.kind !== "initial-care" && (
-              <Btn
-                onClick={() => setNoteDestination("record")}
-                aria-pressed={noteDestination === "record"}
-              >
-                Add to patient record
-              </Btn>
-            )}
-          </nav>
-          {noteDestination === "record" ? (
-            <PatientAssistant
-              connectionId={connectionId}
-              organizationContext={organizationContext}
-              captureOnly
-              writableCategories={data.permissions?.write ?? []}
-              onSaved={() => void refresh()}
-              onDenied={() => controller?.clear()}
-            />
-          ) : (
-            <form
-              className="account-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                await act("save", {
-                  requestKey: crypto.randomUUID(),
-                  patientPersonId: data.patientPersonId,
-                  kind: f.get("kind"),
-                  category: f.get("category"),
-                  body: {
-                    text: f.get("text"),
-                    bodySite: f.get("bodySite") || null,
-                    contextLinks: [],
-                  },
-                  occurredAt: f.get("eventDate")
-                    ? {
-                        precision: "exact",
-                        at: new Date(String(f.get("eventDate"))).toISOString(),
-                      }
-                    : { precision: "unknown" },
-                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                  dueAt: f.get("due")
-                    ? new Date(String(f.get("due"))).toISOString()
-                    : null,
-                  ...(suggestion && f.get("useAi")
-                    ? { aiRunId: suggestion.id }
-                    : {}),
-                });
-              }}
-            >
-              <label>
-                Type
-                <select name="kind">
-                  <option value="private-note">Author-only private note</option>
-                  <option value="reminder">Author-only reminder</option>
-                  <option value="draft">Clinical draft</option>
-                </select>
-              </label>
-              <label>
-                Category
-                <select name="category">
-                  {[
-                    "clinical",
-                    "allergy",
-                    "medication-use",
-                    "baseline",
-                    "ongoing",
-                    "prescription",
-                    "result",
-                  ].map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Content
-                <textarea
-                  name="text"
-                  key={suggestion?.id ?? "manual"}
-                  defaultValue={suggestion?.text ?? ""}
-                  required
-                  maxLength={10000}
-                />
-              </label>
-              <label>
-                Body site
-                <input name="bodySite" />
-              </label>
-              <label>
-                Exact event time, only if known
-                <input type="datetime-local" name="eventDate" />
-              </label>
-              <label>
-                Reminder time, if applicable
-                <input type="datetime-local" name="due" />
-              </label>
-              {suggestion && (
-                <label>
-                  <input type="checkbox" name="useAi" />
-                  Retain this AI suggestion’s provenance (draft or private note)
-                </label>
-              )}
-              <Btn type="submit" disabled={busy}>
-                Save private work
-              </Btn>
-            </form>
-          )}
-          {data.work.map((w) => (
-            <article className="record-card" key={w.id}>
-              <strong>
-                {w.kind} · {w.category} · {w.state} · version {w.version}
-              </strong>
-              <p>{w.body.text}</p>
-              <small>Work ID {w.id}</small>
-              {w.ai_provenance ? (
-                <p>AI-assisted work; human review required.</p>
-              ) : null}
-              {w.state === "paused" ? (
-                <form
-                  onSubmit={async (e) => {
-                    e.preventDefault();
-                    const f = new FormData(e.currentTarget);
-                    await act("edit", {
-                      id: w.id,
-                      version: w.version,
-                      action: "resume",
-                      reason: f.get("reason"),
-                    });
-                  }}
-                >
-                  <label>
-                    Review original dates and current authority
-                    <textarea name="reason" minLength={10} required />
-                  </label>
-                  <Btn type="submit" disabled={busy}>
-                    Review and resume
-                  </Btn>
-                </form>
-              ) : (
-                w.state === "draft" && (
-                  <>
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault();
-                        const f = new FormData(e.currentTarget);
-                        await act("edit", {
-                          id: w.id,
-                          version: w.version,
-                          action: "edit",
-                          body: { ...w.body, text: f.get("text") },
-                        });
-                      }}
-                    >
-                      <label>
-                        Edit private draft
-                        <textarea
-                          name="text"
-                          defaultValue={w.body.text}
-                          required
-                        />
-                      </label>
-                      <Btn type="submit" disabled={busy}>
-                        Save revision
-                      </Btn>
-                    </form>
-                    {w.kind === "draft" && w.category !== "result" && (
+          <CareNotesView
+            key={
+              organizationContext
+                ? JSON.stringify(organizationContext)
+                : connectionId
+            }
+            connectionId={connectionId}
+            organizationContext={organizationContext}
+            patientPersonId={data.patientPersonId}
+            writableCategories={data.permissions?.write ?? []}
+            onSaved={refresh}
+            onDenied={() => {
+              setData(null);
+              controller?.clear();
+            }}
+          />
+          {data.work.some(
+            (w) => w.kind !== "private-note" && w.state !== "finalized",
+          ) && (
+            <details className="care-note-legacy">
+              <summary>Existing drafts &amp; reminders</summary>
+              {data.work
+                .filter(
+                  (w) => w.kind !== "private-note" && w.state !== "finalized",
+                )
+                .map((w) => (
+                  <article className="record-card" key={w.id}>
+                    <strong>
+                      {w.kind} · {w.category} · {w.state} · version {w.version}
+                    </strong>
+                    <p>{w.body.text}</p>
+                    <small>Work ID {w.id}</small>
+                    {w.ai_provenance ? (
+                      <p>AI-assisted work; human review required.</p>
+                    ) : null}
+                    {w.state === "paused" ? (
                       <form
-                        className="account-form"
                         onSubmit={async (e) => {
                           e.preventDefault();
                           const f = new FormData(e.currentTarget);
-                          await act("finalize", {
+                          await act("edit", {
                             id: w.id,
                             version: w.version,
-                            requestKey: crypto.randomUUID(),
-                            reviewed: true,
-                            status: f.get("status"),
-                            ...(f.get("logicalId")
-                              ? {
-                                  correction: {
-                                    logicalId: f.get("logicalId"),
-                                    expectedVersion: Number(
-                                      f.get("expectedVersion"),
-                                    ),
-                                  },
-                                  correctionKind: f.get("correctionKind"),
-                                  reason: f.get("reason"),
-                                }
-                              : {}),
+                            action: "resume",
+                            reason: f.get("reason"),
                           });
                         }}
                       >
                         <label>
-                          State
-                          <select name="status">
-                            {["unknown", "active", "resolved", "recurrent"].map(
-                              (s) => (
-                                <option key={s}>{s}</option>
-                              ),
-                            )}
-                          </select>
-                        </label>
-                        <details>
-                          <summary>
-                            Correct an existing entry instead of recording new
-                            care
-                          </summary>
-                          <label>
-                            Logical entry ID
-                            <input name="logicalId" />
-                          </label>
-                          <label>
-                            Expected version
-                            <input
-                              type="number"
-                              name="expectedVersion"
-                              min={1}
-                            />
-                          </label>
-                          <label>
-                            Correction kind
-                            <select name="correctionKind">
-                              <option>material</option>
-                              <option>minor</option>
-                            </select>
-                          </label>
-                          <label>
-                            Correction reason
-                            <textarea name="reason" />
-                          </label>
-                        </details>
-                        <label>
-                          <input type="checkbox" required />I reviewed this
-                          entry and its evidence. Publish as my attributed
-                          clinical contribution.
+                          Review original dates and current authority
+                          <textarea name="reason" minLength={10} required />
                         </label>
                         <Btn type="submit" disabled={busy}>
-                          Finalize reviewed care
+                          Review and resume
                         </Btn>
                       </form>
+                    ) : (
+                      w.state === "draft" && (
+                        <>
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              const f = new FormData(e.currentTarget);
+                              await act("edit", {
+                                id: w.id,
+                                version: w.version,
+                                action: "edit",
+                                body: { ...w.body, text: f.get("text") },
+                              });
+                            }}
+                          >
+                            <label>
+                              Edit private draft
+                              <textarea
+                                name="text"
+                                defaultValue={w.body.text}
+                                required
+                              />
+                            </label>
+                            <Btn type="submit" disabled={busy}>
+                              Save revision
+                            </Btn>
+                          </form>
+                          {w.kind === "draft" && w.category !== "result" && (
+                            <form
+                              className="account-form"
+                              onSubmit={async (e) => {
+                                e.preventDefault();
+                                const f = new FormData(e.currentTarget);
+                                await act("finalize", {
+                                  id: w.id,
+                                  version: w.version,
+                                  requestKey: crypto.randomUUID(),
+                                  reviewed: true,
+                                  status: f.get("status"),
+                                  ...(f.get("logicalId")
+                                    ? {
+                                        correction: {
+                                          logicalId: f.get("logicalId"),
+                                          expectedVersion: Number(
+                                            f.get("expectedVersion"),
+                                          ),
+                                        },
+                                        correctionKind: f.get("correctionKind"),
+                                        reason: f.get("reason"),
+                                      }
+                                    : {}),
+                                });
+                              }}
+                            >
+                              <label>
+                                State
+                                <select name="status">
+                                  {[
+                                    "unknown",
+                                    "active",
+                                    "resolved",
+                                    "recurrent",
+                                  ].map((s) => (
+                                    <option key={s}>{s}</option>
+                                  ))}
+                                </select>
+                              </label>
+                              <details>
+                                <summary>
+                                  Correct an existing entry instead of recording
+                                  new care
+                                </summary>
+                                <label>
+                                  Logical entry ID
+                                  <input name="logicalId" />
+                                </label>
+                                <label>
+                                  Expected version
+                                  <input
+                                    type="number"
+                                    name="expectedVersion"
+                                    min={1}
+                                  />
+                                </label>
+                                <label>
+                                  Correction kind
+                                  <select name="correctionKind">
+                                    <option>material</option>
+                                    <option>minor</option>
+                                  </select>
+                                </label>
+                                <label>
+                                  Correction reason
+                                  <textarea name="reason" />
+                                </label>
+                              </details>
+                              <label>
+                                <input type="checkbox" required />I reviewed
+                                this entry and its evidence. Publish as my
+                                attributed clinical contribution.
+                              </label>
+                              <Btn type="submit" disabled={busy}>
+                                Finalize reviewed care
+                              </Btn>
+                            </form>
+                          )}
+                          <Btn
+                            disabled={busy}
+                            onClick={() =>
+                              void act("edit", {
+                                id: w.id,
+                                version: w.version,
+                                action: "cancel",
+                                reason: "Author cancelled private work.",
+                              })
+                            }
+                          >
+                            Cancel private work
+                          </Btn>
+                        </>
+                      )
                     )}
-                    <Btn
-                      disabled={busy}
-                      onClick={() =>
-                        void act("edit", {
-                          id: w.id,
-                          version: w.version,
-                          action: "cancel",
-                          reason: "Author cancelled private work.",
-                        })
-                      }
-                    >
-                      Cancel private work
-                    </Btn>
-                  </>
-                )
-              )}
-            </article>
-          ))}
+                  </article>
+                ))}
+            </details>
+          )}
         </>
       )}
       {section === "all" && organizationContext?.kind !== "initial-care" && (

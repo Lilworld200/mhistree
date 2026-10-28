@@ -1,3 +1,17 @@
+## Medication purpose field — 2026-10-28
+
+Added an optional500-character What is this medication for? textarea to both Medication use and Prescription / recommendation. Purpose appears in the reviewed narrative as Reason for medication and persists as body.careDetails.indication; it is not inferred and does not publish a separate condition. Existing shared formatting/validation and atomic save are reused, with no migration or historical rewrite. Existing UI6/6 and native form6/6 tests verify the field, request payload, preview and retained purpose for both categories. Standalone TypeScript, targeted ESLint and whitespace checks passed. No provider or deployment change.
+
+## Care Notes radio control correction — 2026-10-28
+
+Replaced the segmented destination buttons with left-aligned native radio inputs and visible dots. Selected text has full emphasis; the other option is grey with reduced opacity. Shared radio-group naming is unique per mounted editor, with native exclusive selection and keyboard behavior. Destination-specific fields, drafts and save behavior are unchanged. Existing Care Notes interaction suite6/6, TypeScript noEmit/incremental-disabled, targeted ESLint and whitespace checks passed. No server, database, provider or deployment change.
+
+## Care Notes direct forms and private-note browser — 2026-10-28
+
+Implemented the owner's two-destination segmented Private Note / Patient Record design. Removed the redundant Type/mixed creation form and AI-only record preparation from Care Notes. New scoped category-specific fields, faithful structured preview, explicit record review, exact Save labels, independent drafts, stable retries, and an author-only paginated private-note browser with versioned editing/resume/archive. Manual reviewed records share the atomic work/event/state service and medication recommendation transition helper with existing AI publication. Long records use bounded source spans. Direct, organization and initial-care contexts retain current scope and patient checks; no note reaches patient Health/timeline. No new database migration, provider/dependency/environment change or deployment.
+
+Verification:8 native suites44 passed;4 unit/jsdom suites22 passed (66 total). Final native form/HTTP rerun9/9 passed after state/audit refinements. Standalone TypeScript, targeted ESLint and whitespace checks passed. Actual component inspected with synthetic API at desktop/mobile widths; two-column/one-column grids had no horizontal overflow. No authenticated production/browser/device/full accessibility certification or new production build is claimed. Full ownership, commands, initial tooling limits and evidence: [Care Notes forms](docs/tasks/care-notes-forms-2026-10-28.md).
+
 ## Missing care-draft recovery and truthful workflow replies — 2026-10-28
 
 Reproduced an accepted-preparation wording gap and unsupported model draft/send claims with synthetic histories. Added exact preceding single-offer preparation assent, bounded patient-authorised recovery, current stored workflow/receipt context and publication rechecks, and a once-only older pending review card near the latest reply. Existing edited drafts and completed deliveries are reused; recovery never sends automatically. Typed Send keeps its original displayed-review/version/expiry/next-answer gate. No provider, environment, schema, hosted patient data or deployment change.

@@ -20,6 +20,50 @@ export type Recommendation = {
   disposition: string | null;
   followups_closed: boolean;
 };
+/** Manual forms and reviewed AI proposals share recommendation/use transitions. */
+export async function syncReviewedMedication(
+  a: AccessTransaction,
+  d: {
+    patientPersonId: string;
+    category: string;
+    name?: string;
+    text: string;
+    eventId: string;
+    useStatus?: string;
+  },
+) {
+  if (
+    !d.name ||
+    (a.context.kind !== "direct" && a.context.kind !== "organization")
+  )
+    return;
+  if (d.category === "prescription")
+    await a.tx.query(
+      "insert into mhistree.medication_recommendations(patient_person_id,author_account_id,connection_id,source_event_id,name,details) values($1,$2,$3,$4,$5,$6) on conflict(source_event_id,name) do nothing",
+      [
+        d.patientPersonId,
+        a.actor.accountId,
+        a.context.connectionId,
+        d.eventId,
+        d.name,
+        d.text.slice(0, 2000),
+      ],
+    );
+  if (
+    d.category === "medication-use" &&
+    ["taking", "stopped"].includes(d.useStatus ?? "")
+  )
+    await a.tx.query(
+      "update mhistree.medication_recommendations set state=case when disposition is not null then disposition else $4 end,use_state=$4,followups_closed=true,latest_event_id=$5,version=version+1 where patient_person_id=$1 and connection_id=$2 and lower(name)=lower($3) and latest_event_id is distinct from $5",
+      [
+        d.patientPersonId,
+        a.context.connectionId,
+        d.name,
+        d.useStatus,
+        d.eventId,
+      ],
+    );
+}
 export function localDay(now: Date, timezone: string) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,

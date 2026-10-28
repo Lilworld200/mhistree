@@ -79,6 +79,25 @@ export const contributionInput = z
         reportStyle: z.literal("reported-predicate").optional(),
         bodySite: z.string().nullable().default(null),
         contextLinks: z.array(z.uuid()).default([]),
+        careDetails: z
+          .object({
+            name: z.string().max(200).optional(),
+            dose: z.string().max(200).optional(),
+            frequency: z.string().max(200).optional(),
+            route: z.string().max(200).optional(),
+            indication: z.string().max(500).optional(),
+            certainty: z.enum(["suspected", "confirmed"]).optional(),
+            reaction: z.string().max(500).optional(),
+            severity: z
+              .enum(["unknown", "mild", "moderate", "severe"])
+              .optional(),
+            value: z.string().max(200).optional(),
+            unit: z.string().max(200).optional(),
+            plannedStart: z.iso.date().optional(),
+            plannedEnd: z.iso.date().optional(),
+          })
+          .strict()
+          .optional(),
         episodeUpdate: z
           .object({
             eventId: z.uuid(),
