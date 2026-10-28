@@ -28,6 +28,39 @@ export async function groqRequest(
     });
     aiDebug("provider.http", { upstreamStatus: response.status, attempt: 1 });
     if (!response.ok) {
+      if (response.status === 429) {
+        let reason = "rate-limit-unspecified";
+        try {
+          const payload = (await groqJson(response)) as {
+            error?: { message?: unknown };
+          };
+          const message =
+            typeof payload?.error?.message === "string"
+              ? payload.error.message
+              : "";
+          for (const [pattern, label] of [
+            [/tokens per day|\bTPD\b/i, "tokens-per-day"],
+            [/tokens per minute|\bTPM\b/i, "tokens-per-minute"],
+            [/requests per day|\bRPD\b/i, "requests-per-day"],
+            [/requests per minute|\bRPM\b/i, "requests-per-minute"],
+          ] as const)
+            if (pattern.test(message)) {
+              reason = label;
+              break;
+            }
+        } catch {
+          /* No raw error text, headers or account identifiers in diagnostics. */
+        }
+        const retrySeconds = Number(response.headers.get("retry-after"));
+        aiDebug("provider.http.failed", {
+          upstreamStatus: 429,
+          quotaFailure: true,
+          reason,
+          ...(Number.isFinite(retrySeconds) && retrySeconds > 0
+            ? { retryMs: retrySeconds * 1000 }
+            : {}),
+        });
+      }
       if (response.status === 400) {
         let requiresTerms = false;
         try {

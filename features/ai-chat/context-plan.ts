@@ -29,9 +29,10 @@ export function contextPlan(question: string, history: ContextTurn[] = []) {
     /\b(?:\d{4}-\d{2}-\d{2}|\d{1,2}[/-]\d{1,2}|monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/i.test(
       question,
     );
-  const broad = /\b(history|overview|summary|summarize|everything)\b/i.test(
-    question,
-  );
+  const broad =
+    /\b(history|timeline|overview|summary|summarize|everything)\b/i.test(
+      question,
+    );
   const previous = history.filter((m) => m.content !== question).slice(-6);
   const topicChange =
     /\b(change (?:the )?(?:subject|topic)|something (?:else|unrelated)|anyway|instead.{0,12}(?:code|coding)|let.s talk about)\b/i.test(

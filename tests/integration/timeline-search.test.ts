@@ -184,12 +184,12 @@ describe("timeline search throughout chat", () => {
       )?.content,
     ).not.toContain(stomach);
   });
-  it("keeps greetings lean and strips echoed metadata before storage and history", async () => {
+  it("supplies a bounded first-greeting overview and strips echoed metadata before storage and history", async () => {
     const sent = await send("Hello there");
     await generateReply(db.pool, patient.session, sent.messageId, {
       generate: async (system, messages) => {
         expect(system).not.toContain("stomach ache on Monday");
-        expect(system).toContain('"evidence":[]');
+        expect(system).toContain('"evidence":[{');
         expect(messages[0].content).toBe("Hello there");
         return 'Source capture: {"capturedAt":"2026-10-27","elapsedSeconds":-14}\nHello!';
       },

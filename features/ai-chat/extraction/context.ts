@@ -8,12 +8,14 @@ import {
 import type { z } from "zod";
 import type { eventTime } from "@/features/health-records/schema";
 import { searchTimelineInAccess } from "../timeline-search";
+import { episodeStates } from "@/features/health-records/episode-state";
 
 export type PriorReport = {
   id: string;
   logicalId: string;
   version: number;
   category: string;
+  status: string;
   body: NarrativeBody & { bodySite: string | null; contextLinks: string[] };
   eventTime: z.infer<typeof eventTime>;
   capturedAt: string;
@@ -23,6 +25,13 @@ export type ExtractionContext = {
   reports: PriorReport[];
   messages: { content: string; capturedAt: string; timezone: string }[];
   fingerprint: string;
+  precedingQuestion?: {
+    messageId?: string;
+    content: string;
+    kind: string;
+    subject: string;
+    capturedAt: string;
+  } | null;
   timelineCandidates?: {
     eventId: string;
     text: string;
@@ -73,14 +82,71 @@ export async function extractionContext(
       [messageId],
     )
   ).rows[0];
+  const preceding = (
+    await a.tx.query(
+      `select m.id,m.role,m.content,m.dialogue,m.captured_at from mhistree.chat_messages m
+     join mhistree.chat_messages target on target.id=$1
+     where m.conversation_id=target.conversation_id and m.sequence<target.sequence
+     order by m.sequence desc limit 1`,
+      [messageId],
+    )
+  ).rows[0];
+  const precedingQuestion: ExtractionContext["precedingQuestion"] =
+    preceding?.role === "assistant" && preceding.dialogue?.question
+      ? {
+          messageId: preceding.id,
+          content: preceding.content.slice(0, 1000),
+          kind: preceding.dialogue.question.kind,
+          subject: preceding.dialogue.question.subject,
+          capturedAt: preceding.captured_at.toISOString(),
+        }
+      : null;
   const candidates = target
     ? await searchTimelineInAccess(
         a,
         target.person_id,
-        target.content,
+        precedingQuestion?.kind === "symptom"
+          ? `${precedingQuestion.subject} ${target.content}`.slice(0, 10000)
+          : target.content,
         target.captured_at,
       )
     : [];
+  // A new-chat short answer may refer to an older report only when the exact
+  // preceding symptom subject identifies one currently authorized episode.
+  // Search similarity alone never promotes wider history to a mutation target.
+  if (
+    precedingQuestion?.kind === "symptom" &&
+    /^(?:no|nope|yes|yeah|yep)[.!\s]*$/i.test(target?.content ?? "")
+  ) {
+    const words =
+      precedingQuestion.subject.toLowerCase().match(/[a-z]{3,}/g) ?? [];
+    const own = candidates.filter(
+      (e) =>
+        e.category === "symptom" &&
+        e.author_account_id === a.actor.accountId &&
+        e.source_status === "patient-reported" &&
+        e.chat_message_id &&
+        words.length &&
+        words.every((word) =>
+          `${e.body.text} ${e.body.bodySite ?? ""}`
+            .toLowerCase()
+            .includes(word),
+        ),
+    );
+    const updated = await episodeStates(
+      a,
+      own.map((e) => e.id),
+    );
+    const current = own.filter(
+      (e) => !updated.some((state) => state.root === e.id),
+    );
+    if (
+      current.length === 1 &&
+      candidates.filter((e) => e.match_score > 0).length < 16 &&
+      !reports.some((r) => r.id === current[0].id)
+    )
+      reports.unshift(current[0]);
+  }
   const timelineCandidates = candidates
     .filter((e) => e.match_score > 0 && !reports.some((r) => r.id === e.id))
     .slice(0, 4)
@@ -93,12 +159,14 @@ export async function extractionContext(
       status: e.status,
     }));
   return {
+    precedingQuestion,
     timelineCandidates,
     reports: reports.map((e) => ({
       id: e.id,
       logicalId: e.logical_id,
       version: e.version,
       category: e.category,
+      status: e.status,
       body: e.body,
       eventTime: e.occurred_at,
       capturedAt: e.captured_at.toISOString(),
@@ -109,18 +177,25 @@ export async function extractionContext(
       capturedAt: m.captured_at.toISOString(),
       timezone: m.timezone,
     })),
-    fingerprint: digest(JSON.stringify(reports.map((e) => [e.id, e.version]))),
+    fingerprint: digest(
+      JSON.stringify([
+        reports.map((e) => [e.id, e.version]),
+        precedingQuestion,
+      ]),
+    ),
   };
 }
 
 export function modelExtractionContext(context: ExtractionContext | undefined) {
   if (!context) return null;
   const projection = {
+    precedingQuestion: context.precedingQuestion ?? null,
     previousPatientMessages: context.messages.slice(-4),
     possibleTimelineContext: (context.timelineCandidates ?? []).slice(0, 4),
     previousReports: context.reports.slice(0, 6).map((r) => ({
       eventId: r.id,
       category: r.category,
+      status: r.status,
       text: (r.body.reportStyle
         ? r.body.text
         : recordNarrative({
@@ -172,7 +247,7 @@ export function compatibleTimes(
 
 /** An explicit reference to an identified earlier incident is not a new date. */
 export function incidentTimeReference(phrase: string) {
-  return /^(?:(?:on|during|at|in)\s+)?(?:that|the|this)\s+(?:same|earlier|previous|reported)\s+(?:run|jog|walk|workout|session|incident|episode|occasion|event|time)\.?$/i.test(
+  return /^(?:(?:on|during|at|in)\s+)?(?:that|the|this)\s+(?:same|earlier|previous|reported)\s+(?:run|jog|walk|workout|session|incident|episode|occasion|event|time|(?:(?:sleepless|restless|difficult|painful)\s+)?(?:night|morning|afternoon|evening|day|week|month))\.?$/i.test(
     phrase.trim(),
   );
 }

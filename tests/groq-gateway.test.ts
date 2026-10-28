@@ -215,3 +215,34 @@ it("requests schema-constrained patient replies in one call and keeps actions se
     },
   });
 });
+
+it("classifies rate limits with safe labels while retaining one attempt", async () => {
+  const logs = vi.spyOn(console, "info").mockImplementation(() => {});
+  vi.stubEnv("AI_DEBUG", "1");
+  const fetcher = vi.fn(async () =>
+    Response.json(
+      {
+        error: {
+          message: "tokens per day (TPD): secret-account secret-patient",
+        },
+      },
+      { status: 429, headers: { "retry-after": "120" } },
+    ),
+  );
+  vi.stubGlobal("fetch", fetcher);
+  try {
+    await expect(
+      new GroqGateway("secret-key").generate("secret-source", []),
+    ).rejects.toThrow("RATE_LIMITED");
+    const text = JSON.stringify(logs.mock.calls);
+    expect(text).toContain("tokens-per-day");
+    expect(text).toContain("retryMs");
+    expect(text).not.toMatch(
+      /secret-account|secret-patient|secret-key|secret-source/,
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  } finally {
+    logs.mockRestore();
+    vi.unstubAllEnvs();
+  }
+});

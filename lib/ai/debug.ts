@@ -88,7 +88,10 @@ export function aiDebug(event: string, fields: Record<string, unknown> = {}) {
       if (
         symbols.has(key) &&
         typeof value === "string" &&
-        /^[a-zA-Z0-9_.:-]{1,120}$/.test(value)
+        (key === "model"
+          ? /^[a-zA-Z0-9_./:-]{1,120}$/
+          : /^[a-zA-Z0-9_.:-]{1,120}$/
+        ).test(value)
       )
         safe[key] = value;
       if (booleans.has(key) && typeof value === "boolean") safe[key] = value;

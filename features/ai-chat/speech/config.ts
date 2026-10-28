@@ -3,7 +3,9 @@ import { z } from "zod";
 import { DomainError } from "@/lib/errors";
 
 export function speechConfiguration() {
-  const provider = process.env.AI_PROVIDER ?? "groq";
+  const provider =
+    process.env.AI_SPEECH_PROVIDER ??
+    (process.env.AI_PROVIDER === "gemini" ? "gemini" : "groq");
   if (provider !== "groq" && provider !== "gemini")
     throw new DomainError("CONFIGURATION_REQUIRED");
   const result = z

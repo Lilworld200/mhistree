@@ -2,13 +2,14 @@ import "server-only";
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { withAccess } from "@/features/access/server";
+import { withAccess, type AccessTransaction } from "@/features/access/server";
 import { appendEvent } from "@/features/audit/server";
 import { consumeAttempt } from "@/lib/db/rate-limit";
 import { digest } from "@/features/auth/sessions";
 import { DomainError, applicationErrorCode } from "@/lib/errors";
 import type { AIGateway, AIMessage } from "@/lib/ai/gateway";
-import { retrieveEvidence } from "./retrieval";
+import { retrieveEvidence, retrieveEvidenceInAccess } from "./retrieval";
+import { patientIdentity } from "./profile-context";
 import { patientChatPolicy } from "./patient-prompt";
 import { aiDebug, debugMessage, debugRef, withAIDebug } from "@/lib/ai/debug";
 import { practitionerDiscovery } from "./practitioner-discovery";
@@ -278,6 +279,7 @@ async function generatePatientReply(
 ) {
   z.uuid().parse(messageId);
   const lease = randomUUID();
+  let profile!: Awaited<ReturnType<typeof patientIdentity>>;
   const prepared = await withAccess(
     pool,
     session,
@@ -306,7 +308,16 @@ async function generatePatientReply(
           [message.conversation_id, message.sequence],
         )
       ).rows.reverse();
-      return { message, history, personId: a.actor.personId };
+      const initial = !(
+        await a.tx.query(
+          "select 1 from mhistree.chat_messages where conversation_id=$1 and role='patient' and sequence>coalesce((select target_sequence from mhistree.chat_memory_links where conversation_id=$1),0) and sequence<$2 limit 1",
+          [message.conversation_id, message.sequence],
+        )
+      ).rowCount;
+      return { message, history, personId: a.actor.personId, initial };
+    },
+    async (tx, actor) => {
+      profile = await patientIdentity(tx, actor);
     },
   );
   if (!prepared) {
@@ -380,6 +391,11 @@ async function generatePatientReply(
     const currentTime = timeAnchor(now, prepared.message.timezone, now);
     const history = boundedHistory(prepared.history);
     const plan = contextPlan(prepared.message.content, history);
+    // Navigation starts a fresh bounded health overview, even for a greeting.
+    if (prepared.initial) {
+      plan.timeline = true;
+      plan.broad = true;
+    }
     const acceptedContact = contactOfferAccepted(
       history,
       prepared.message.content,
@@ -397,12 +413,11 @@ async function generatePatientReply(
       role: m.role === "patient" ? "user" : "assistant",
       content: m.role === "patient" ? m.content : replyText(m.content),
     }));
-    const readEvidence = () =>
+    const readEvidence = (a?: AccessTransaction) =>
       plan.timeline
-        ? retrieveEvidence(
-            pool,
-            session,
-            { kind: "patient" },
+        ? (a
+            ? retrieveEvidenceInAccess.bind(null, a)
+            : retrieveEvidence.bind(null, pool, session, { kind: "patient" }))(
             prepared.personId,
             [
               plan.searchText,
@@ -427,9 +442,10 @@ async function generatePatientReply(
             asOf: now.toISOString(),
           });
     const evidence = await readEvidence();
-    const safety = plan.medication
-      ? await medicationSafetyContext(pool, session, prepared.personId)
-      : { items: [], bounded: false, incomplete: true };
+    const safety =
+      plan.medication || prepared.initial
+        ? await medicationSafetyContext(pool, session, prepared.personId)
+        : { items: [], bounded: false, incomplete: true };
     const discovery = needsContact
       ? await practitionerDiscovery(pool, session)
       : { status: "unavailable" as const };
@@ -442,6 +458,7 @@ async function generatePatientReply(
     const system = `${patientChatPolicy}\n${careActionPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify(
       {
         currentTime,
+        profile: { name: profile.name, birthDate: profile.birthDate },
         privateMemory: {
           items: (continueWithoutMemory ? [] : memory.items).map((i) => ({
             kind: i.kind,
@@ -467,6 +484,7 @@ async function generatePatientReply(
           capturedAt: e.capturedAt,
           timezone: e.sourceTimezone,
           relevance: e.relevance,
+          latestEpisodeReport: e.latestEpisodeReport,
         })),
         ...discovery,
         personalMedication: plan.personalMedication,
@@ -567,14 +585,20 @@ async function generatePatientReply(
     if (currentMemory.fingerprint !== memory.fingerprint)
       throw new DomainError("ACCESS_REVOKED");
     const currentEvidence = await readEvidence();
-    const currentSafety = plan.medication
-      ? await medicationSafetyContext(pool, session, prepared.personId)
-      : safety;
+    const currentSafety =
+      plan.medication || prepared.initial
+        ? await medicationSafetyContext(pool, session, prepared.personId)
+        : safety;
     if (JSON.stringify(currentSafety) !== JSON.stringify(safety))
       throw new DomainError("ACCESS_REVOKED");
     const currentIds = new Set(currentEvidence.evidence.map((e) => e.id));
     if (evidence.evidence.some((e) => !currentIds.has(e.id)))
       throw new DomainError("ACCESS_REVOKED");
+    if (
+      JSON.stringify(currentEvidence.evidence) !==
+      JSON.stringify(evidence.evidence)
+    )
+      throw new DomainError("VERSION_CONFLICT");
     if (
       discovery.status === "available" &&
       discovery.connectedPractitioners.length
@@ -601,6 +625,12 @@ async function generatePatientReply(
       session,
       { kind: "patient" },
       async (a) => {
+        const publicationEvidence = await readEvidence(a);
+        if (
+          JSON.stringify(publicationEvidence.evidence) !==
+          JSON.stringify(evidence.evidence)
+        )
+          throw new DomainError("VERSION_CONFLICT");
         const publicationMemory = await recallMemoryInAccess(
           a,
           prepared.message.conversation_id,
@@ -638,6 +668,11 @@ async function generatePatientReply(
             draftText,
           );
         return { state: "succeeded" };
+      },
+      async (tx, actor) => {
+        const current = await patientIdentity(tx, actor);
+        if (JSON.stringify(current) !== JSON.stringify(profile))
+          throw new DomainError("VERSION_CONFLICT");
       },
     );
     aiDebug("chat.reply.published", {

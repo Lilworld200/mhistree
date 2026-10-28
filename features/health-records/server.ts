@@ -261,6 +261,29 @@ export async function acceptContributionInAccess(
     if (linked.rowCount !== new Set(data.body.contextLinks).size)
       throw new DomainError("ACCESS_DENIED");
   }
+  if (data.body.episodeUpdate) {
+    const update = data.body.episodeUpdate;
+    const prior = (
+      await access.tx.query(
+        `select e.id,e.version,e.category,e.source_status,e.author_account_id from mhistree.record_heads h
+       join mhistree.contributions e on e.id=h.current_id
+       where e.id=$1 and e.patient_person_id=$2 for share of h`,
+        [update.eventId, source.patient_person_id],
+      )
+    ).rows[0];
+    if (!prior || prior.version !== update.expectedVersion)
+      throw new DomainError("VERSION_CONFLICT");
+    if (
+      data.correction ||
+      source.category !== "symptom" ||
+      prior.category !== "symptom" ||
+      prior.source_status !== "patient-reported" ||
+      source.source_status !== "patient-reported" ||
+      prior.author_account_id !== access.actor.accountId ||
+      !data.body.contextLinks.includes(prior.id)
+    )
+      throw new DomainError("ACCESS_DENIED");
+  }
   if (data.correction) {
     const head = (
       await access.tx.query(

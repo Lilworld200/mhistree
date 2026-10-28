@@ -78,6 +78,13 @@ export const contributionInput = z
         reportStyle: z.literal("reported-predicate").optional(),
         bodySite: z.string().nullable().default(null),
         contextLinks: z.array(z.uuid()).default([]),
+        episodeUpdate: z
+          .object({
+            eventId: z.uuid(),
+            expectedVersion: z.number().int().positive(),
+          })
+          .strict()
+          .optional(),
         medication: z
           .object({
             useStatus: z.enum(["taking", "stopped", "not-started", "unknown"]),

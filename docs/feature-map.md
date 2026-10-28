@@ -1,3 +1,9 @@
+Reversible chat provider selection2026-10-28: lib/ai/compatible.ts and gateway.ts select explicit NVIDIA/OpenRouter/Groq chat with independent speech configuration; existing clinical/private/care boundaries unchanged. [Evidence/configuration](tasks/provider-selection-2026-10-28.md).
+
+Identity/episode repair2026-10-28: AI-chat profile-context and navigation-aware first-turn overview; extraction exact-question interpretation and new linked episode observations; shared health-record episode validation/derived state. [Evidence and remaining live gates](tasks/identity-timeline-episodes-2026-10-28.md).
+
+Provider diagnostic2026-10-28: Groq direct + current structured adapter passed synthetic live checks; conditional NVIDIA switch not triggered. NVIDIA Lightning passed, GPT-OSS20B timed out twice. No runtime/configuration change. See [availability evidence](tasks/provider-availability-2026-10-28.md).
+
 Contextual care2026-10-27: `features/ai-chat/health-context.ts` owns independent bounded medication/allergy context and patient-source draft guards; `care-delivery.ts` owns destination receipts/partial retry and version-bound typed confirmations. `context-plan.ts` routes bounded health follow-ups without another model call; `care-action-card.tsx`/`chat-view.tsx` bind visible review IDs. Migration `20261027213652_contextual_multi_recipient_chat.sql`; implementation guide `docs/tasks/contextual-care-2026-10-27.md`.
 
 Reviewed patient chat care actions2026-10-27: ChatView -> care-action-card -> /api/chat/care-actions -> care-actions -> shared messaging/appointments InAccess services. Structured reply/action schema remains separate from saved conversational content and TTS. Private ownership migration20261027195005, source/event/scope rechecks, atomic idempotent confirmation and truthful stored/requested outcomes. Details: [implementation](tasks/chat-care-actions-2026-10-27.md).

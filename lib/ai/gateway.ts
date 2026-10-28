@@ -4,6 +4,7 @@ import { requestGemini } from "./request";
 import { DomainError } from "@/lib/errors";
 import { aiDebug, withAIDebug } from "./debug";
 import { GroqGateway } from "./groq";
+import { CompatibleGateway } from "./compatible";
 import {
   patientReplySchema,
   patientReplyFormat,
@@ -196,6 +197,19 @@ export class GeminiGateway implements AIGateway {
   }
 }
 export function aiGateway(): AIGateway {
+  const provider = process.env.AI_PROVIDER;
+  if (provider === "openrouter" || provider === "nvidia") {
+    const key =
+      process.env[
+        provider === "openrouter" ? "OPENROUTER_API_KEY" : "NVIDIA_API_KEY"
+      ]?.trim();
+    const model =
+      process.env[
+        provider === "openrouter" ? "AI_OPENROUTER_MODEL" : "AI_NVIDIA_MODEL"
+      ]?.trim();
+    if (!key || !model) throw new DomainError("CONFIGURATION_REQUIRED");
+    return new CompatibleGateway(key, provider, model);
+  }
   if ((process.env.AI_PROVIDER ?? "groq") === "groq") {
     const key = process.env.GROQ_API_KEY?.trim();
     if (!key) throw new DomainError("CONFIGURATION_REQUIRED");

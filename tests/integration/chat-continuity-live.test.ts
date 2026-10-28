@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import { testDatabase } from "../helpers/postgres";
 import { staffFixture } from "../helpers/fixtures";
 import { GeminiGateway } from "@/lib/ai/gateway";
+import { CompatibleGateway } from "@/lib/ai/compatible";
 import {
   createConversation,
   sendMessage,
@@ -25,17 +26,26 @@ it.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
   "live synthetic summary, topic title and time-aware reply use the configured economical model",
   async () => {
     const env = { ...parseEnv(await readFile(".env", "utf8")), ...process.env };
+    const provider = process.env.MHISTREE_EVAL_PROVIDER;
     if (
-      !env.GEMINI_API_KEY ||
-      !env.AI_PATIENT_MODEL ||
-      !env.AI_EXTRACTION_MODEL
+      !provider &&
+      (!env.GEMINI_API_KEY || !env.AI_PATIENT_MODEL || !env.AI_EXTRACTION_MODEL)
     )
-      throw new Error("Live test requires configured Gemini fields");
-    const gateway = new GeminiGateway({
-      key: env.GEMINI_API_KEY,
-      chatModel: env.AI_PATIENT_MODEL,
-      extractionModel: env.AI_EXTRACTION_MODEL,
-    });
+      throw new Error("Live test requires explicit provider configuration");
+    const gateway =
+      provider === "nvidia" || provider === "openrouter"
+        ? new CompatibleGateway(
+            env[
+              provider === "nvidia" ? "NVIDIA_API_KEY" : "OPENROUTER_API_KEY"
+            ]!,
+            provider,
+            process.env.MHISTREE_EVAL_MODEL!,
+          )
+        : new GeminiGateway({
+            key: env.GEMINI_API_KEY!,
+            chatModel: env.AI_PATIENT_MODEL!,
+            extractionModel: env.AI_EXTRACTION_MODEL!,
+          });
     const patient = await staffFixture(db.pool),
       old = randomUUID(),
       next = randomUUID();
@@ -94,6 +104,10 @@ it.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
       JSON.stringify(
         {
           model: gateway.modelName,
+          usage:
+            gateway instanceof CompatibleGateway
+              ? gateway.observedUsage
+              : undefined,
           title: title.title,
           memory: memory.items,
           reply,

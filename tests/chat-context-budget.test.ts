@@ -20,6 +20,10 @@ describe("bounded patient chat context and presentation", () => {
     expect(contextPlan("Help me write a poem").timeline).toBe(false);
     expect(contextPlan("I'm still feeling stressed").summaries).toBe(false);
     expect(contextPlan("Remember my coding project?").summaries).toBe(true);
+    for (const command of ["Read my timeline", "Check my timeline"]) {
+      expect(contextPlan(command).timeline).toBe(true);
+      expect(contextPlan(command).broad).toBe(true);
+    }
   });
   it("bounds active messages and retains the latest full patient turn", () => {
     const all = Array.from({ length: 20 }, (_, i) => ({
