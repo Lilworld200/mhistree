@@ -1,3 +1,4 @@
+import { scheduleInboxAnalysis } from "@/features/messaging/schedule-analysis";
 import { NextRequest } from "next/server";
 import { database } from "@/lib/db/client";
 import {
@@ -29,13 +30,14 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     mutationGuard(request);
-    return success(
-      await changeCareProposal(
-        database(),
-        sessionFrom(request),
-        await jsonBody(request, 65536),
-      ),
+    const session = sessionFrom(request);
+    const result = await changeCareProposal(
+      database(),
+      session,
+      await jsonBody(request, 65536),
     );
+    scheduleInboxAnalysis(session, { kind: "patient" });
+    return success(result);
   } catch (error) {
     return failure(error);
   }

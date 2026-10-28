@@ -1,3 +1,4 @@
+import { scheduleInboxAnalysis } from "@/features/messaging/schedule-analysis";
 import {
   practitionerChatHistory,
   preparePractitionerReview,
@@ -36,6 +37,7 @@ import {
   success,
   failure,
 } from "@/lib/http";
+export const maxDuration = 240;
 export async function GET(r: NextRequest) {
   try {
     const context = actingContextSchema.parse(
@@ -184,20 +186,21 @@ export async function POST(r: NextRequest) {
         ),
       );
     }
-    return success(
-      await {
-        save: saveWork,
-        "save-note": saveCareNote,
-        edit: editWork,
-        finalize: finalizeEntry,
-        "ai-save": savePractitionerProposal,
-        request: createServiceRequest,
-        "request-transition": changeServiceRequest,
-        result: publishResult,
-        message: sendCareMessage,
-        appointment: changeAppointment,
-      }[d.action](pool, session, d.context, d.data),
-    );
+    const result = await {
+      save: saveWork,
+      "save-note": saveCareNote,
+      edit: editWork,
+      finalize: finalizeEntry,
+      "ai-save": savePractitionerProposal,
+      request: createServiceRequest,
+      "request-transition": changeServiceRequest,
+      result: publishResult,
+      message: sendCareMessage,
+      appointment: changeAppointment,
+    }[d.action](pool, session, d.context, d.data);
+    if (d.action === "message" && d.context.kind === "organization")
+      scheduleInboxAnalysis(session, d.context, d.context.connectionId);
+    return success(result);
   } catch (e) {
     return failure(e);
   }

@@ -14,7 +14,6 @@ import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
 import { replyText } from "./reply-text";
-import { useConnectedCare } from "./use-connected-care";
 import { CareActionCard } from "./care-action-card";
 import type { CareProposal } from "./care-action-schema";
 import type { Conversation } from "./conversation";
@@ -60,7 +59,6 @@ export function ChatView() {
     [processing, setProcessing] = useState(0),
     [processingError, setProcessingError] = useState(""),
     [processingRevision, setProcessingRevision] = useState(0);
-  const connected = useConnectedCare(selected);
   const recoveredDraft =
     history.pendingCareProposal &&
     history.pendingCareProposal.replyMessageId !== history.items.at(-1)?.id
@@ -252,7 +250,7 @@ export function ChatView() {
   useEffect(() => {
     const area = scrollRef.current;
     if (area) area.scrollTop = area.scrollHeight;
-  }, [history.items.length, connected.snapshot.items.length, generating]);
+  }, [history.items.length, generating]);
   async function generate(id: string, conversation: string, readAloud = false) {
     setGenerating(id);
     setError("");
@@ -352,13 +350,6 @@ export function ChatView() {
         });
         created.current.add(id);
       }
-      if (connected.recipient) {
-        await connected.send(text, spoken?.token);
-        setText("");
-        setVoiceDraft(null);
-        request.current = null;
-        return;
-      }
       if (preparation.current?.id === id && !limitedMemory.current.has(id)) {
         await preparation.current.promise;
         // Navigation during preparation must not send the captured draft to another conversation.
@@ -432,72 +423,6 @@ export function ChatView() {
           />
         </div>
       </header>
-      {selected && (
-        <div className="sharing-tabs" aria-label="Conversation recipient">
-          <label>
-            Talk to
-            <select
-              aria-label="Conversation recipient"
-              value={
-                connected.recipient
-                  ? `${connected.recipient.connectionId}:${connected.recipient.practitionerId}`
-                  : ""
-              }
-              disabled={busy || Boolean(generating)}
-              onChange={(e) => {
-                voice.stopPlayback();
-                connected.setRecipient(
-                  connected.snapshot.recipients.find(
-                    (r) =>
-                      `${r.connectionId}:${r.practitionerId}` ===
-                      e.target.value,
-                  ) ?? null,
-                );
-                visibleCareConfirmation.current = null;
-              }}
-            >
-              <option value="">Mhistree</option>
-              {connected.snapshot.recipients.map((r) => (
-                <option
-                  key={`${r.connectionId}:${r.practitionerId}`}
-                  value={`${r.connectionId}:${r.practitionerId}`}
-                >
-                  {r.name}
-                  {connected.snapshot.online.includes(
-                    `${r.connectionId}:${r.practitionerId}`,
-                  )
-                    ? " · Online"
-                    : ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          {connected.recipient ? (
-            <>
-              <p>
-                Direct care message to {connected.recipient.name}. Mhistree will
-                not reply.
-              </p>
-              <Btn sm onClick={() => void connected.acknowledge()}>
-                Mark displayed care messages read
-              </Btn>
-              <Btn sm onClick={() => connected.setRecipient(null)}>
-                Return to Mhistree
-              </Btn>
-            </>
-          ) : connected.snapshot.online.length > 0 ? (
-            <p>
-              A connected practitioner is online. Select their name to start a
-              direct conversation.
-            </p>
-          ) : null}
-          {connected.error && (
-            <p role="status">
-              Care conversation unavailable: {connected.error}
-            </p>
-          )}
-        </div>
-      )}
       <div
         className="msgs"
         ref={scrollRef}
@@ -526,7 +451,7 @@ export function ChatView() {
             Earlier messages
           </Btn>
         )}
-        {!history.items.length && !connected.snapshot.items.length && (
+        {!history.items.length && (
           <div className="empty">
             <div>
               <Logo s={44} />
@@ -559,164 +484,137 @@ export function ChatView() {
             </div>
           </div>
         )}
-        {[
-          ...history.items,
-          ...connected.snapshot.items.map(
-            (m): Message =>
-              ({
-                id: m.id,
-                role: m.role,
-                content: m.content,
-                captured_at: m.sent_at,
-                timezone: "UTC",
-                state: null,
-                sequence: m.sequence,
-                name: m.name,
-                originConversationId: m.origin_conversation_id,
-                summaryAttachment: m.summary_attachment,
-                clinicalAttachments: m.clinical_attachments,
-              }) satisfies Message,
-          ),
-        ]
-          .sort(
-            (a, b) =>
-              new Date(a.captured_at).getTime() -
-              new Date(b.captured_at).getTime(),
-          )
-          .map((m, index, displayed) => (
-            <div key={m.id}>
-              {index > 0 &&
-                new Date(m.captured_at).getTime() -
-                  new Date(
-                    displayed[index - 1]?.captured_at ?? m.captured_at,
-                  ).getTime() >
-                  3600000 && (
-                  <p className="conversation-gap">
-                    Conversation resumed after a gap
-                  </p>
-                )}
-              <article
-                className={`brow ${m.role.startsWith("patient") ? "brow-user" : "brow-ai"}`}
-                id={`message-${m.id}`}
+        {history.items.map((m, index, displayed) => (
+          <div key={m.id}>
+            {index > 0 &&
+              new Date(m.captured_at).getTime() -
+                new Date(
+                  displayed[index - 1]?.captured_at ?? m.captured_at,
+                ).getTime() >
+                3600000 && (
+                <p className="conversation-gap">
+                  Conversation resumed after a gap
+                </p>
+              )}
+            <article
+              className={`brow ${m.role.startsWith("patient") ? "brow-user" : "brow-ai"}`}
+              id={`message-${m.id}`}
+            >
+              {m.role === "assistant" && (
+                <span className="aav">
+                  <Logo s={22} />
+                </span>
+              )}
+              <div
+                className={`bubble${m.role.startsWith("patient") ? " bubble-user" : ""}`}
               >
-                {m.role === "assistant" && (
-                  <span className="aav">
-                    <Logo s={22} />
-                  </span>
+                <span className="sr-only">
+                  {m.name ??
+                    (m.role === "patient"
+                      ? "You"
+                      : "Mhistree AI interpretation")}
+                </span>
+                {m.name && <strong>{m.name}</strong>}
+                {m.originConversationId && (
+                  <Btn
+                    sm
+                    onClick={() =>
+                      chatNavigation?.select(m.originConversationId!)
+                    }
+                  >
+                    Originating exchange
+                  </Btn>
                 )}
-                <div
-                  className={`bubble${m.role.startsWith("patient") ? " bubble-user" : ""}`}
-                >
-                  <span className="sr-only">
-                    {m.name ??
-                      (m.role === "patient"
-                        ? "You"
-                        : "Mhistree AI interpretation")}
-                  </span>
-                  {m.name && <strong>{m.name}</strong>}
-                  {m.originConversationId && (
+                {m.summaryAttachment && (
+                  <aside aria-label="Shared summary">
+                    {m.summaryAttachment.text}
+                  </aside>
+                )}
+                {m.clinicalAttachments?.map((attachment) => (
+                  <aside key={attachment.eventId}>
+                    <strong>Reviewed patient-record entry</strong>
+                    <p>{attachment.text}</p>
+                  </aside>
+                ))}
+                <p className="message-content">
+                  {m.role === "assistant" ? replyText(m.content) : m.content}
+                </p>
+                {m.role === "assistant" &&
+                  (m.replyInputMethod === "microphone" ||
+                    history.items.some(
+                      (p) =>
+                        p.id === m.reply_to && p.inputMethod === "microphone",
+                    )) && (
                     <Btn
                       sm
-                      onClick={() =>
-                        chatNavigation?.select(m.originConversationId!)
+                      className="chat-reply-playback"
+                      disabled={
+                        voice.recording !== "idle" ||
+                        voice.playback === "loading"
                       }
+                      onClick={() => void voice.play(m.id)}
                     >
-                      Originating exchange
+                      Play reply
                     </Btn>
                   )}
-                  {m.summaryAttachment && (
-                    <aside aria-label="Shared summary">
-                      {m.summaryAttachment.text}
-                    </aside>
+                {m.role === "assistant" &&
+                  m.careProposal &&
+                  m.careProposal.id !== recoveredDraft?.id && (
+                    <CareActionCard
+                      key={m.careProposal.id}
+                      proposal={m.careProposal}
+                      active={m.id === history.items.at(-1)?.id}
+                      onConfirmationChange={
+                        m.id === history.items.at(-1)?.id
+                          ? (id) => {
+                              visibleCareConfirmation.current = id;
+                            }
+                          : undefined
+                      }
+                    />
                   )}
-                  {m.clinicalAttachments?.map((attachment) => (
-                    <aside key={attachment.eventId}>
-                      <strong>Reviewed patient-record entry</strong>
-                      <p>{attachment.text}</p>
-                    </aside>
-                  ))}
-                  <p className="message-content">
-                    {m.role === "assistant" ? replyText(m.content) : m.content}
-                  </p>
-                  {m.role === "assistant" &&
-                    (m.replyInputMethod === "microphone" ||
-                      history.items.some(
-                        (p) =>
-                          p.id === m.reply_to && p.inputMethod === "microphone",
-                      )) && (
-                      <Btn
-                        sm
-                        className="chat-reply-playback"
-                        disabled={
-                          voice.recording !== "idle" ||
-                          voice.playback === "loading"
-                        }
-                        onClick={() => void voice.play(m.id)}
-                      >
-                        Play reply
-                      </Btn>
-                    )}
-                  {m.role === "assistant" &&
-                    m.careProposal &&
-                    m.careProposal.id !== recoveredDraft?.id && (
-                      <CareActionCard
-                        key={m.careProposal.id}
-                        proposal={m.careProposal}
-                        active={
-                          !connected.recipient &&
-                          m.id === history.items.at(-1)?.id
-                        }
-                        onConfirmationChange={
-                          m.id === history.items.at(-1)?.id
-                            ? (id) => {
-                                visibleCareConfirmation.current = id;
-                              }
-                            : undefined
-                        }
-                      />
-                    )}
-                  <details className="message-meta">
-                    <summary>
-                      {m.role === "patient"
-                        ? "Message details"
-                        : "AI interpretation · details"}
-                    </summary>
-                    <small>
-                      {new Date(m.captured_at).toLocaleString()} · captured in{" "}
-                      {m.timezone}
-                      {m.inputMethod === "microphone" &&
-                        " · Microphone transcript reviewed before sending"}
-                    </small>
-                    {m.transcription && (
-                      <p className="muted">
-                        Original machine transcript: {m.transcription.text}
-                      </p>
-                    )}
-                  </details>
-                  {m.state && m.state !== "succeeded" && (
-                    <p className="message-status">
-                      Reply: {m.state}{" "}
-                      {m.state === "failed" && generating !== m.id && (
-                        <Btn
-                          sm
-                          disabled={Boolean(generating)}
-                          onClick={() =>
-                            void generate(
-                              m.id,
-                              selected,
-                              m.inputMethod === "microphone",
-                            )
-                          }
-                        >
-                          Retry reply
-                        </Btn>
-                      )}
+                <details className="message-meta">
+                  <summary>
+                    {m.role === "patient"
+                      ? "Message details"
+                      : "AI interpretation · details"}
+                  </summary>
+                  <small>
+                    {new Date(m.captured_at).toLocaleString()} · captured in{" "}
+                    {m.timezone}
+                    {m.inputMethod === "microphone" &&
+                      " · Microphone transcript reviewed before sending"}
+                  </small>
+                  {m.transcription && (
+                    <p className="muted">
+                      Original machine transcript: {m.transcription.text}
                     </p>
                   )}
-                </div>
-              </article>
-            </div>
-          ))}
+                </details>
+                {m.state && m.state !== "succeeded" && (
+                  <p className="message-status">
+                    Reply: {m.state}{" "}
+                    {m.state === "failed" && generating !== m.id && (
+                      <Btn
+                        sm
+                        disabled={Boolean(generating)}
+                        onClick={() =>
+                          void generate(
+                            m.id,
+                            selected,
+                            m.inputMethod === "microphone",
+                          )
+                        }
+                      >
+                        Retry reply
+                      </Btn>
+                    )}
+                  </p>
+                )}
+              </div>
+            </article>
+          </div>
+        ))}
         {recoveredDraft && (
           <CareActionCard
             key={recoveredDraft.id}
@@ -899,9 +797,7 @@ export function ChatView() {
           />
         )}
         <label className="sr-only" htmlFor="chat-message">
-          {connected.recipient
-            ? `Message ${connected.recipient.name}`
-            : "Message Mhistree"}
+          Message Mhistree
         </label>
         <textarea
           id="chat-message"

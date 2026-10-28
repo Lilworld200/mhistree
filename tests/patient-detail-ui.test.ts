@@ -5,6 +5,8 @@ import { createRoot, type Root } from "react-dom/client";
 import { PatientDetailView } from "@/features/practitioner/patient-detail-view";
 import { MobileTopbarTarget } from "@/components/layout/mobile-topbar-actions";
 const request = vi.hoisted(() => vi.fn());
+const navigation = vi.hoisted(() => ({ replace: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => navigation }));
 vi.mock("@/lib/client-api", () => ({
   api: request,
   errorMessage: (e: Error) => e.message,
@@ -50,15 +52,19 @@ const workspace = {
 };
 async function mount(detail = workspace) {
   request.mockImplementation(async (_path, input) =>
-    _path.includes("view=timeline")
-      ? { items: [], nextCursor: null }
-      : input?.action === "ai"
-        ? {
-            text: "This is a reviewed-evidence suggestion.",
-            limitations: ["Limited shared history"],
-            evidenceIds: ["event-one"],
-          }
-        : detail,
+    _path.includes("view=analysis")
+      ? { findings: [], jobs: [] }
+      : _path.includes("view=ai-chat")
+        ? { items: [], nextCursor: null }
+        : _path.includes("view=timeline")
+          ? { items: [], nextCursor: null }
+          : input?.action === "ai"
+            ? {
+                text: "This is a reviewed-evidence suggestion.",
+                limitations: ["Limited shared history"],
+                evidenceIds: ["event-one"],
+              }
+            : detail,
   );
   host = document.createElement("div");
   document.body.append(host);
@@ -156,7 +162,7 @@ it("provides patient-scoped AI conversation and retains a failed question for re
   );
   expect(input.value).toBe("What reports relate to jogging?");
   expect(document.querySelector('[role="alert"]')?.textContent).toContain(
-    "kept",
+    "retained",
   );
   await act(async () =>
     document
@@ -247,9 +253,15 @@ it("opens the care conversation directly from its inbox link and retains its blu
       capabilities: { messages: true, work: true, requests: false },
       notifications: { health: true, messages: true, ai: false },
     } as typeof workspace);
-    expect(document.querySelector('[role="dialog"]')?.textContent).toContain(
-      "Authorized care tools: messages",
+    expect(navigation.replace).toHaveBeenCalledWith(
+      "/clinician/inbox?connection=connection-one",
     );
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(
+      host.querySelector(
+        'a[href="/clinician/inbox?connection=connection-one"]',
+      ),
+    ).not.toBeNull();
     expect(
       host.querySelector(
         '.patient-folder-tab [aria-label="Health (new update)"]',

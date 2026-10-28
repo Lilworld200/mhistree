@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { InboxFindings } from "@/features/messaging/inbox-findings";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
 import type { ActingContext } from "@/features/access/server";
@@ -230,6 +231,16 @@ export function TalkAssistant({
           ? "Discuss this patient’s care. Review and edit suggested findings before sending them as your message and saving them. You can also continue by typing."
           : "Read-only assistance: ask about this patient’s currently shared records."}
       </p>
+      <InboxFindings
+        connectionId={connectionId}
+        context={organizationContext ?? { kind: "direct", connectionId }}
+        onDenied={() => fail(new Error("ACCESS_REVOKED"))}
+        onOpened={() => {
+          setLoading(true);
+          setVersion(null);
+          setLoadAttempt((n) => n + 1);
+        }}
+      />
       {loading ? <p role="status">Loading your conversation…</p> : null}
       {error && <p role="alert">{error} Your unsent input is retained.</p>}
       {!loading && error && !page.items.length && (

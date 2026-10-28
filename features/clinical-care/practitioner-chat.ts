@@ -358,6 +358,14 @@ export async function confirmPractitionerReview(
       );
       if (consumed.rowCount) throw new DomainError("VERSION_CONFLICT");
       const original = await ownedRun(a, stage.response.runId, scope);
+      if (original.response.inboxFindingIds?.length) {
+        const active = await a.tx.query(
+          "select id from mhistree.care_pending_findings where id=any($1::uuid[]) and state='reviewing' and review_run_id=$2 for update",
+          [original.response.inboxFindingIds, original.id],
+        );
+        if (active.rowCount !== original.response.inboxFindingIds.length)
+          throw new DomainError("VERSION_CONFLICT");
+      }
       const proposals = z
         .array(storedPractitionerProposal)
         .parse(original.response.proposals);
@@ -394,12 +402,26 @@ export async function confirmPractitionerReview(
             {
               reviewId: stage.id,
               approvalMessageId,
+              ...(original.response.originCareMessageId
+                ? { originCareMessageId: original.response.originCareMessageId }
+                : {}),
             },
             entry.destination === "record"
               ? proposals.find((p) => p.id === entry.requestKey)?.occurredAt
               : undefined,
           ),
         );
+      if (original.response.inboxFindingIds?.length) {
+        const included = entries.map((e) => e.requestKey);
+        await a.tx.query(
+          "update mhistree.care_pending_findings set state=case when id=any($2::uuid[]) then $3 else 'pending' end,review_run_id=case when id=any($2::uuid[]) then review_run_id else null end,version=version+1 where id=any($1::uuid[])",
+          [
+            original.response.inboxFindingIds,
+            included,
+            entries[0].destination === "note" ? "private" : "recorded",
+          ],
+        );
+      }
       const response = {
         text:
           entries[0].destination === "note"

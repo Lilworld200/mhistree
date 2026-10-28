@@ -1,9 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { PatientAssistant } from "./patient-assistant";
 import { CareNotesView } from "@/features/clinical-care/care-notes-view";
 import { Btn } from "@/components/ui/button";
-import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
 import { useCareNotifications } from "./notification-context";
 import type { ActingContext } from "@/features/access/server";
@@ -91,10 +91,6 @@ export function WorkspaceView({
     clear: () => void;
   };
 }) {
-  const [reviewMessage, setReviewMessage] = useState<{
-    id: string;
-    content: string;
-  } | null>(null);
   const endpoint = organizationContext
     ? "/api/organizations/workspace"
     : "/api/practitioner/workspace";
@@ -103,20 +99,13 @@ export function WorkspaceView({
     : `connection=${connectionId}`;
   const [localData, setData] = useState<Workspace | null>(null),
     [message, setMessage] = useState(""),
-    [busy, setBusy] = useState(false),
-    [suggestion, setSuggestion] = useState<{
-      id: string;
-      text: string;
-      limitations: string[];
-      evidenceIds: string[];
-    } | null>(null);
+    [busy, setBusy] = useState(false);
   const refresh = useCallback(async () => {
     if (controller) return controller.refresh();
     try {
       setData(await api<Workspace>(`${endpoint}?${query}`));
     } catch (e) {
       setData(null);
-      setSuggestion(null);
       setMessage(errorMessage(e));
     }
   }, [endpoint, query, controller]);
@@ -130,7 +119,6 @@ export function WorkspaceView({
       .catch((error) => {
         if (active) {
           setData(null);
-          setSuggestion(null);
           setMessage(errorMessage(error));
         }
       });
@@ -144,37 +132,6 @@ export function WorkspaceView({
       window.removeEventListener("focus", refresh);
     };
   }, [refresh, endpoint, query, controller]);
-  const [patientOnline, setPatientOnline] = useState(false);
-  useEffect(() => {
-    if (section !== "messages" || organizationContext?.kind === "initial-care")
-      return;
-    let alive = true,
-      running = false;
-    async function pulse() {
-      if (running || document.visibilityState !== "visible") return;
-      running = true;
-      try {
-        const result = await api<{ online: boolean }>(endpoint, {
-          ...(organizationContext
-            ? { context: organizationContext }
-            : { connectionId }),
-          action: "presence",
-          data: {},
-        });
-        if (alive) setPatientOnline(result.online);
-      } catch {
-        if (alive) setPatientOnline(false);
-      } finally {
-        running = false;
-      }
-    }
-    void pulse();
-    const timer = setInterval(() => void pulse(), 15000);
-    return () => {
-      alive = false;
-      clearInterval(timer);
-    };
-  }, [section, organizationContext, connectionId, endpoint]);
   const data = controller
     ? controller.ready
       ? controller.data
@@ -224,7 +181,6 @@ export function WorkspaceView({
         ].includes(e.message)
       ) {
         setData(null);
-        setSuggestion(null);
         controller?.clear();
       }
     } finally {
@@ -473,61 +429,19 @@ export function WorkspaceView({
         </>
       )}
       {section === "all" && organizationContext?.kind !== "initial-care" && (
-        <>
-          <h2>Practitioner AI assistance</h2>
-          <form
-            className="account-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              const result = await act("ai", {
-                question: f.get("question"),
-                purpose: f.get("purpose"),
-                includeOwnNotes: Boolean(f.get("notes")),
-              });
-              if (result) setSuggestion(result as typeof suggestion);
+        <section id="talk-to-mhistree">
+          <h2>Talk to Mhistree</h2>
+          <PatientAssistant
+            connectionId={connectionId}
+            organizationContext={organizationContext}
+            writableCategories={data.permissions?.write ?? []}
+            onSaved={refresh}
+            onDenied={() => {
+              setData(null);
+              controller?.clear();
             }}
-          >
-            <label>
-              Purpose
-              <select name="purpose">
-                <option>summary</option>
-                <option>question</option>
-                <option>assessment</option>
-                <option>draft</option>
-              </select>
-            </label>
-            <label>
-              Question
-              <textarea name="question" required />
-            </label>
-            <label>
-              <input type="checkbox" name="notes" />
-              Include only my private notes in this author workspace
-            </label>
-            <Btn type="submit" disabled={busy}>
-              Generate suggestion
-            </Btn>
-          </form>
-          {suggestion && (
-            <article className="record-card">
-              <strong>AI suggestion — not finalized care</strong>
-              <p>{suggestion.text}</p>
-              {suggestion.limitations.map((l, i) => (
-                <p key={i}>{l}</p>
-              ))}
-              <p>
-                Evidence:{" "}
-                {suggestion.evidenceIds.join(", ") ||
-                  "No finalized evidence cited"}
-              </p>
-              <p>
-                Edit the suggestion in the draft form above before saving or
-                finalizing.
-              </p>
-            </article>
-          )}
-        </>
+          />
+        </section>
       )}
       {(section === "all" || section === "requests") &&
         organizationContext?.kind !== "initial-care" && (
@@ -689,177 +603,13 @@ export function WorkspaceView({
         )}
       {(section === "all" || section === "messages") &&
         organizationContext?.kind !== "initial-care" && (
-          <>
-            <h2 id="care-text-inbox">Care text inbox</h2>
-            {patientOnline && (
-              <p>Patient online · You can exchange direct care messages.</p>
-            )}
-            <p>
-              Separate from AI chat. Stored delivery does not mean the patient
-              has read or acted on a message.
-            </p>
-            {data.handoverSummary && (
-              <div
-                className="card handover-summary-card"
-                style={{
-                  marginBottom: "16px",
-                  borderLeft: "4px solid var(--accent, #3b82f6)",
-                  padding: "12px 16px",
-                  background: "var(--card-subtle, rgba(59, 130, 246, 0.05))",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: "0 0 6px 0",
-                    fontSize: "14px",
-                    fontWeight: 600,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <Icon n="spark" s={16} /> Patient Summary from AI
-                </h3>
-                <p
-                  style={{ margin: 0, fontSize: "13px", color: "var(--ink2)" }}
-                >
-                  {data.handoverSummary}
-                </p>
-                <small
-                  style={{
-                    display: "block",
-                    marginTop: "6px",
-                    color: "var(--ink3)",
-                    fontSize: "11px",
-                  }}
-                >
-                  Clinical summary only. Raw patient-AI chat remains private to
-                  the patient.
-                </small>
-              </div>
-            )}
-            {data.messages?.items.map((m) => (
-              <article className="record-card" key={m.id}>
-                <p>{m.content}</p>
-                {m.clinical_attachments?.map((attachment) => (
-                  <aside key={attachment.eventId}>
-                    <strong>Reviewed patient-record entry</strong>
-                    <p>{attachment.text}</p>
-                  </aside>
-                ))}
-                {m.own &&
-                  data.permissions?.write.includes("prescription") &&
-                  m.recommendations
-                    ?.filter((r) => ["pending", "planned"].includes(r.state))
-                    .map((r) => (
-                      <Btn
-                        key={r.id}
-                        sm
-                        disabled={busy}
-                        onClick={() =>
-                          void act("recommendation-withdraw", {
-                            id: r.id,
-                            version: r.version,
-                          })
-                        }
-                      >
-                        Withdraw {r.name} initiation follow-ups
-                      </Btn>
-                    ))}
-                {m.own && (
-                  <Btn sm onClick={() => setReviewMessage(m)}>
-                    Review findings for patient record
-                  </Btn>
-                )}
-                {m.summary_attachment && (
-                  <aside aria-label="Patient shared summary">
-                    <h4>Patient reviewed summary</h4>
-                    <p>{m.summary_attachment.text}</p>
-                  </aside>
-                )}
-                <small>
-                  {new Date(m.sent_at).toLocaleString()} · {m.delivery_state}
-                </small>
-              </article>
-            ))}
-            {reviewMessage && (
-              <section aria-label="Review care message findings">
-                <h3>Review findings</h3>
-                <PatientAssistant
-                  key={reviewMessage.id}
-                  connectionId={connectionId}
-                  organizationContext={organizationContext}
-                  captureOnly
-                  initialQuestion={reviewMessage.content}
-                  originCareMessageId={reviewMessage.id}
-                  writableCategories={data.permissions?.write ?? []}
-                  onSaved={() => void refresh()}
-                  onDenied={() => controller?.clear()}
-                />
-                <Btn onClick={() => setReviewMessage(null)}>Close review</Btn>
-              </section>
-            )}
-            <form
-              className="account-form"
-              onSubmit={async (e) => {
-                e.preventDefault();
-                const f = new FormData(e.currentTarget);
-                await act("message", {
-                  connectionId,
-                  requestKey: crypto.randomUUID(),
-                  content: f.get("content"),
-                  replyToMessageId: data.messages?.items.at(-1)?.id,
-                  ...(f.get("recommendationReviewed")
-                    ? {
-                        recommendation: {
-                          name: f.get("medicineName"),
-                          details: f.get("medicineDetails"),
-                          reviewed: true,
-                        },
-                      }
-                    : {}),
-                });
-              }}
+          <Btn asChild>
+            <Link
+              href={`/clinician/inbox?connection=${connectionId}${organizationContext ? `&context=${encodeURIComponent(JSON.stringify(organizationContext))}` : ""}`}
             >
-              <label>
-                Message
-                <textarea name="content" required />
-              </label>
-              <details>
-                <summary>Medication recommendation</summary>
-                <p>
-                  Records a reviewed recommendation only. Sending does not
-                  finalize a prescription or establish actual use. Include the
-                  exact name and details in your message.
-                </p>
-                <label>
-                  Exact medicine name
-                  <input name="medicineName" maxLength={200} />
-                </label>
-                <label>
-                  Recommendation details
-                  <input name="medicineDetails" maxLength={2000} />
-                </label>
-                <label>
-                  <input type="checkbox" name="recommendationReviewed" />I
-                  reviewed this recommendation
-                </label>
-              </details>
-              <Btn type="submit" disabled={busy}>
-                Send care message
-              </Btn>
-            </form>
-            <Btn
-              disabled={busy || !data.messages?.items.at(-1)?.sequence}
-              onClick={() =>
-                void act("read", {
-                  throughSequence: data.messages?.items.at(-1)?.sequence,
-                })
-              }
-            >
-              Mark displayed thread read
-            </Btn>
-          </>
+              Open Care inbox
+            </Link>
+          </Btn>
         )}
     </section>
   );

@@ -1,3 +1,4 @@
+import { scheduleInboxAnalysis } from "@/features/messaging/schedule-analysis";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
@@ -19,6 +20,7 @@ import {
 } from "@/features/appointments/server";
 import { careMessages, sendCareMessage } from "@/features/messaging/server";
 import { patientConnections } from "@/features/access/patient-controls";
+export const maxDuration = 240;
 export async function GET(request: NextRequest) {
   try {
     const pool = database(),
@@ -70,9 +72,14 @@ export async function POST(request: NextRequest) {
       return success(
         await changeAppointment(pool, session, { kind: "patient" }, data),
       );
-    return success(
-      await sendCareMessage(pool, session, { kind: "patient" }, data),
+    const result = await sendCareMessage(
+      pool,
+      session,
+      { kind: "patient" },
+      data,
     );
+    scheduleInboxAnalysis(session, { kind: "patient" });
+    return success(result);
   } catch (error) {
     return failure(error);
   }

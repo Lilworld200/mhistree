@@ -3,6 +3,8 @@ import { PatientAssistant } from "./patient-assistant";
 import { PatientActionButton } from "./patient-action-button";
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { NotificationDot } from "@/components/ui/notification-dot";
+import { useRouter } from "next/navigation";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 import { Btn } from "@/components/ui/button";
 import { Icon, type IconName } from "@/components/ui/icons";
@@ -197,6 +199,7 @@ export function PatientDetailView({
   connectionId: string;
   initialData?: Detail;
 }) {
+  const router = useRouter();
   const [panel, setPanel] = useState<Panel | null>(null);
   const trigger = useRef<HTMLElement | null>(null);
   const view =
@@ -213,20 +216,38 @@ export function PatientDetailView({
   useEffect(() => {
     const openLinkedPanel = () => {
       const hash = window.location.hash;
-      if (hash === "#care-text-inbox" && canMessage) setPanel("messages");
+      if (hash === "#care-text-inbox" && canMessage)
+        router.replace(`/clinician/inbox?connection=${connectionId}`);
+      else if (hash === "#talk-to-mhistree") setPanel("ai");
       else if (hash === "#private-work" && canWork) setPanel("work");
       else if (hash === "#requests-results" && canRequest) setPanel("requests");
     };
     openLinkedPanel();
     window.addEventListener("hashchange", openLinkedPanel);
     return () => window.removeEventListener("hashchange", openLinkedPanel);
-  }, [connectionId, canMessage, canWork, canRequest]);
+  }, [connectionId, canMessage, canWork, canRequest, router]);
   function tile(
     value: Panel,
     icon: IconName,
     description: string,
     hasNotification?: boolean,
   ) {
+    if (value === "messages")
+      return (
+        <Link
+          className="card patient-section-tile"
+          href={`/clinician/inbox?connection=${connectionId}`}
+        >
+          <span className="patient-tile-icon">
+            <Icon n={icon} />
+          </span>
+          <div>
+            <h2>Care inbox {hasNotification && <NotificationDot />}</h2>
+            <p>{description}</p>
+          </div>
+          <Icon n="chevronRight" />
+        </Link>
+      );
     return (
       <button
         type="button"

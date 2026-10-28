@@ -19,7 +19,7 @@ afterEach(async () => {
   host?.remove();
   vi.resetAllMocks();
 });
-it("attributes practitioner replies, requires recipient selection and sends direct text without AI generation or extraction", async () => {
+it("keeps private AI chat free of practitioner messages and direct-recipient switching", async () => {
   const recipient = {
     connectionId: "connection",
     practitionerId: "doctor",
@@ -43,11 +43,9 @@ it("attributes practitioner replies, requires recipient selection and sends dire
       },
     ],
   };
-  let deny = false;
   apiMock.mockImplementation(
     async (path: string, input?: { action: string }) => {
       if (path === "/api/chat/connected-care") {
-        if (input?.action === "send" && deny) throw new Error("ACCESS_REVOKED");
         return care;
       }
       if (path === "/api/chat")
@@ -64,64 +62,12 @@ it("attributes practitioner replies, requires recipient selection and sends dire
   document.body.append(host);
   root = createRoot(host);
   await act(async () => root.render(createElement(ChatView)));
-  expect(host.textContent).toContain("A synthetic practitioner response.");
-  const select = host.querySelector("select")!;
-  expect(select.value).toBe("");
-  await act(async () => {
-    select.value = "connection:doctor";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(host.textContent).toContain("Mhistree will not reply");
-  await act(async () => {
-    const field = host.querySelector("#chat-message")!;
-    Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.set!.call(field, "My deliberate direct response.");
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () =>
-    host
-      .querySelector("form.composer")!
-      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
-  );
-  expect(
-    apiMock.mock.calls.some(
-      ([path, input]) =>
-        path === "/api/chat/connected-care" && input?.action === "send",
-    ),
-  ).toBe(true);
-  expect(
-    apiMock.mock.calls.some(
-      ([path, input]) =>
-        path === "/api/extraction" || input?.action === "generate",
-    ),
-  ).toBe(false);
-  await act(async () => {
-    [...host.querySelectorAll("button")]
-      .find((b) => b.textContent === "Return to Mhistree")!
-      .click();
-  });
-  expect(select.value).toBe("");
-  deny = true;
-  await act(async () => {
-    select.value = "connection:doctor";
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    const field = host.querySelector("#chat-message")!;
-    Object.getOwnPropertyDescriptor(
-      HTMLTextAreaElement.prototype,
-      "value",
-    )!.set!.call(field, "Keep this unsent draft.");
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () =>
-    host
-      .querySelector("form.composer")!
-      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })),
-  );
-  expect(select.value).toBe("");
   expect(host.textContent).not.toContain("A synthetic practitioner response.");
-  expect(host.querySelector<HTMLTextAreaElement>("#chat-message")!.value).toBe(
-    "Keep this unsent draft.",
-  );
+  expect(
+    host.querySelector('select[aria-label="Conversation recipient"]'),
+  ).toBeNull();
+  expect(host.textContent).not.toContain("Return to Mhistree");
+  expect(
+    apiMock.mock.calls.some(([path]) => path === "/api/chat/connected-care"),
+  ).toBe(false);
 });

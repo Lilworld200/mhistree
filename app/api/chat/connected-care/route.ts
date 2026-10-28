@@ -1,24 +1,12 @@
 import { NextRequest } from "next/server";
-import { database } from "@/lib/db/client";
-import {
-  mutationGuard,
-  jsonBody,
-  sessionFrom,
-  success,
-  failure,
-} from "@/lib/http";
-import { connectedChat } from "@/features/messaging/connected-chat";
+import { DomainError } from "@/lib/errors";
+import { failure, mutationGuard } from "@/lib/http";
+/** Combined AI/care sessions are retired; refresh and use the dedicated inbox. */
 export async function POST(request: NextRequest) {
   try {
     mutationGuard(request);
-    return success(
-      await connectedChat(
-        database(),
-        sessionFrom(request),
-        await jsonBody(request, 131072),
-      ),
-    );
-  } catch (error) {
-    return failure(error);
+    throw new DomainError("VERSION_CONFLICT");
+  } catch (e) {
+    return failure(e);
   }
 }

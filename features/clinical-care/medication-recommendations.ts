@@ -30,6 +30,7 @@ export async function syncReviewedMedication(
     text: string;
     eventId: string;
     useStatus?: string;
+    originCareMessageId?: string;
   },
 ) {
   if (
@@ -38,17 +39,32 @@ export async function syncReviewedMedication(
   )
     return;
   if (d.category === "prescription")
-    await a.tx.query(
-      "insert into mhistree.medication_recommendations(patient_person_id,author_account_id,connection_id,source_event_id,name,details) values($1,$2,$3,$4,$5,$6) on conflict(source_event_id,name) do nothing",
-      [
-        d.patientPersonId,
-        a.actor.accountId,
-        a.context.connectionId,
-        d.eventId,
-        d.name,
-        d.text.slice(0, 2000),
-      ],
-    );
+    if (d.originCareMessageId) {
+      await a.tx.query(
+        "insert into mhistree.medication_recommendations(patient_person_id,author_account_id,connection_id,source_message_id,name,details,reviewed_event_id) values($1,$2,$3,$4,$5,$6,$7) on conflict(source_message_id,name) do update set reviewed_event_id=excluded.reviewed_event_id",
+        [
+          d.patientPersonId,
+          a.actor.accountId,
+          a.context.connectionId,
+          d.originCareMessageId,
+          d.name,
+          d.text.slice(0, 2000),
+          d.eventId,
+        ],
+      );
+      return;
+    } else
+      await a.tx.query(
+        "insert into mhistree.medication_recommendations(patient_person_id,author_account_id,connection_id,source_event_id,name,details) values($1,$2,$3,$4,$5,$6) on conflict(source_event_id,name) do nothing",
+        [
+          d.patientPersonId,
+          a.actor.accountId,
+          a.context.connectionId,
+          d.eventId,
+          d.name,
+          d.text.slice(0, 2000),
+        ],
+      );
   if (
     d.category === "medication-use" &&
     ["taking", "stopped"].includes(d.useStatus ?? "")
@@ -121,6 +137,8 @@ export function medicationStatement(
     question === `Have you started taking ${name}?` ||
     question === `When, if at all, do you plan to start ${name}?`;
   if (!named && !exact) return null;
+  // A leading acknowledgement does not replace the explicit first-person report.
+  text = text.replace(/^\s*yes[,!.]?\s+(?=i\b)/i, "");
   if (
     text.includes("?") ||
     /\b(?:unsure|uncertain|not sure|never|did not|didn.t)\b/i.test(text)
@@ -131,7 +149,11 @@ export function medicationStatement(
   const target = named ? escaped : "(?:it|that medicine|this medicine)";
   const matches = (pattern: string) =>
     new RegExp(`^\\s*(?:${pattern})\\s+${target}\\b`, "i").test(text);
-  if (matches("i (?:(?:have )?stopped taking|am no longer taking)"))
+  if (
+    matches(
+      "i (?:(?:have )?stopped taking|am no longer taking)|i've stopped taking",
+    )
+  )
     return "stopped" as const;
   if (
     matches("i (?:won't|will not|don't want to) (?:start(?: taking)?|take)") ||
@@ -140,7 +162,9 @@ export function medicationStatement(
   )
     return "declined" as const;
   if (
-    matches("i(?:'m| am) (?:now )?taking|i (?:have )?started taking|i take") ||
+    matches(
+      "i(?:'m| am) (?:now )?taking|i (?:have )?started taking|i(?:'ve| have) been taking|i've started taking|i take",
+    ) ||
     (question === `Have you started taking ${name}?` &&
       /^yes[.!]?$/i.test(text.trim()))
   )
