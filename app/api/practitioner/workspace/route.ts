@@ -1,4 +1,9 @@
 import {
+  practitionerChatHistory,
+  preparePractitionerReview,
+  confirmPractitionerReview,
+} from "@/features/clinical-care/practitioner-chat";
+import {
   saveCareNote,
   privateNotes,
 } from "@/features/clinical-care/care-notes";
@@ -43,6 +48,15 @@ export async function GET(r: NextRequest) {
       .parse(r.nextUrl.searchParams.get("connection"));
     const pool = database(),
       session = sessionFrom(r);
+    if (r.nextUrl.searchParams.get("view") === "ai-chat")
+      return success(
+        await practitionerChatHistory(
+          pool,
+          session,
+          { kind: "direct", connectionId },
+          r.nextUrl.searchParams.get("cursor") ?? undefined,
+        ),
+      );
     if (r.nextUrl.searchParams.get("view") === "private-notes")
       return success(
         await privateNotes(
@@ -91,6 +105,8 @@ export async function POST(r: NextRequest) {
           "result",
           "ai",
           "ai-save",
+          "ai-review",
+          "ai-review-confirm",
           "message",
           "appointment",
           "appointment-create",
@@ -105,6 +121,14 @@ export async function POST(r: NextRequest) {
     const pool = database(),
       session = sessionFrom(r),
       context = { kind: "direct" as const, connectionId: d.connectionId };
+    if (d.action === "ai-review")
+      return success(
+        await preparePractitionerReview(pool, session, context, d.data),
+      );
+    if (d.action === "ai-review-confirm")
+      return success(
+        await confirmPractitionerReview(pool, session, context, d.data),
+      );
     if (d.action === "recommendation-withdraw") {
       const data = z
         .object({ id: z.uuid(), version: z.number().int().positive() })

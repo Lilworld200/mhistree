@@ -2,7 +2,7 @@
 import { afterEach, it, expect, vi } from "vitest";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { PatientAssistant } from "@/features/practitioner/patient-assistant";
+import { LegacyPatientAssistant as PatientAssistant } from "@/features/practitioner/patient-assistant";
 const request = vi.hoisted(() => vi.fn());
 vi.mock("@/lib/client-api", () => ({
   api: request,

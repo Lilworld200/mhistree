@@ -1,4 +1,6 @@
 "use client";
+import { TalkAssistant } from "./talk-assistant";
+import type { ComponentProps } from "react";
 import { useRef, useState } from "react";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
@@ -12,7 +14,7 @@ import {
 
 import { ProposalReview } from "@/features/clinical-care/proposal-review";
 
-export function PatientAssistant({
+export function LegacyPatientAssistant({
   connectionId,
   summary = false,
   writableCategories = [],
@@ -260,5 +262,21 @@ export function PatientAssistant({
         </p>
       )}
     </div>
+  );
+}
+
+export function PatientAssistant(
+  props: ComponentProps<typeof LegacyPatientAssistant>,
+) {
+  return props.captureOnly || props.originCareMessageId ? (
+    <LegacyPatientAssistant {...props} />
+  ) : (
+    <TalkAssistant
+      key={JSON.stringify([
+        props.organizationContext ?? { connectionId: props.connectionId },
+        props.writableCategories ?? [],
+      ])}
+      {...props}
+    />
   );
 }

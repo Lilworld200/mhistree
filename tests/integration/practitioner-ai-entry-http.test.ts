@@ -4,7 +4,10 @@ import { NextRequest } from "next/server";
 import { testDatabase } from "../helpers/postgres";
 import { staffFixture } from "../helpers/fixtures";
 import { initiateDirectConnection } from "@/features/practitioner/patients";
-import { POST } from "@/app/api/practitioner/workspace/route";
+import {
+  POST,
+  GET as workspaceGET,
+} from "@/app/api/practitioner/workspace/route";
 import { GET as recordsGET } from "@/app/api/records/route";
 import { GET as healthGET } from "@/app/api/health/route";
 const { databaseMock, gatewayMock } = vi.hoisted(() => ({
@@ -143,4 +146,62 @@ it("transports the reviewed chat save to patient timeline and Health, with no fa
   expect((await health.json()).data.items).toEqual([
     expect.objectContaining({ id: eventId, category: "allergy" }),
   ]);
+});
+
+it("transports editable review preparation and normal-text confirmation through the workspace API", async () => {
+  const generated = await POST(
+    request("ai", {
+      question: text,
+      purpose: "question",
+      includeOwnNotes: false,
+      conversation: true,
+      timezone: "Africa/Lagos",
+    }),
+  );
+  const run = (await generated.json()).data;
+  const { careNoteFields } =
+    await import("@/features/clinical-care/care-note-schema");
+  const prepared = await POST(
+    request("ai-review", {
+      runId: run.id,
+      destination: "record",
+      timezone: "Africa/Lagos",
+      items: [
+        {
+          id: run.proposals[0].id,
+          fields: careNoteFields.parse({
+            name: "latex",
+            certainty: "confirmed",
+          }),
+        },
+      ],
+    }),
+  );
+  expect(prepared.status).toBe(200);
+  const review = (await prepared.json()).data;
+  const payload = { reviewId: review.id, reviewed: true };
+  expect(
+    (
+      await POST(
+        request("ai-review-confirm", payload, "https://foreign.example"),
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (await POST(request("ai-review-confirm", { ...payload, reviewed: false })))
+      .status,
+  ).toBe(422);
+  const confirmed = await POST(request("ai-review-confirm", payload));
+  expect(confirmed.status).toBe(200);
+  const message = (await confirmed.json()).data;
+  expect(message.question).toContain("latex");
+  expect(message.proposals).toEqual([]);
+  const restored = await workspaceGET(
+    new NextRequest(
+      `http://127.0.0.1:3101/api/practitioner/workspace?connection=${connectionId}&view=ai-chat`,
+      { headers: { cookie: `mhistree-session=${doctor.session}` } },
+    ),
+  );
+  expect(restored.status).toBe(200);
+  expect((await restored.json()).data.items.at(-1).id).toBe(message.id);
 });

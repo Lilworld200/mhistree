@@ -1,6 +1,7 @@
 import "server-only";
 import type { Pool, PoolClient } from "pg";
 import { z } from "zod";
+import type { contributionInput } from "@/features/health-records/schema";
 import {
   withAccess,
   type ActingContext,
@@ -32,7 +33,7 @@ async function notePatient(a: AccessTransaction) {
 }
 
 /** Lock current authority metadata before the restricted role; no clinical rows or grants are broadened. */
-async function lockNoteContext(
+export async function lockNoteContext(
   tx: PoolClient,
   actor: AccessTransaction["actor"],
   context: ActingContext,
@@ -62,64 +63,79 @@ export async function saveCareNote(
     session,
     context,
     async (a) => {
-      const patient = await notePatient(a);
-      if (patient !== d.patientPersonId) throw new DomainError("ACCESS_DENIED");
-      if (["medication-use", "prescription"].includes(d.category))
-        await a.tx.query(
-          "select pg_advisory_xact_lock(hashtextextended($1,0))",
-          [`medication-workflow:${patient}`],
-        );
-      const now = new Date(),
-        day = localDay(now, d.timezone);
-      if (
-        d.destination === "record" &&
-        [d.fields.actualStart, d.fields.actualEnd].some(
-          (date) => date && date > day,
-        )
-      )
-        throw new DomainError("VALIDATION_FAILED");
-      const body = careNoteBody(d);
-      const work = await saveWorkInAccess(a, {
-        requestKey: d.requestKey,
-        patientPersonId: patient,
-        kind: d.destination === "note" ? "private-note" : "draft",
-        category: d.category,
-        body,
-        occurredAt:
-          d.destination === "record" && d.fields.eventDate
-            ? resolveTime(d.fields.eventDate, now, d.timezone)
-            : { precision: "unknown" },
-        timezone: d.timezone,
-      });
-      if (d.destination === "note")
-        return { destination: "note" as const, workId: work.id, eventId: null };
-      const status =
-        d.category === "medication-use"
-          ? d.fields.useStatus === "taking"
-            ? "active"
-            : d.fields.useStatus === "stopped"
-              ? "resolved"
-              : "unknown"
-          : d.fields.status;
-      const result = await finalizeEntryInAccess(a, {
-        id: work.id,
-        version: 1,
-        requestKey: d.requestKey,
-        reviewed: true,
-        status,
-      });
-      await syncReviewedMedication(a, {
-        patientPersonId: patient,
-        category: d.category,
-        name: d.fields.name,
-        text: body.text,
-        eventId: result.eventId,
-        useStatus: body.medication?.useStatus,
-      });
-      return { destination: "record" as const, workId: work.id, ...result };
+      return saveCareNoteInAccess(a, d);
     },
     (tx, actor) => lockNoteContext(tx, actor, context),
   );
+}
+
+export async function saveCareNoteInAccess(
+  a: AccessTransaction,
+  d: z.infer<typeof careNoteInput>,
+  aiRunId?: string,
+  review?: { reviewId: string; approvalMessageId: string },
+  occurredAt?: z.infer<typeof contributionInput.shape.occurredAt>,
+) {
+  const patient = await notePatient(a);
+  if (patient !== d.patientPersonId) throw new DomainError("ACCESS_DENIED");
+  if (["medication-use", "prescription"].includes(d.category))
+    await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
+      `medication-workflow:${patient}`,
+    ]);
+  const now = new Date(),
+    day = localDay(now, d.timezone);
+  if (
+    d.destination === "record" &&
+    [d.fields.actualStart, d.fields.actualEnd].some(
+      (date) => date && date > day,
+    )
+  )
+    throw new DomainError("VALIDATION_FAILED");
+  const body = careNoteBody(d);
+  const work = await saveWorkInAccess(a, {
+    requestKey: d.requestKey,
+    ...(aiRunId ? { aiRunId } : {}),
+    patientPersonId: patient,
+    kind: d.destination === "note" ? "private-note" : "draft",
+    category: d.category,
+    body,
+    occurredAt:
+      d.destination === "record" && d.fields.eventDate
+        ? resolveTime(d.fields.eventDate, now, d.timezone)
+        : (occurredAt ?? { precision: "unknown" }),
+    timezone: d.timezone,
+  });
+  if (review)
+    await a.tx.query(
+      "update mhistree.clinical_work set ai_provenance=ai_provenance || $2::jsonb where id=$1",
+      [work.id, JSON.stringify(review)],
+    );
+  if (d.destination === "note")
+    return { destination: "note" as const, workId: work.id, eventId: null };
+  const status =
+    d.category === "medication-use"
+      ? d.fields.useStatus === "taking"
+        ? "active"
+        : d.fields.useStatus === "stopped"
+          ? "resolved"
+          : "unknown"
+      : d.fields.status;
+  const result = await finalizeEntryInAccess(a, {
+    id: work.id,
+    version: 1,
+    requestKey: d.requestKey,
+    reviewed: true,
+    status,
+  });
+  await syncReviewedMedication(a, {
+    patientPersonId: patient,
+    category: d.category,
+    name: d.fields.name,
+    text: body.text,
+    eventId: result.eventId,
+    useStatus: body.medication?.useStatus,
+  });
+  return { destination: "record" as const, workId: work.id, ...result };
 }
 
 const cursor = z

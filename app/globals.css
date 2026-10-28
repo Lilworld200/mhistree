@@ -4643,3 +4643,15 @@ textarea:focus-visible {
 .care-recipient-card small { white-space: normal; }
 .care-send-question { font-weight: 650; }
 .care-delivery-results { padding-left: 20px; }
+
+/* Shared Care Notes inputs inside a combined practitioner AI review. */
+.practitioner-finding-card { min-width:0; max-width:none; }
+.practitioner-finding-card > fieldset:not(.care-note-destinations) { min-width:0; margin:0; padding:18px 0; border:0; border-top:1px solid var(--bs); display:grid; gap:16px; }
+.practitioner-finding-card legend { padding:0 8px 0 0; font-weight:800; color:var(--ink); }
+.practitioner-finding-card label { min-width:0; }
+.practitioner-finding-card label small { color:var(--ink3); font-size:12px; font-weight:400; }
+.practitioner-finding-card .care-note-review { display:flex; align-items:flex-start; gap:10px; }
+.practitioner-finding-card .care-note-review input { flex:none; width:18px; height:18px; margin-top:4px; accent-color:var(--ink); }
+.practitioner-finding-card .btn { max-width:100%; min-height:46px; height:auto; white-space:normal; padding-block:12px; }
+
+.practitioner-finding-card .care-note-field-grid { align-items:start; }
