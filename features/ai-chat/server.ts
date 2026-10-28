@@ -36,6 +36,7 @@ import {
   confirmCareMessages,
   decoratedProposal,
   invalidateCareConfirmation,
+  latestCareProposal,
 } from "./care-delivery";
 import {
   medicationSafetyContext,
@@ -46,6 +47,9 @@ import {
   uncertainMedicineName,
   requestedCareAction,
   unresolvedMedicineName,
+  careDraftRecovery,
+  previouslyRequestedCare,
+  claimsCareOperation,
 } from "./health-context";
 const timezone = z.string().refine((v) => {
   try {
@@ -147,7 +151,13 @@ export async function conversationHistory(
     ).rows;
     const more = rows.length > 50;
     const page = rows.slice(0, 50);
+    const latestCare = await latestCareProposal(a, id);
     return {
+      pendingCareProposal:
+        latestCare &&
+        ["draft", "partial", "failed", "sending"].includes(latestCare.state)
+          ? latestCare
+          : null,
       memoryReady: await memoryReady(a, id),
       items: page.reverse().map((m) => ({
         ...m,
@@ -425,12 +435,24 @@ async function generatePatientReply(
       history,
       prepared.message.content,
     );
+    const latestCare = await withAccess(
+      pool,
+      session,
+      { kind: "patient" },
+      (a) => latestCareProposal(a, prepared.message.conversation_id),
+    );
+    const recovery = careDraftRecovery(prepared.message.content);
+    const recoverMissingDraft =
+      recovery &&
+      !latestCare &&
+      previouslyRequestedCare(history, prepared.message.content);
     const previousQuestion = [...history]
       .reverse()
       .find((m) => m.role === "assistant")?.dialogue?.question;
     const needsContact =
       plan.contact ||
       acceptedContact ||
+      recoverMissingDraft ||
       (plan.medication &&
         previousQuestion?.kind === "symptom" &&
         /^(yes|yeah|yep)[.! ]*$/i.test(prepared.message.content.trim()));
@@ -524,6 +546,21 @@ async function generatePatientReply(
         recommendationPolicy:
           "Recommendations and plans never prove actual use. Do not initiate medication follow-ups yourself; the server adds one exact eligible question and records its delivery. Never interpret a practitioner yes as patient use.",
         contactPreparationAccepted: acceptedContact,
+        careWorkflowState: latestCare
+          ? {
+              kind: latestCare.kind,
+              state: latestCare.state,
+              deliveries: latestCare.deliveries?.map((d) => ({
+                state: d.state,
+              })),
+              meaning:
+                "Only these stored receipts establish a send. Pending drafts are private and unsent.",
+            }
+          : {
+              state: "none",
+              meaning:
+                "No saved proposal exists. Do not claim a draft or send exists.",
+            },
         previousQuestion,
         appointmentRecipients: bookingOptions.recipients,
         appointmentDiscoveryStatus: bookingOptions.status,
@@ -579,12 +616,42 @@ async function generatePatientReply(
     const action = requestedCareAction(
       generated,
       prepared.message.content,
-      acceptedContact,
+      acceptedContact || recoverMissingDraft,
     );
+    // Reopening a saved draft never creates another proposal or repeats a stored send.
+    if (recovery && latestCare && dialogue.decision !== "urgent") {
+      if (latestCare.state === "completed") {
+        reply =
+          latestCare.kind === "message"
+            ? "Your message is already saved to Care inbox. That does not mean it has been read. You can check Care inbox for the saved copy."
+            : "Your appointment request is already saved. Practitioner acceptance is separate; check Appointments for its status.";
+      } else if (latestCare.state === "dismissed") {
+        reply =
+          "That draft was dismissed. No additional message has been sent. Ask me to prepare a new message if you want a new review.";
+      } else if (latestCare.state === "sending") {
+        reply =
+          "Delivery is still being checked. Review the draft and delivery results below before retrying; no additional message has been sent by this reply.";
+      } else if (latestCare.kind === "appointment") {
+        reply =
+          "Your saved appointment request draft is shown below. Review the recipient and available times, then use Request appointment. No appointment has been requested by this reply.";
+      } else {
+        const stored =
+          latestCare.deliveries?.filter((d) => d.state === "stored").length ??
+          0;
+        reply = stored
+          ? "Your saved draft and delivery results are shown below. Some copies were saved to Care inbox; review the remaining destinations before retrying."
+          : "Your saved draft is shown below. Review its text and recipients, then use Send message. Nothing has been sent from this draft.";
+      }
+      dialogue.question = { kind: "none", subject: "" };
+    }
+    const proposalAction = recovery && latestCare ? null : action;
     if (
-      acceptedContact &&
-      action?.kind === "message" &&
-      dialogue.decision !== "urgent"
+      proposalAction?.kind === "message" &&
+      dialogue.decision !== "urgent" &&
+      (acceptedContact ||
+        recoverMissingDraft ||
+        !generated.action ||
+        claimsCareOperation(reply))
     ) {
       reply =
         discovery.status === "available" &&
@@ -593,6 +660,39 @@ async function generatePatientReply(
           : "Your private question is drafted for review. We still need to verify an eligible connected recipient before it can be sent.";
       dialogue.question = { kind: "none", subject: "" };
       dialogue.decision = "clinical_review";
+    }
+    if (
+      proposalAction?.kind === "appointment" &&
+      dialogue.decision !== "urgent"
+    ) {
+      reply =
+        "Review the appointment request below and choose an eligible recipient and advertised time. No appointment has been requested or booked yet.";
+      dialogue.question = { kind: "none", subject: "" };
+    }
+    if (
+      !proposalAction &&
+      dialogue.decision !== "urgent" &&
+      !(recovery && latestCare) &&
+      claimsCareOperation(reply)
+    ) {
+      reply =
+        latestCare &&
+        ["draft", "partial", "failed", "sending"].includes(latestCare.state)
+          ? "Your saved draft and any delivery results are shown below. Review them and use the card's Send message button to confirm any remaining delivery."
+          : "I haven't prepared or sent a new care message. Would you like me to prepare a message for you to review?";
+      dialogue.question = {
+        kind: latestCare ? "none" : "offer_contact",
+        subject: "care message preparation",
+      };
+    }
+    if (dialogue.decision === "urgent" && claimsCareOperation(reply)) {
+      // Preserve urgent advice while removing unsupported workflow assertions.
+      const advice = reply
+        .split(/(?<=[.!?])\s+/)
+        .filter((sentence) => !claimsCareOperation(sentence))
+        .join(" ");
+      reply = `${advice || "Seek urgent real-world medical help now if you may be in immediate danger."} No care message has been sent by this reply.`;
+      dialogue.question = { kind: "none", subject: "" };
     }
     const draftText = groundedContactDraft(
       history,
@@ -673,6 +773,18 @@ async function generatePatientReply(
         );
         if (publicationMemory.fingerprint !== memory.fingerprint)
           throw new DomainError("ACCESS_REVOKED");
+        const publicationCare = await latestCareProposal(
+          a,
+          prepared.message.conversation_id,
+        );
+        if (
+          publicationCare?.id !== latestCare?.id ||
+          publicationCare?.version !== latestCare?.version ||
+          publicationCare?.state !== latestCare?.state ||
+          JSON.stringify(publicationCare?.deliveries) !==
+            JSON.stringify(latestCare?.deliveries)
+        )
+          throw new DomainError("VERSION_CONFLICT");
         const done = await a.tx.query(
           "update mhistree.chat_generations set state='succeeded',lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running' returning message_id",
           [messageId, lease],
@@ -693,7 +805,7 @@ async function generatePatientReply(
           throw new DomainError("VERSION_CONFLICT");
         const followup =
           dialogue.decision !== "urgent" &&
-          !action &&
+          !proposalAction &&
           plan.medication &&
           !reply.includes("?")
             ? freshRecommendations.due.find((r) =>
@@ -723,12 +835,12 @@ async function generatePatientReply(
             "insert into mhistree.medication_followups(recommendation_id,local_date,reply_message_id,question) values($1,$2,$3,$4) on conflict do nothing",
             [followup.id, freshRecommendations.day, replyId, question],
           );
-        if (action)
+        if (proposalAction)
           await storeCareProposal(
             a,
             replyId,
-            action,
-            action.kind === "message" ? messageOptions : bookingOptions,
+            proposalAction,
+            proposalAction.kind === "message" ? messageOptions : bookingOptions,
             prepared.message.content,
             draftText,
           );

@@ -67,6 +67,26 @@ export async function decoratedProposal(
     confirmation,
   };
 }
+/** Latest workflow state is read from storage, independently of model prose/history length. */
+export async function latestCareProposal(
+  a: AccessTransaction,
+  conversationId: string,
+) {
+  const row = (
+    await a.tx.query(
+      `select p.*,m.conversation_id as "conversationId",m.id as "replyMessageId" from mhistree.chat_care_proposals p
+     join mhistree.chat_messages m on m.id=p.reply_message_id
+     where m.conversation_id=$1 and p.account_id=$2 order by m.sequence desc limit 1`,
+      [conversationId, a.actor.accountId],
+    )
+  ).rows[0];
+  return row
+    ? {
+        ...(await decoratedProposal(a, row)),
+        replyMessageId: row.replyMessageId as string,
+      }
+    : null;
+}
 export async function invalidateCareConfirmation(
   a: AccessTransaction,
   conversationId: string,

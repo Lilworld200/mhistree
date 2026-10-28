@@ -10,6 +10,9 @@ import {
   contactOfferAccepted,
   requestedCareAction,
   unresolvedMedicineName,
+  careDraftRecovery,
+  previouslyRequestedCare,
+  claimsCareOperation,
 } from "@/features/ai-chat/health-context";
 const symptom = {
   topic: "health",
@@ -89,6 +92,98 @@ it("distinguishes symptom agreement from contact preparation", () => {
     ),
   ).toBe(true);
 });
+it("accepts preparation wording only after the exact single contact offer, without broadening Send consent", () => {
+  const offer = [
+    {
+      role: "assistant",
+      content: "Would you like me to prepare a message for your doctor?",
+      dialogue: { question: { kind: "other", subject: "care" } },
+    },
+  ];
+  for (const answer of [
+    "okay do so",
+    "ok please do that",
+    "please do",
+    "yes",
+  ]) {
+    expect(contactOfferAccepted(offer, answer)).toBe(true);
+  }
+  expect(confirmationAnswer("okay do so")).toBeNull();
+  expect(
+    contactOfferAccepted(
+      [
+        {
+          role: "assistant",
+          content: "Are you still having pain?",
+          dialogue: { question: { kind: "offer_contact", subject: "pain" } },
+        },
+      ],
+      "okay do so",
+    ),
+  ).toBe(false);
+  expect(
+    contactOfferAccepted(
+      [
+        {
+          role: "assistant",
+          content:
+            "Would you like to ask your doctor? Are you taking medicine?",
+        },
+      ],
+      "yes",
+    ),
+  ).toBe(false);
+  expect(
+    contactOfferAccepted(
+      [...offer, { role: "patient", content: "Something else" }],
+      "yes",
+    ),
+  ).toBe(false);
+});
+
+it("requires patient preparation authority to recover a missing draft, not an assistant claim", () => {
+  const history = [
+    { role: "patient", content: "I have an unusual taste this morning." },
+    {
+      role: "assistant",
+      content: "Would you like me to prepare a message for your doctor?",
+    },
+    { role: "patient", content: "okay do so" },
+    { role: "assistant", content: "I've prepared a draft." },
+  ];
+  expect(previouslyRequestedCare(history, "I don't see any draft?")).toBe(true);
+  expect(previouslyRequestedCare(history.slice(-1), "resend it please")).toBe(
+    false,
+  );
+  expect(
+    previouslyRequestedCare(
+      [...history, { role: "patient", content: "never mind" }],
+      "where is the draft?",
+    ),
+  ).toBe(false);
+  for (const text of [
+    "where is it, I don't see the message?",
+    "I don't see any draft?",
+    "resend it cause I am not seeing anything",
+  ])
+    expect(careDraftRecovery(text)).toBe(true);
+  for (const text of [
+    "I've prepared a message for your doctor.",
+    "The message draft is ready for your review.",
+    "The draft should appear as a review card.",
+    "Resending the draft now.",
+    "I've sent the message to your doctor.",
+  ])
+    expect(claimsCareOperation(text)).toBe(true);
+  expect(
+    claimsCareOperation("Would you like help preparing a message for review?"),
+  ).toBe(false);
+  expect(careDraftRecovery("I suddenly can't see anything.")).toBe(false);
+  expect(
+    claimsCareOperation("I've put together a short breathing exercise."),
+  ).toBe(false);
+});
+
 it("builds a nonblank multi-turn question without inventing medicine use", () => {
   const history = [
     { role: "patient", content: "I am considering co trimazole" },
@@ -184,6 +279,13 @@ it("requires patient intent before preparing a model-suggested message", () => {
     requestedCareAction(reply, "I want to take co trimazole", false),
   ).toBeNull();
   expect(requestedCareAction(reply, "yes", true)?.kind).toBe("message");
+  expect(
+    requestedCareAction(
+      { ...reply, action: { ...reply.action, kind: "appointment" } },
+      "okay do so",
+      true,
+    )?.kind,
+  ).toBe("message");
 });
 
 it("keeps spelling uncertainty through yes and accepts the patient's corrected name", () => {

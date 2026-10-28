@@ -72,10 +72,102 @@ export function replyDialogue(reply: PatientReply, health: boolean): Dialogue {
 }
 
 export function contactOfferAccepted(history: ContextTurn[], current: string) {
-  const last = [...history].reverse().find((m) => m.role === "assistant");
+  const turns = precedingCareTurns(history, current);
+  const last = turns.at(-1);
+  const offer = last?.content ?? "";
+  const explicitOffer =
+    /\b(?:would you like|would it help|do you want|shall i|should i|can i|could i|may i|want me to|want help)\b/i.test(
+      offer,
+    ) &&
+    (/\b(?:ask(?:ing)?|contact(?:ing)?|messag(?:e|ing)|speak(?:ing)?|talk(?:ing)?|send(?:ing)?)\b.{0,80}\b(?:doctors?|practitioners?|nurses?|care team|dr)\b/i.test(
+      offer,
+    ) ||
+      /\b(?:prepare|draft|write|put together)\b.{0,60}\b(?:message|question)\b/i.test(
+        offer,
+      ));
   return (
-    confirmationAnswer(current) === "yes" &&
-    last?.dialogue?.question?.kind === "offer_contact"
+    preparationAnswer(current) &&
+    last?.role === "assistant" &&
+    explicitOffer &&
+    (offer.match(/\?/g)?.length ?? 0) === 1 &&
+    !/\b(?:and|also)\b.{0,40}\b(?:do you|are you|is it|have you|would you|should i)\b/i.test(
+      offer,
+    )
+  );
+}
+
+function precedingCareTurns(history: ContextTurn[], current: string) {
+  const last = history.at(-1);
+  return last &&
+    ["patient", "user"].includes(last.role) &&
+    last.content === current
+    ? history.slice(0, -1)
+    : history;
+}
+
+/** Preparation consent is deliberately separate from the exact reviewed Send answer. */
+function preparationAnswer(text: string) {
+  return (
+    confirmationAnswer(text) === "yes" ||
+    /^(?:okay|ok|yes|sure)[, ]+(?:please )?(?:do so|do that|do it)[.! ]*$/i.test(
+      text.trim(),
+    ) ||
+    /^(?:please do|please do so)[.! ]*$/i.test(text.trim())
+  );
+}
+
+export function explicitCareRequest(text: string) {
+  return (
+    /\b(contact|message|send|ask|speak|talk)\b.{0,60}\b(doctor|nurse|practitioner|care team|dr|mr)\b/i.test(
+      text,
+    ) &&
+    !/\b(?:don't|do not|not to|no need to)\b.{0,40}\b(?:contact|message|send|ask|speak|talk)\b/i.test(
+      text.replace(/[’‘]/g, "'"),
+    )
+  );
+}
+
+export function careDraftRecovery(text: string) {
+  const value = text.replace(/[’‘]/g, "'");
+  return /\b(?:where|show|see|find|missing|review|resend|reopen|bring back)\b.{0,65}\b(?:draft|message|card)\b|\b(?:draft|message|card)\b.{0,45}\b(?:missing|not showing|not visible)\b|\bresend (?:it|that)\b/i.test(
+    value,
+  );
+}
+
+export function previouslyRequestedCare(
+  history: ContextTurn[],
+  current: string,
+) {
+  const turns = precedingCareTurns(history, current).slice(-20);
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    if (!["patient", "user"].includes(turn.role)) continue;
+    if (
+      confirmationAnswer(turn.content) === "no" ||
+      /\b(?:change (?:the )?(?:subject|topic)|something unrelated|let's talk about)\b/i.test(
+        turn.content,
+      )
+    )
+      return false;
+    if (
+      explicitCareRequest(turn.content) ||
+      contactOfferAccepted(turns.slice(0, i), turn.content)
+    )
+      return true;
+  }
+  return false;
+}
+
+/** Model prose cannot establish draft creation, delivery, or a recipient's attention. */
+export function claimsCareOperation(text: string) {
+  if (
+    !/\b(?:draft|message|card|doctor|practitioner|nurse|care team|appointment|booking)\b/i.test(
+      text,
+    )
+  )
+    return false;
+  return /\b(?:i(?:['’]ve| have)?|we(?:['’]ve| have)?)\s+(?:(?:already|just)\s+)?(?:prepared|drafted|created|put together|sent|contacted|notified|resent|forwarded|booked|scheduled)\b|\b(?:the|your|a)\s+(?:message\s+)?draft\s+(?:is|was|should|will)\b|\bhere(?:['’]s| is)\s+(?:a|the|your)\s+(?:message|draft)\b|\b(?:resending|sending)\b.{0,60}\b(?:draft|message|doctor|practitioner|card)\b|\byou (?:should|will|can|'ll)\s*see\s+(?:a|the|your)\s+(?:review\s+)?(?:card|draft)\b|\b(?:message|request)\b.{0,35}\b(?:has been|was|is)\s+(?:sent|delivered|forwarded|saved)\b/i.test(
+    text,
   );
 }
 
@@ -93,7 +185,8 @@ export function groundedContactDraft(
       (q) =>
         patient.some((p) => p.includes(q)) &&
         q.length > 3 &&
-        !confirmationAnswer(q),
+        !preparationAnswer(q) &&
+        !careDraftRecovery(q),
     )
     .slice(0, 4);
   const useful = [
@@ -103,14 +196,22 @@ export function groundedContactDraft(
         .filter(
           (p) =>
             !confirmationAnswer(p) &&
-            /\b(throat|dry|pain|stomach|belly|medicine|medication|take|taking|drink|omeprazole|trimazole|tablet|symptom|doctor|practitioner)\b/i.test(
+            !preparationAnswer(p) &&
+            !careDraftRecovery(p) &&
+            /\b(throat|dry|pain|stomach|belly|taste|bitter|fever|malaria|medicine|medication|take|taking|drink|omeprazole|trimazole|tablet|symptom|doctor|practitioner)\b/i.test(
               p,
             ),
         )
         .slice(-3),
     ]),
   ].slice(0, 4);
-  if (!useful.length && !confirmationAnswer(current)) useful.push(current);
+  if (
+    !useful.length &&
+    !confirmationAnswer(current) &&
+    !preparationAnswer(current) &&
+    !careDraftRecovery(current)
+  )
+    useful.push(current);
   const pieces = useful.map((q) => `I said: “${q}”`);
   for (let i = 1; i < history.length; i++) {
     const answer = history[i],
@@ -211,17 +312,20 @@ export function requestedCareAction(
   current: string,
   acceptedOffer: boolean,
 ) {
-  if (reply.action?.kind === "appointment") return reply.action;
-  const explicit =
-    /\b(contact|message|send|ask|speak|talk)\b.{0,60}\b(doctor|nurse|practitioner|care team|dr|mr)\b/i.test(
-      current,
-    );
+  if (
+    reply.action?.kind === "appointment" &&
+    /\b(?:appointment|book|booking|schedule|visit)\b/i.test(current)
+  )
+    return reply.action;
+  const explicit = explicitCareRequest(current);
   return acceptedOffer || explicit
-    ? (reply.action ?? {
-        kind: "message" as const,
-        connectionId: null,
-        practitionerId: null,
-        draft: "",
-      })
+    ? reply.action?.kind === "message"
+      ? reply.action
+      : {
+          kind: "message" as const,
+          connectionId: null,
+          practitionerId: null,
+          draft: "",
+        }
     : null;
 }

@@ -41,6 +41,7 @@ type History = {
   items: Message[];
   nextCursor: string | null;
   memoryReady?: boolean;
+  pendingCareProposal?: (CareProposal & { replyMessageId: string }) | null;
 };
 export function ChatView() {
   const router = useRouter();
@@ -60,6 +61,11 @@ export function ChatView() {
     [processingError, setProcessingError] = useState(""),
     [processingRevision, setProcessingRevision] = useState(0);
   const connected = useConnectedCare(selected);
+  const recoveredDraft =
+    history.pendingCareProposal &&
+    history.pendingCareProposal.replyMessageId !== history.items.at(-1)?.id
+      ? history.pendingCareProposal
+      : null;
   const [memoryState, setMemoryState] = useState<"" | "preparing" | "failed">(
     "",
   );
@@ -508,6 +514,7 @@ export function ChatView() {
                   `/api/chat?id=${selected}&before=${history.nextCursor}`,
                 );
                 setHistory({
+                  ...history,
                   items: [...older.items, ...history.items],
                   nextCursor: older.nextCursor,
                 });
@@ -649,23 +656,25 @@ export function ChatView() {
                         Play reply
                       </Btn>
                     )}
-                  {m.role === "assistant" && m.careProposal && (
-                    <CareActionCard
-                      key={m.careProposal.id}
-                      proposal={m.careProposal}
-                      active={
-                        !connected.recipient &&
-                        m.id === history.items.at(-1)?.id
-                      }
-                      onConfirmationChange={
-                        m.id === history.items.at(-1)?.id
-                          ? (id) => {
-                              visibleCareConfirmation.current = id;
-                            }
-                          : undefined
-                      }
-                    />
-                  )}
+                  {m.role === "assistant" &&
+                    m.careProposal &&
+                    m.careProposal.id !== recoveredDraft?.id && (
+                      <CareActionCard
+                        key={m.careProposal.id}
+                        proposal={m.careProposal}
+                        active={
+                          !connected.recipient &&
+                          m.id === history.items.at(-1)?.id
+                        }
+                        onConfirmationChange={
+                          m.id === history.items.at(-1)?.id
+                            ? (id) => {
+                                visibleCareConfirmation.current = id;
+                              }
+                            : undefined
+                        }
+                      />
+                    )}
                   <details className="message-meta">
                     <summary>
                       {m.role === "patient"
@@ -708,6 +717,13 @@ export function ChatView() {
               </article>
             </div>
           ))}
+        {recoveredDraft && (
+          <CareActionCard
+            key={recoveredDraft.id}
+            proposal={recoveredDraft}
+            active={false}
+          />
+        )}
         {generating && (
           <div className="brow brow-ai" role="status">
             <span className="aav">

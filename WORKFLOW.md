@@ -1,3 +1,9 @@
+## Missing care-draft recovery and truthful workflow replies — 2026-10-28
+
+Reproduced an accepted-preparation wording gap and unsupported model draft/send claims with synthetic histories. Added exact preceding single-offer preparation assent, bounded patient-authorised recovery, current stored workflow/receipt context and publication rechecks, and a once-only older pending review card near the latest reply. Existing edited drafts and completed deliveries are reused; recovery never sends automatically. Typed Send keeps its original displayed-review/version/expiry/next-answer gate. No provider, environment, schema, hosted patient data or deployment change.
+
+Final regression: five native PostgreSQL suites51/51 and seven unit/jsdom suites37/37; total88 passed. TypeScript noEmit/incremental-disabled and targeted ESLint passed. Native startup required the authorised outside-sandbox run because pg_ctl could not create a restricted Windows token inside the sandbox. New UI coverage uses the real review card; no production/browser/live-provider reproduction or new build claim. Full source map, initial failures, remaining hosted boundary and commands: [care-draft repair](docs/tasks/care-draft-recovery-2026-10-28.md).
+
 ## Patient identity card layout — 2026-10-28
 
 Owner's final layout places the profile image/initials at the top left, Care notes at the top right and the name/DOB/Mhistree ID below, left-aligned on both breakpoints. Refactored the patient identity header into a scoped two-row CSS grid; removed absolute Care notes positioning and the mobile reserved top strip. Today's report/overview, folder tools, permission checks and panel operations retain their existing placement and behavior. Read governing files, T21, identity-access contract, practitioner README and design references.
