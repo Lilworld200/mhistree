@@ -175,3 +175,43 @@ it("identifies the one-time model terms setup without leaking provider messages 
   ).rejects.toThrow("CONFIGURATION_REQUIRED");
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+it("requests schema-constrained patient replies in one call and keeps actions separate from text", async () => {
+  const value = {
+    text: "Review this message before sending.",
+    dialogue: {
+      topic: "health",
+      decision: "clinical_review",
+      question: { kind: "none", subject: "" },
+    },
+    sourceQuotes: [],
+    action: {
+      kind: "message",
+      connectionId: null,
+      practitionerId: null,
+      draft: "Would taking this medicine help?",
+    },
+  };
+  const fetcher = vi.fn(async () => completion(JSON.stringify(value)));
+  vi.stubGlobal("fetch", fetcher);
+  expect(
+    await new GroqGateway("synthetic").patientReply("Synthetic policy", [
+      { role: "user", content: "Help me ask my doctor." },
+    ]),
+  ).toEqual(value);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(
+    JSON.parse(
+      String(
+        (fetcher.mock.calls as unknown as [string, RequestInit][])[0][1].body,
+      ),
+    ).response_format,
+  ).toMatchObject({
+    type: "json_schema",
+    json_schema: {
+      name: "patient_reply",
+      strict: true,
+      schema: { additionalProperties: false },
+    },
+  });
+});

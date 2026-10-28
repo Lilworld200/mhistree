@@ -5,11 +5,40 @@ import type { AIGateway, AIMessage } from "./gateway";
 import { aiDebug, withAIDebug } from "./debug";
 import { groqJson, groqRequest } from "./groq-request";
 
+import {
+  patientReplySchema,
+  patientReplyFormat,
+} from "@/features/ai-chat/care-action-schema";
+
 export const groqChatModel = "openai/gpt-oss-20b";
 
 export class GroqGateway implements AIGateway {
-  readonly modelName = groqChatModel;
-  constructor(private key: string) {}
+  constructor(
+    private key: string,
+    readonly modelName = groqChatModel,
+  ) {}
+
+  async patientReply(
+    system: string,
+    messages: AIMessage[],
+    signal?: AbortSignal,
+  ) {
+    try {
+      return patientReplySchema.parse(
+        JSON.parse(
+          await this.generate(system, messages, {
+            json: true,
+            responseSchema: patientReplyFormat,
+            maxOutputTokens: 2048,
+            signal,
+          }),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw new DomainError("PROVIDER_UNAVAILABLE");
+    }
+  }
 
   generate(
     system: string,
@@ -54,9 +83,16 @@ export class GroqGateway implements AIGateway {
             reasoning_effort: "low",
             include_reasoning: false,
             temperature: 0.2,
-            ...(options.json
-              ? { response_format: { type: "json_object" } }
-              : {}),
+            ...(options.responseSchema
+              ? {
+                  response_format: {
+                    type: "json_schema",
+                    json_schema: { ...options.responseSchema, strict: true },
+                  },
+                }
+              : options.json
+                ? { response_format: { type: "json_object" } }
+                : {}),
           }),
           options.signal,
         );

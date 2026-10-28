@@ -1,11 +1,9 @@
 allowBuilds:
-  esbuild: set this to true or false
-  unrs-resolver: set this to true or false
-onlyBuiltDependencies:
-  - embedded-postgres
-  - '@embedded-postgres/windows-x64'
-  - supabase
-  - esbuild
-  - sharp
-  - unrs-resolver
-
+  builds: true
+permissions:
+  builds:
+    skills: true
+  esbuild:
+    build: true
+  unrs-resolver:
+    build: true

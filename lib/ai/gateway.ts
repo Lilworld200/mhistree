@@ -4,13 +4,24 @@ import { requestGemini } from "./request";
 import { DomainError } from "@/lib/errors";
 import { aiDebug, withAIDebug } from "./debug";
 import { GroqGateway } from "./groq";
+import {
+  patientReplySchema,
+  patientReplyFormat,
+  type PatientReply,
+} from "@/features/ai-chat/care-action-schema";
 export type AIMessage = { role: "user" | "assistant"; content: string };
 export interface AIGateway {
   readonly modelName?: string;
+  patientReply?(
+    system: string,
+    messages: AIMessage[],
+    signal?: AbortSignal,
+  ): Promise<PatientReply>;
   generate(
     system: string,
     messages: AIMessage[],
     options?: {
+      responseSchema?: { name: string; schema: Record<string, unknown> };
       maxOutputTokens?: number;
       json?: boolean;
       signal?: AbortSignal;
@@ -28,6 +39,27 @@ export class GeminiGateway implements AIGateway {
       clinicianModel?: string;
     },
   ) {}
+  async patientReply(
+    system: string,
+    messages: AIMessage[],
+    signal?: AbortSignal,
+  ) {
+    try {
+      return patientReplySchema.parse(
+        JSON.parse(
+          await this.generate(system, messages, {
+            json: true,
+            maxOutputTokens: 2048,
+            responseSchema: patientReplyFormat,
+            signal,
+          }),
+        ),
+      );
+    } catch (error) {
+      if (error instanceof DomainError) throw error;
+      throw new DomainError("PROVIDER_UNAVAILABLE");
+    }
+  }
   get modelName() {
     return this.config.chatModel;
   }
@@ -35,6 +67,7 @@ export class GeminiGateway implements AIGateway {
     system: string,
     messages: AIMessage[],
     options: {
+      responseSchema?: { name: string; schema: Record<string, unknown> };
       maxOutputTokens?: number;
       json?: boolean;
       signal?: AbortSignal;
@@ -89,6 +122,9 @@ export class GeminiGateway implements AIGateway {
               ),
               temperature: 0.2,
               ...(options.json ? { responseMimeType: "application/json" } : {}),
+              ...(options.responseSchema
+                ? { responseJsonSchema: options.responseSchema.schema }
+                : {}),
             },
           }),
         },

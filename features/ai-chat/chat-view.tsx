@@ -14,6 +14,8 @@ import type { TranscriptDraft } from "./speech/schema";
 import { MobileTopbarActions } from "@/components/layout/mobile-topbar-actions";
 
 import { replyText } from "./reply-text";
+import { CareActionCard } from "./care-action-card";
+import type { CareProposal } from "./care-action-schema";
 import type { Conversation } from "./conversation";
 
 type Message = {
@@ -25,6 +27,7 @@ type Message = {
   state: string | null;
   sequence: string;
   reply_to?: string;
+  careProposal?: CareProposal | null;
   replyInputMethod?: "text" | "microphone";
   inputMethod?: "text" | "microphone";
   transcription?: { text: string; model: string; capturedAt: string } | null;
@@ -79,9 +82,13 @@ export function ChatView() {
     },
   );
   const resetVoice = voice.reset;
-  const request = useRef<{ key: string; text: string; token?: string } | null>(
-      null,
-    ),
+  const visibleCareConfirmation = useRef<string | null>(null);
+  const request = useRef<{
+      key: string;
+      text: string;
+      token?: string;
+      careConfirmationId?: string;
+    } | null>(null),
     locked = useRef(false),
     current = useRef("");
   const startPreparation = useCallback(function startPreparation(
@@ -347,6 +354,7 @@ export function ChatView() {
           key: crypto.randomUUID(),
           text,
           token: spoken?.token,
+          careConfirmationId: visibleCareConfirmation.current ?? undefined,
         };
       const result = await api<{ messageId: string }>("/api/chat", {
         action: "send",
@@ -354,6 +362,7 @@ export function ChatView() {
           conversationId: id,
           requestKey: request.current.key,
           content: text,
+          careConfirmationId: request.current.careConfirmationId,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           ...(spoken
             ? { inputMethod: "microphone", transcriptionToken: spoken.token }
@@ -510,6 +519,20 @@ export function ChatView() {
                       Play reply
                     </Btn>
                   )}
+                {m.role === "assistant" && m.careProposal && (
+                  <CareActionCard
+                    key={m.careProposal.id}
+                    proposal={m.careProposal}
+                    active={m.id === history.items.at(-1)?.id}
+                    onConfirmationChange={
+                      m.id === history.items.at(-1)?.id
+                        ? (id) => {
+                            visibleCareConfirmation.current = id;
+                          }
+                        : undefined
+                    }
+                  />
+                )}
                 <details className="message-meta">
                   <summary>
                     {m.role === "patient"

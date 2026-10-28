@@ -28,7 +28,7 @@ export async function requireCare(
   if (!connection) throw new DomainError("ACCESS_DENIED");
   return connection;
 }
-const slot = z
+export const appointmentSlot = z
   .object({
     startsAt: z.iso.datetime({ offset: true }),
     endsAt: z.iso.datetime({ offset: true }),
@@ -72,87 +72,94 @@ async function saveAppointment(
   input: unknown,
   clinicianBooking: boolean,
 ) {
-  const data = z
-    .object({
-      connectionId: z.uuid(),
-      practitionerId: clinicianBooking ? z.never().optional() : z.uuid(),
-      requestKey: z.uuid(),
-      slot,
-    })
-    .strict()
-    .parse(input);
   try {
-    return await withAccess(pool, session, context, async (a) => {
-      const connection = await requireCare(
-        a,
-        data.connectionId,
-        "appointments.manage",
-      );
-      const practitionerId = clinicianBooking
-        ? a.actor.accountId
-        : data.practitionerId;
-      if (
-        clinicianBooking &&
-        (context.kind !== "direct" ||
-          context.connectionId !== connection.id ||
-          connection.practitioner_account_id !== a.actor.accountId)
-      )
-        throw new DomainError("ACCESS_DENIED");
-      await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
-        `booking:${data.requestKey}`,
-      ]);
-      const existing = (
-        await a.tx.query(
-          "select * from mhistree.appointments where request_key=$1",
-          [data.requestKey],
-        )
-      ).rows[0];
-      if (existing) {
-        if (
-          existing.connection_id !== data.connectionId ||
-          existing.practitioner_account_id !== practitionerId ||
-          existing.timezone !== data.slot.timezone ||
-          existing.starts_at.toISOString() !==
-            new Date(data.slot.startsAt).toISOString() ||
-          existing.ends_at.toISOString() !==
-            new Date(data.slot.endsAt).toISOString()
-        )
-          throw new DomainError("VERSION_CONFLICT");
-        return existing;
-      }
-      if (new Date(data.slot.startsAt) <= new Date())
-        throw new DomainError("VERSION_CONFLICT");
-      const row = (
-        await a.tx.query(
-          "insert into mhistree.appointments(connection_id,patient_person_id,practitioner_account_id,starts_at,ends_at,timezone,request_key,state) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
-          [
-            connection.id,
-            connection.patient_person_id,
-            practitionerId,
-            data.slot.startsAt,
-            data.slot.endsAt,
-            data.slot.timezone,
-            data.requestKey,
-            clinicianBooking ? "accepted" : "requested",
-          ],
-        )
-      ).rows[0];
-      await appendEvent(a.tx, {
-        actorAccountId: a.actor.accountId,
-        personId: connection.patient_person_id,
-        action: clinicianBooking
-          ? "appointment.booked"
-          : "appointment.requested",
-        referenceId: row.id,
-        contextId: a.contextId,
-      });
-      return row;
-    });
+    return await withAccess(pool, session, context, (a) =>
+      requestAppointmentInAccess(a, input, clinicianBooking),
+    );
   } catch (error) {
     if ((error as { code?: string }).code === "23P01")
       throw new DomainError("VERSION_CONFLICT");
     throw error;
   }
+}
+
+/** Also used by explicit reviewed chat requests in the same transaction. */
+export async function requestAppointmentInAccess(
+  a: AccessTransaction,
+  input: unknown,
+  clinicianBooking = false,
+) {
+  const data = z
+    .object({
+      connectionId: z.uuid(),
+      practitionerId: clinicianBooking ? z.never().optional() : z.uuid(),
+      requestKey: z.uuid(),
+      slot: appointmentSlot,
+    })
+    .strict()
+    .parse(input);
+  const connection = await requireCare(
+    a,
+    data.connectionId,
+    "appointments.manage",
+  );
+  const practitionerId = clinicianBooking
+    ? a.actor.accountId
+    : data.practitionerId;
+  if (
+    clinicianBooking &&
+    (a.context.kind !== "direct" ||
+      a.context.connectionId !== connection.id ||
+      connection.practitioner_account_id !== a.actor.accountId)
+  )
+    throw new DomainError("ACCESS_DENIED");
+  await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
+    `booking:${data.requestKey}`,
+  ]);
+  const existing = (
+    await a.tx.query(
+      "select * from mhistree.appointments where request_key=$1",
+      [data.requestKey],
+    )
+  ).rows[0];
+  if (existing) {
+    if (
+      existing.connection_id !== data.connectionId ||
+      existing.practitioner_account_id !== practitionerId ||
+      existing.timezone !== data.slot.timezone ||
+      existing.starts_at.toISOString() !==
+        new Date(data.slot.startsAt).toISOString() ||
+      existing.ends_at.toISOString() !==
+        new Date(data.slot.endsAt).toISOString()
+    )
+      throw new DomainError("VERSION_CONFLICT");
+    return existing;
+  }
+  if (new Date(data.slot.startsAt) <= new Date())
+    throw new DomainError("VERSION_CONFLICT");
+  const row = (
+    await a.tx.query(
+      "insert into mhistree.appointments(connection_id,patient_person_id,practitioner_account_id,starts_at,ends_at,timezone,request_key,state) values($1,$2,$3,$4,$5,$6,$7,$8) returning *",
+      [
+        connection.id,
+        connection.patient_person_id,
+        practitionerId,
+        data.slot.startsAt,
+        data.slot.endsAt,
+        data.slot.timezone,
+        data.requestKey,
+        clinicianBooking ? "accepted" : "requested",
+      ],
+    )
+  ).rows[0];
+  await appendEvent(a.tx, {
+    actorAccountId: a.actor.accountId,
+    personId: connection.patient_person_id,
+    action: clinicianBooking ? "appointment.booked" : "appointment.requested",
+    referenceId: row.id,
+    contextId: a.contextId,
+  });
+  return row;
 }
 export async function changeAppointment(
   pool: Pool,
@@ -165,7 +172,7 @@ export async function changeAppointment(
       id: z.uuid(),
       version: z.number().int().positive(),
       action: z.enum(["accept", "decline", "cancel", "reschedule"]),
-      slot: slot.optional(),
+      slot: appointmentSlot.optional(),
     })
     .strict()
     .refine(

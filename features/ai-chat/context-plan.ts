@@ -1,9 +1,26 @@
 /** Cheap deterministic routing: no additional model call, provider embedding or raw-chat search. */
-export function contextPlan(question: string) {
+export type ContextTurn = {
+  role: string;
+  content: string;
+  dialogue?: {
+    topic?: string;
+    decision?: string;
+    question?: { kind: string; subject: string };
+  } | null;
+};
+export function contextPlan(question: string, history: ContextTurn[] = []) {
   const historical =
     /\b(still|again|previous(?:ly)?|before|remember|recall|last|yesterday|ago|history|timeline|earlier|used to|anymore|no longer|better|worse|improv\w*|continu\w*)\b/i.test(
       question,
     );
+  const medication =
+    /\b(omeprazole|paracetamol|parastamol|acetaminophen|ibuprofen|drugs?|co[ -]?trimazole|co[ -]?trimoxazole|clotrimazole|tablets?|capsules?|pills?|doses?|antibiotic\w*|medicin\w*|medicat\w*|prescri\w*|interact\w*)\b/i.test(
+      question,
+    ) ||
+    /\b(?:safe for me|can i|should i|want to|thinking of|considering)\b.{0,45}\b(?:take|taking|drink|use|start|stop)\b/i.test(
+      question,
+    );
+  const personalMedication = medication && /\b(i|me|my|mine)\b/i.test(question);
   const health =
     /\b(stress\w*|anxious|anxiety|pain\w*|ache\w*|aching|chest|shoulder\w*|back|arm\w*|throat|heart|hurt\w*|symptom\w*|tired\w*|fatigue|sleep\w*|medicin\w*|medicat\w*|allerg\w*|prescri\w*|result\w*|blood|breath\w*|headache\w*|stomach|belly|knee|legs?|jogg\w*|running|fever|dizz\w*|nause\w*|vomit\w*|cough\w*|rash|diagnos\w*|condition\w*|health)\b/i.test(
       question,
@@ -15,8 +32,69 @@ export function contextPlan(question: string) {
   const broad = /\b(history|overview|summary|summarize|everything)\b/i.test(
     question,
   );
+  const previous = history.filter((m) => m.content !== question).slice(-6);
+  const topicChange =
+    /\b(change (?:the )?(?:subject|topic)|something (?:else|unrelated)|anyway|instead.{0,12}(?:code|coding)|let.s talk about)\b/i.test(
+      question,
+    );
+  const shortFollowUp =
+    /^(?:yes|yeah|yep|no|nope|okay|ok|sure|still hurts|it does|it is|same thing|that one|what about this one|go ahead|proceed)[.! ]*$/i.test(
+      question.trim(),
+    ) || /^(?:still|again|it |that |this |what about)/i.test(question.trim());
+  let reset = -1;
+  previous.forEach((m, i) => {
+    if (
+      m.dialogue?.topic === "everyday" ||
+      /\b(change (?:the )?(?:subject|topic)|something unrelated|let.s talk about)\b/i.test(
+        m.content,
+      )
+    )
+      reset = i;
+  });
+  const active = previous.slice(reset + 1);
+  const inheritedHealth =
+    !topicChange &&
+    shortFollowUp &&
+    active.some(
+      (m) =>
+        m.dialogue?.topic === "health" ||
+        /\b(throat|pain|stomach|belly|medicin\w*|medicat\w*|omeprazole|co[ -]?trimazole)\b/i.test(
+          m.content,
+        ),
+    );
+  const contextual = inheritedHealth
+    ? active
+        .filter((m) => m.role === "patient" || m.role === "user")
+        .slice(-3)
+        .map((m) => m.content)
+        .join(" ")
+    : "";
+  const subject = inheritedHealth
+    ? ([...active].reverse().find((m) => m.role === "assistant")?.dialogue
+        ?.question?.subject ?? "")
+    : "";
   return {
-    timeline: historical || health || dated || broad,
+    timeline:
+      !topicChange &&
+      (historical || health || medication || inheritedHealth || dated || broad),
+    medication:
+      !topicChange &&
+      (medication ||
+        (inheritedHealth &&
+          active.some((m) =>
+            /\b(medicin\w*|medicat\w*|omeprazole|co[ -]?trimazole|take|tablet)\b/i.test(
+              m.content,
+            ),
+          ))),
+    personalMedication,
+    contact:
+      /\b(contact|message|ask|speak|talk|doctor|nurse|practitioner|appointment|book)\b/i.test(
+        question,
+      ) ||
+      personalMedication ||
+      (inheritedHealth &&
+        active.some((m) => m.dialogue?.question?.kind === "offer_contact")),
+    searchText: `${contextual} ${subject} ${question}`.trim().slice(-6000),
     summaries: historical && !health,
     broad,
   };

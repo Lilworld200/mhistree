@@ -39,7 +39,7 @@ export function replyText(value: string): string {
   }
   text = text.replace(/^\s*\{[^\n]*"capturedAt"[^\n]*\}\s*$/gm, "");
   if (
-    /\b(?:capturedAt|elapsedSeconds|sourceDates|privateMemory|source_fingerprint)\b\s*["”’']?\s*:/i.test(
+    /\b(?:capturedAt|elapsedSeconds|sourceDates|privateMemory|source_fingerprint|sourceQuotes|careConfirmationId|care_confirmation_id|dialogue|proposal_version|confirmation_id|careActionResults|medicationSafety|contactPreparationAccepted)\b\s*["”’']?\s*:/i.test(
       text,
     )
   )

@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { parseEnv } from "node:util";
 import { afterAll, describe, expect, it } from "vitest";
 import { patientChatPolicy } from "@/features/ai-chat/patient-prompt";
-import { GeminiGateway, type AIMessage } from "@/lib/ai/gateway";
+import { aiGateway, type AIMessage } from "@/lib/ai/gateway";
 
 // Real provider smoke/rubric cases; all input is synthetic. No database or patient records.
 // Review the saved synthetic replies too; mechanical checks do not certify empathy or clinical safety.
@@ -92,19 +92,13 @@ describe.runIf(process.env.MHISTREE_LIVE_AI_TEST === "1")(
           ...parseEnv(await readFile(".env", "utf8")),
           ...process.env,
         };
-        if (
-          !env.GEMINI_API_KEY ||
-          !env.AI_PATIENT_MODEL ||
-          !env.AI_EXTRACTION_MODEL
-        )
-          throw new Error(
-            "Live voice evaluation requires configured Gemini model fields",
-          );
-        const gateway = new GeminiGateway({
-          key: env.GEMINI_API_KEY,
-          chatModel: env.AI_PATIENT_MODEL,
-          extractionModel: env.AI_EXTRACTION_MODEL,
-        });
+        const previous = { ...process.env };
+        Object.assign(process.env, env);
+        const gateway = aiGateway();
+        // Provider selection uses the same factory as production, not a hardcoded Gemini adapter.
+        for (const key of Object.keys(process.env))
+          if (!(key in previous)) delete process.env[key];
+        Object.assign(process.env, previous);
         const history: AIMessage[] = [];
         for (const turn of turns) {
           history.push({ role: "user", content: turn });

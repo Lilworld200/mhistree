@@ -50,7 +50,7 @@ async function sent(session: string) {
   const message = await sendMessage(db.pool, session, {
     conversationId: conversation.id,
     requestKey: randomUUID(),
-    content: "I need help with my concern",
+    content: "Help me contact my practitioner about my concern",
     timezone: "Africa/Lagos",
   });
   return { ...message, conversation: conversation.id };

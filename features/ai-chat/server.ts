@@ -23,6 +23,24 @@ import { conversationPreview } from "./conversation";
 import { continuityPolicy, timeAnchor } from "./temporal";
 import { boundedHistory, contextPlan } from "./context-plan";
 import { replyText } from "./reply-text";
+import { careActionPolicy, type CareOptions } from "./care-action-schema";
+import { appointmentDiscovery, storeCareProposal } from "./care-actions";
+import {
+  claimTypedCareConfirmation,
+  confirmCareMessages,
+  decoratedProposal,
+  invalidateCareConfirmation,
+} from "./care-delivery";
+import {
+  medicationSafetyContext,
+  contactOfferAccepted,
+  groundedContactDraft,
+  replyDialogue,
+  conversationalHealthText,
+  uncertainMedicineName,
+  requestedCareAction,
+  unresolvedMedicineName,
+} from "./health-context";
 const timezone = z.string().refine((v) => {
   try {
     new Intl.DateTimeFormat("en", { timeZone: v });
@@ -39,6 +57,7 @@ const sendInput = z
     timezone,
     inputMethod: z.enum(["text", "microphone"]).default("text"),
     transcriptionToken: z.string().min(1).max(65536).optional(),
+    careConfirmationId: z.uuid().optional(),
   })
   .strict()
   .refine(
@@ -70,6 +89,8 @@ export async function createConversation(
     if (!row) throw new DomainError("ACCESS_DENIED");
     if (previousConversationId)
       await linkPreviousConversation(access, id, previousConversationId);
+    if (previousConversationId)
+      await invalidateCareConfirmation(access, previousConversationId);
     return row;
   });
 }
@@ -114,7 +135,7 @@ export async function conversationHistory(
       throw new DomainError("ACCESS_DENIED");
     const rows = (
       await a.tx.query(
-        `select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,coalesce(to_jsonb(m)->>'input_method','text') as "inputMethod",to_jsonb(m)->'transcription' as transcription,(select coalesce(to_jsonb(p)->>'input_method','text') from mhistree.chat_messages p where p.id=m.reply_to) as "replyInputMethod",g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51`,
+        `select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,(select jsonb_build_object('id',cp.id,'kind',cp.kind,'payload',cp.payload,'state',cp.state,'version',cp.version,'result_id',cp.result_id,'deliveries',(select coalesce(jsonb_agg(jsonb_build_object('connectionId',d.connection_id,'state',d.state,'resultId',d.result_id,'errorCode',d.error_code)),'[]'::jsonb) from mhistree.chat_care_deliveries d where d.proposal_id=cp.id)) from mhistree.chat_care_proposals cp where cp.reply_message_id=m.id) as "careProposal",coalesce(to_jsonb(m)->>'input_method','text') as "inputMethod",to_jsonb(m)->'transcription' as transcription,(select coalesce(to_jsonb(p)->>'input_method','text') from mhistree.chat_messages p where p.id=m.reply_to) as "replyInputMethod",g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51`,
         [id, before ?? null],
       )
     ).rows;
@@ -181,6 +202,8 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
         existing.content !== data.content ||
         existing.conversation_id !== data.conversationId ||
         existing.timezone !== data.timezone ||
+        (existing.care_confirmation_id ?? null) !==
+          (data.careConfirmationId ?? null) ||
         (existing.input_method ?? "text") !== data.inputMethod ||
         (existing.transcription?.id ?? null) !== (transcription?.id ?? null)
       )
@@ -190,8 +213,8 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
     const id = randomUUID();
     const inserted = await a.tx.query(
       data.inputMethod === "microphone"
-        ? "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key,input_method,transcription) values($1,$2,$3,$4,'patient',$5,$6,$7,$8,$9) on conflict do nothing returning id"
-        : "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key) values($1,$2,$3,$4,'patient',$5,$6,$7) on conflict do nothing returning id",
+        ? "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key,input_method,transcription,care_confirmation_id) values($1,$2,$3,$4,'patient',$5,$6,$7,$8,$9,$10) on conflict do nothing returning id"
+        : "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,request_key,care_confirmation_id) values($1,$2,$3,$4,'patient',$5,$6,$7,$8) on conflict do nothing returning id",
       [
         id,
         data.conversationId,
@@ -203,6 +226,7 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
         ...(data.inputMethod === "microphone"
           ? [data.inputMethod, transcription]
           : []),
+        data.careConfirmationId ?? null,
       ],
     );
     if (!inserted.rowCount) throw new DomainError("VERSION_CONFLICT");
@@ -278,7 +302,7 @@ async function generatePatientReply(
       if (!claim.rowCount) return null;
       const history = (
         await a.tx.query(
-          "select id,role,content,captured_at,timezone from mhistree.chat_messages where conversation_id=$1 and sequence<=$2 order by sequence desc limit 20",
+          "select m.id,m.role,m.content,m.captured_at,m.timezone,m.dialogue,(select jsonb_build_object('kind',p.kind,'state',p.state,'reviewedText',case when p.state='completed' then p.payload->>'content' else null end) from mhistree.chat_care_proposals p where p.reply_message_id=m.id) as care_outcome from mhistree.chat_messages m where m.conversation_id=$1 and m.sequence<=$2 order by m.sequence desc limit 20",
           [message.conversation_id, message.sequence],
         )
       ).rows.reverse();
@@ -291,6 +315,60 @@ async function generatePatientReply(
   }
   aiDebug("chat.reply.claimed", { messageCount: prepared.history.length });
   try {
+    const confirmation = await claimTypedCareConfirmation(
+      pool,
+      session,
+      messageId,
+    );
+    if (confirmation) {
+      let response =
+        "The pending Send is cancelled. Your private draft is retained.";
+      if (confirmation.answer === "yes") {
+        const result = confirmation.replay
+          ? await withAccess(pool, session, { kind: "patient" }, async (a) => {
+              const row = (
+                await a.tx.query(
+                  "select * from mhistree.chat_care_proposals where id=$1",
+                  [confirmation.proposalId],
+                )
+              ).rows[0];
+              return decoratedProposal(a, row);
+            })
+          : await confirmCareMessages(
+              pool,
+              session,
+              confirmation.proposalId,
+              confirmation.version,
+            );
+        const stored =
+          result?.deliveries?.filter((d) => d.state === "stored").length ?? 0;
+        const failed =
+          result?.deliveries?.filter((d) => d.state !== "stored").length ?? 0;
+        response = stored
+          ? `Your message was saved to ${stored} care ${stored === 1 ? "inbox" : "inboxes"}.${failed ? ` ${failed} destination${failed === 1 ? " was" : "s were"} not saved; review the retained draft and retry those explicitly.` : ""} This does not mean a practitioner has read it.`
+          : "The message could not be saved to the selected recipients. Your private draft is retained for review.";
+      }
+      return withAccess(pool, session, { kind: "patient" }, async (a) => {
+        const done = await a.tx.query(
+          "update mhistree.chat_generations set state='succeeded',lease_until=null,updated_at=clock_timestamp() where message_id=$1 and lease_id=$2 and state='running' returning message_id",
+          [messageId, lease],
+        );
+        if (!done.rowCount) return { state: "cancelled" };
+        await a.tx.query(
+          "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to) values($1,$2,$3,$4,'assistant',$5,$6,$7)",
+          [
+            randomUUID(),
+            prepared.message.conversation_id,
+            a.actor.personId,
+            a.actor.accountId,
+            response,
+            prepared.message.timezone,
+            messageId,
+          ],
+        );
+        return { state: "succeeded" };
+      });
+    }
     const now = new Date();
     const memory = await recallMemory(
       pool,
@@ -301,7 +379,20 @@ async function generatePatientReply(
     );
     const currentTime = timeAnchor(now, prepared.message.timezone, now);
     const history = boundedHistory(prepared.history);
-    const plan = contextPlan(prepared.message.content);
+    const plan = contextPlan(prepared.message.content, history);
+    const acceptedContact = contactOfferAccepted(
+      history,
+      prepared.message.content,
+    );
+    const previousQuestion = [...history]
+      .reverse()
+      .find((m) => m.role === "assistant")?.dialogue?.question;
+    const needsContact =
+      plan.contact ||
+      acceptedContact ||
+      (plan.medication &&
+        previousQuestion?.kind === "symptom" &&
+        /^(yes|yeah|yep)[.! ]*$/i.test(prepared.message.content.trim()));
     const messages: AIMessage[] = history.map((m) => ({
       role: m.role === "patient" ? "user" : "assistant",
       content: m.role === "patient" ? m.content : replyText(m.content),
@@ -313,7 +404,15 @@ async function generatePatientReply(
             session,
             { kind: "patient" },
             prepared.personId,
-            prepared.message.content,
+            [
+              plan.searchText,
+              ...memory.items
+                .filter((i) => i.kind === "patient-report")
+                .slice(0, 2)
+                .map((i) => i.text),
+            ]
+              .join(" ")
+              .slice(0, 10000),
             {
               selective: true,
               broad: plan.broad,
@@ -328,14 +427,135 @@ async function generatePatientReply(
             asOf: now.toISOString(),
           });
     const evidence = await readEvidence();
-    const discovery = await practitionerDiscovery(pool, session);
-    const reply = replyText(
-      await gateway.generate(
-        `${patientChatPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify({ currentTime, privateMemory: { items: (continueWithoutMemory ? [] : memory.items).map((i) => ({ kind: i.kind, text: i.text, dates: i.sources.map((s) => ({ at: s.capturedAt, zone: s.timezone })) })) }, sourceDates: history.map((m, index) => ({ index, at: m.captured_at, zone: m.timezone })), limitedMemory: continueWithoutMemory, ...evidence, evidence: evidence.evidence.map((e) => ({ text: e.text, category: e.category, status: e.status, eventTime: e.eventTime, capturedAt: e.capturedAt, timezone: e.sourceTimezone, relevance: e.relevance })), ...discovery })}`,
-        messages,
-        { signal, maxOutputTokens: 1024 },
-      ),
+    const safety = plan.medication
+      ? await medicationSafetyContext(pool, session, prepared.personId)
+      : { items: [], bounded: false, incomplete: true };
+    const discovery = needsContact
+      ? await practitionerDiscovery(pool, session)
+      : { status: "unavailable" as const };
+    const bookingOptions: CareOptions =
+      /\b(appointment|book|booking|schedule|visit)\b/i.test(
+        prepared.message.content,
+      )
+        ? await appointmentDiscovery(pool, session)
+        : { status: "unavailable", recipients: [], slots: [], bounded: false };
+    const system = `${patientChatPolicy}\n${careActionPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify(
+      {
+        currentTime,
+        privateMemory: {
+          items: (continueWithoutMemory ? [] : memory.items).map((i) => ({
+            kind: i.kind,
+            text: i.text,
+            dates: i.sources.map((s) => ({
+              at: s.capturedAt,
+              zone: s.timezone,
+            })),
+          })),
+        },
+        sourceDates: history.map((m, index) => ({
+          index,
+          at: m.captured_at,
+          zone: m.timezone,
+        })),
+        limitedMemory: continueWithoutMemory,
+        ...evidence,
+        evidence: evidence.evidence.map((e) => ({
+          text: e.text,
+          category: e.category,
+          status: e.status,
+          eventTime: e.eventTime,
+          capturedAt: e.capturedAt,
+          timezone: e.sourceTimezone,
+          relevance: e.relevance,
+        })),
+        ...discovery,
+        personalMedication: plan.personalMedication,
+        medicationSafety: safety,
+        contactPreparationAccepted: acceptedContact,
+        previousQuestion,
+        appointmentRecipients: bookingOptions.recipients,
+        appointmentDiscoveryStatus: bookingOptions.status,
+        careActionResults: history
+          .filter((m) => m.care_outcome?.state === "completed")
+          .slice(-4)
+          .map((m) => ({
+            ...m.care_outcome,
+            reviewedText: m.care_outcome.reviewedText?.slice(0, 1000),
+            meaning:
+              m.care_outcome.kind === "message"
+                ? "Saved to Care inbox; reading or response not established"
+                : "Appointment requested; acceptance not established",
+          })),
+      },
+    )}`;
+    // The optional method keeps older text-only adapters compatible, without provider fallback.
+    const generated = gateway.patientReply
+      ? await gateway.patientReply(system, messages, signal)
+      : {
+          text: await gateway.generate(system, messages, {
+            signal,
+            maxOutputTokens: 1024,
+          }),
+          action: null,
+        };
+    const dialogue = replyDialogue(generated, plan.timeline);
+    const uncertainName =
+      plan.medication &&
+      unresolvedMedicineName(history, prepared.message.content);
+    let reply = conversationalHealthText(
+      generated.text,
+      plan.personalMedication,
+      evidence.evidence.length > 0 || memory.items.length > 0,
+      dialogue.decision === "urgent",
+      prepared.message.content,
+      evidence.evidence.some((e) => /dry throat/i.test(e.text)) ||
+        memory.items.some(
+          (i) => i.kind === "patient-report" && /dry throat/i.test(i.text),
+        ),
+      uncertainName,
     );
+    if (dialogue.decision !== "urgent" && plan.personalMedication)
+      dialogue.decision = "clinical_review";
+    if (
+      dialogue.decision !== "urgent" &&
+      (uncertainMedicineName(prepared.message.content) ||
+        (uncertainName && reply.includes("confirm its exact name")))
+    ) {
+      dialogue.decision = "clarification";
+      dialogue.question = { kind: "other", subject: "exact medicine name" };
+    }
+    const action = requestedCareAction(
+      generated,
+      prepared.message.content,
+      acceptedContact,
+    );
+    if (
+      acceptedContact &&
+      action?.kind === "message" &&
+      dialogue.decision !== "urgent"
+    ) {
+      reply =
+        discovery.status === "available" &&
+        discovery.connectedPractitioners.length
+          ? "I've put together a question for you to review below. You can edit it and choose which practitioners to send it to."
+          : "Your private question is drafted for review. We still need to verify an eligible connected recipient before it can be sent.";
+      dialogue.question = { kind: "none", subject: "" };
+      dialogue.decision = "clinical_review";
+    }
+    const draftText = groundedContactDraft(
+      history,
+      prepared.message.content,
+      generated.sourceQuotes ?? [],
+    );
+    const messageOptions: CareOptions =
+      discovery.status === "available"
+        ? {
+            status: "available",
+            recipients: discovery.connectedPractitioners,
+            slots: [],
+            bounded: discovery.bounded,
+          }
+        : { status: "unavailable", recipients: [], slots: [], bounded: false };
     if (!reply) throw new DomainError("PROVIDER_UNAVAILABLE");
     const currentMemory = await recallMemory(
       pool,
@@ -347,6 +567,11 @@ async function generatePatientReply(
     if (currentMemory.fingerprint !== memory.fingerprint)
       throw new DomainError("ACCESS_REVOKED");
     const currentEvidence = await readEvidence();
+    const currentSafety = plan.medication
+      ? await medicationSafetyContext(pool, session, prepared.personId)
+      : safety;
+    if (JSON.stringify(currentSafety) !== JSON.stringify(safety))
+      throw new DomainError("ACCESS_REVOKED");
     const currentIds = new Set(currentEvidence.evidence.map((e) => e.id));
     if (evidence.evidence.some((e) => !currentIds.has(e.id)))
       throw new DomainError("ACCESS_REVOKED");
@@ -358,6 +583,15 @@ async function generatePatientReply(
       if (
         currentDiscovery.status !== "available" ||
         JSON.stringify(currentDiscovery) !== JSON.stringify(discovery)
+      )
+        throw new DomainError("ACCESS_REVOKED");
+    }
+    if (action?.kind === "appointment" && bookingOptions.recipients.length) {
+      const currentBooking = await appointmentDiscovery(pool, session);
+      if (
+        currentBooking.status !== "available" ||
+        JSON.stringify(currentBooking.recipients) !==
+          JSON.stringify(bookingOptions.recipients)
       )
         throw new DomainError("ACCESS_REVOKED");
     }
@@ -380,18 +614,29 @@ async function generatePatientReply(
           [messageId, lease],
         );
         if (!done.rowCount) return { state: "cancelled" };
+        const replyId = randomUUID();
         await a.tx.query(
-          "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to) values($1,$2,$3,$4,'assistant',$5,$6,$7)",
+          "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to,dialogue) values($1,$2,$3,$4,'assistant',$5,$6,$7,$8)",
           [
-            randomUUID(),
+            replyId,
             prepared.message.conversation_id,
             a.actor.personId,
             a.actor.accountId,
             reply,
             prepared.message.timezone,
             messageId,
+            dialogue,
           ],
         );
+        if (action)
+          await storeCareProposal(
+            a,
+            replyId,
+            action,
+            action.kind === "message" ? messageOptions : bookingOptions,
+            prepared.message.content,
+            draftText,
+          );
         return { state: "succeeded" };
       },
     );

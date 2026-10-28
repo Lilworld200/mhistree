@@ -4598,3 +4598,18 @@ textarea:focus-visible {
 @media (prefers-reduced-motion: reduce) {
   .voice-recording-visual span { transition: none; }
 }
+
+/* Reviewed care actions remain attached to their owning private chat reply. */
+.chat-care-action { margin-top: 16px; padding: 16px; border: 1px solid var(--border, rgba(255,255,255,.8)); border-radius: 20px; background: var(--card, #f6f6f5); box-shadow: var(--sh1, 0 3px 8px #0000000d); min-width: 0; overflow-wrap: anywhere; }
+.chat-care-action .account-form { margin-top: 12px; }
+.chat-care-action select, .chat-care-action textarea { width: 100%; max-width: 100%; min-width: 0; font-size: 16px; }
+.chat-care-action .qrow { flex-wrap: wrap; }
+
+.care-recipient-list { border: 0; padding: 0; margin: 0; display: grid; gap: 8px; min-width: 0; }
+.care-recipient-list legend { font-weight: 700; margin-bottom: 8px; }
+.care-recipient-card { display: flex !important; align-items: center; gap: 12px; padding: 12px 14px; min-height: 52px; border: 1px solid rgba(255,255,255,.8); border-radius: 18px; background: var(--card, #f6f6f5); box-shadow: var(--sh1, 0 3px 8px #0000000d); cursor: pointer; }
+.care-recipient-card input { width: 22px !important; height: 22px; flex: 0 0 22px; accent-color: var(--ink, #181818); }
+.care-recipient-card span { display: grid; min-width: 0; }
+.care-recipient-card small { white-space: normal; }
+.care-send-question { font-weight: 650; }
+.care-delivery-results { padding-left: 20px; }
