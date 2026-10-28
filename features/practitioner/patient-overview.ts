@@ -1,3 +1,4 @@
+import { currentMedicationProjection } from "@/features/health-records/medication-projection";
 import "server-only";
 import type { Pool } from "pg";
 import {
@@ -20,7 +21,7 @@ export async function patientOverviewInAccess(
   now = new Date(),
 ): Promise<PatientOverview> {
   const state = await a.tx.query(
-    "select e.* from mhistree.persistent_state p join mhistree.contributions e on e.id=p.event_id where e.patient_person_id=$1 and e.visibility='finalized' order by e.recorded_at desc,e.id desc limit 101",
+    `select e.* from mhistree.persistent_state p join mhistree.contributions e on e.id=p.event_id where e.patient_person_id=$1 and ${currentMedicationProjection} and e.visibility='finalized' order by e.recorded_at desc,e.id desc limit 101`,
     [personId],
   );
   const today = await a.tx.query(

@@ -1,3 +1,6 @@
+import { withdrawRecommendation } from "@/features/clinical-care/medication-recommendations";
+import { withAccess } from "@/features/access/server";
+import { practitionerPresence } from "@/features/messaging/connected-chat";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { database } from "@/lib/db/client";
@@ -78,6 +81,8 @@ export async function POST(r: NextRequest) {
           "appointment",
           "appointment-create",
           "read",
+          "presence",
+          "recommendation-withdraw",
         ]),
         data: z.unknown(),
       })
@@ -86,6 +91,21 @@ export async function POST(r: NextRequest) {
     const pool = database(),
       session = sessionFrom(r),
       context = { kind: "direct" as const, connectionId: d.connectionId };
+    if (d.action === "recommendation-withdraw") {
+      const data = z
+        .object({ id: z.uuid(), version: z.number().int().positive() })
+        .strict()
+        .parse(d.data);
+      return success(
+        await withAccess(pool, session, context, (a) =>
+          withdrawRecommendation(a, data.id, data.version),
+        ),
+      );
+    }
+    if (d.action === "presence")
+      return success(
+        await practitionerPresence(pool, session, context, d.connectionId),
+      );
     if (d.action === "read") {
       const read = z
         .object({
@@ -114,6 +134,7 @@ export async function POST(r: NextRequest) {
           includeOwnNotes: z.boolean(),
           conversation: z.boolean().optional(),
           previousRunId: z.uuid().optional(),
+          originCareMessageId: z.uuid().optional(),
           timezone: z.string().optional(),
         })
         .strict()

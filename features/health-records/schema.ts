@@ -63,6 +63,7 @@ export const sourceInput = z
     clientKey: z.uuid(),
     uploaded: z.boolean().default(false),
     messageId: z.uuid().optional(),
+    careMessageId: z.uuid().optional(),
     parentSourceId: z.uuid().optional(),
   })
   .strict();
@@ -87,6 +88,8 @@ export const contributionInput = z
           .optional(),
         medication: z
           .object({
+            recommendationId: z.uuid().optional(),
+            commitment: z.boolean().optional(),
             useStatus: z.enum(["taking", "stopped", "not-started", "unknown"]),
             plannedStart: z.iso.date().nullable(),
             plannedEnd: z.iso.date().nullable(),

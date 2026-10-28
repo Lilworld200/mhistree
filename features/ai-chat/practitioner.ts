@@ -25,16 +25,18 @@ export async function practitionerAssistance(
   const d = z
     .object({
       connectionId: z.uuid(),
-      question: z.string().min(1).max(3000),
+      question: z.string().min(1).max(12000),
       purpose: z.enum(["summary", "question", "assessment", "draft"]),
       includeOwnNotes: z.boolean(),
       conversation: z.boolean().default(false),
       previousRunId: z.uuid().optional(),
+      originCareMessageId: z.uuid().optional(),
       timezone: sourceInput.shape.sourceTimezone
         .refine((value) => value !== "unknown")
         .default("Africa/Lagos"),
     })
     .strict()
+    .refine((v) => Boolean(v.originCareMessageId) || v.question.length <= 3000)
     .parse(input);
   const context = selectedContext ?? {
     kind: "direct" as const,
@@ -67,6 +69,20 @@ export async function practitionerAssistance(
       };
     });
   const permissions = await loadPermissions();
+  async function verifyOrigin() {
+    if (!d.originCareMessageId) return;
+    return withAccess(pool, session, context, async (a) => {
+      const message = (
+        await a.tx.query(
+          "select m.content from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where m.id=$1 and m.author_account_id=$2 and t.connection_id=$3",
+          [d.originCareMessageId, a.actor.accountId, d.connectionId],
+        )
+      ).rows[0];
+      if (!message || !d.question.includes(message.content))
+        throw new DomainError("ACCESS_DENIED");
+    });
+  }
+  await verifyOrigin();
   const history = await withAccess(pool, session, context, async (a) => {
     const messages: { role: "user" | "assistant"; content: string }[] = [];
     const clinicianTexts: string[] = [];
@@ -150,7 +166,7 @@ export async function practitionerAssistance(
 ${
   d.conversation
     ? `This is a practitioner conversation, with bounded preceding turns. Answer questions and help capture ONLY explicit patient-specific observations or prescriptions supplied by the practitioner. Current writable categories: ${JSON.stringify(permissions.write)}. Current readable categories: ${JSON.stringify(permissions.read)}. Never claim a save occurred; only the separate reviewed save operation can save. If no writable categories, proposals MUST be [] and explain read-only access when asked to save. Do not propose excluded categories, results/orders, general questions, hypotheticals, assistant suggestions, unsupported diagnoses or facts solely from retrieved evidence. An explicit practitioner finding may be proposed with its uncertainty preserved. Propose separate items for separate facts (up to8); disclose if more remain. No automatic duplication of a prior saved item. Saved private notes are not published clinical facts. Never interpret bare yes/no as a new clinical fact; refer the practitioner to the review choices.
-Each proposal has exactly {category,body,occurredAt,status,sourceSpans,missingDetails,medicationDetails}. category is one of clinical,symptom,activity,medication-use,prescription,allergy,ongoing,baseline, within writable scope. body is {text,bodySite:null,contextLinks:[]} with concise practitioner-attributed factual text; optional medication ONLY for medication-use is {useStatus:taking|stopped|not-started|unknown,plannedStart:null,plannedEnd:null,actualStart:null,actualEnd:null}. Do not infer use from prescribing or make unknown medicine into an identified medication. Prescription is a practitioner's explicit prescription, distinct from actual use. Ongoing includes conditions; preserve suspected versus established meaning. occurredAt is {precision:"unknown"} unless an explicit unambiguous time is supplied (do not infer occurrence from submission time). status is active|resolved|recurrent|unknown, preserve uncertainty. sourceSpans are exact short quotes from the practitioner USER turns only, never assistant text or retrieved evidence. medicationDetails is null for other categories, or {name,dose,frequency}, each an exact practitioner-supplied substring or null. Include known name/dose/frequency verbatim in body.text. When a drug, dose, frequency, actual-use status, identity, condition certainty or other consequential detail is missing/ambiguous/conflicting, list it in missingDetails and ask a natural specific follow-up in text. "Once or twice daily" is ambiguous: clarify, never choose. Never invent a drug/dose/frequency/duration/route/date or confirm a diagnosis yourself. Incomplete proposals can be private notes but cannot be published. Use the preceding user turns to resolve follow-ups, and retain full factual context in the updated proposal; assistant wording is not evidence. If clear, text should ask whether to save to timeline and the relevant Health category or keep as an author-only private note; the practitioner reviews and explicitly chooses.`
+Each proposal has exactly {category,body,occurredAt,status,sourceSpans,missingDetails,medicationDetails}. category is one of clinical,symptom,activity,medication-use,prescription,allergy,ongoing,baseline, within writable scope. body is {text,bodySite:null,contextLinks:[]} with concise practitioner-attributed factual text; optional medication ONLY for medication-use is {useStatus:taking|stopped|not-started|unknown,plannedStart:null,plannedEnd:null,actualStart:null,actualEnd:null}. Do not infer use from prescribing or make unknown medicine into an identified medication. Prescription is a practitioner's explicit prescription, distinct from actual use. Ongoing includes conditions; preserve suspected versus established meaning. An explicit practitioner statement of a suspected condition or allergy supplies its certainty: prepare an editable proposal labeled suspected or unconfirmed. Do not require a confirmed diagnosis, additional patient verification or patient approval to PREPARE or review that suspected entry. Only the practitioner's reviewed Save publishes it. For a clear explicit finding in writable scope and an explicit request to prepare it, return that proposal rather than an empty proposals list; uncertainty is not a reason to discard a clearly labeled suspected finding. For explicit condition/allergy findings, missingDetails is empty when the identity and stated certainty are clear. Unknown reaction type, severity, exposure product, timing, diagnostic testing or cross-reactivity are optional follow-up context, not prerequisites for recording the supplied finding: put those gaps in limitations, retain occurredAt unknown, and do not require additional patient verification. Reserve missingDetails for ambiguity that prevents faithfully representing the actual supplied fact, such as unclear substance or contradictory certainty. occurredAt is {precision:"unknown"} unless an explicit unambiguous time is supplied (do not infer occurrence from submission time). status is active|resolved|recurrent|unknown, preserve uncertainty. sourceSpans are exact short quotes from the practitioner USER turns only, never assistant text or retrieved evidence. medicationDetails is null for other categories, or {name,dose,frequency}, each an exact practitioner-supplied substring or null. Include known name/dose/frequency verbatim in body.text. When a drug, dose, frequency, actual-use status, identity, condition certainty or other consequential detail is missing/ambiguous/conflicting, list it in missingDetails and ask a natural specific follow-up in text. "Once or twice daily" is ambiguous: clarify, never choose. Never invent a drug/dose/frequency/duration/route/date or confirm a diagnosis yourself. Incomplete proposals can be private notes but cannot be published. Use the preceding user turns to resolve follow-ups, and retain full factual context in the updated proposal; assistant wording is not evidence. If clear, text should ask whether to save to timeline and the relevant Health category or keep as an author-only private note; the practitioner reviews and explicitly chooses.`
     : "Return proposals:[]; this is read-only assistance."
 }
 AUTHORIZED EVIDENCE: ${JSON.stringify(evidence)} AUTHOR PRIVATE NOTES: ${JSON.stringify(notes)}`,
@@ -196,6 +212,23 @@ AUTHORIZED EVIDENCE: ${JSON.stringify(evidence)} AUTHOR PRIVATE NOTES: ${JSON.st
         !clinicianTexts.some((text) => text.includes(proposal.body.bodySite!)))
     )
       throw new DomainError("PROVIDER_UNAVAILABLE");
+    if (["clinical", "allergy", "ongoing"].includes(proposal.category)) {
+      const uncertainty =
+        /\b(?:suspect(?:ed)?|possible|unconfirmed|not confirmed)\b/i;
+      const sourceUncertain = proposal.sourceSpans.some(
+        (span) =>
+          uncertainty.test(span) ||
+          clinicianTexts.some((text) =>
+            text
+              .split(/[.!?\n]/)
+              .some(
+                (clause) => clause.includes(span) && uncertainty.test(clause),
+              ),
+          ),
+      );
+      if (sourceUncertain && !uncertainty.test(proposal.body.text))
+        throw new DomainError("PROVIDER_UNAVAILABLE");
+    }
     proposal.missingDetails = proposalGaps(proposal);
   }
   const latest = await loadWorkspace();
@@ -216,6 +249,7 @@ AUTHORIZED EVIDENCE: ${JSON.stringify(evidence)} AUTHOR PRIVATE NOTES: ${JSON.st
     JSON.stringify(evidence.evidence.map((e) => [e.id, e.version]))
   )
     throw new DomainError("ACCESS_REVOKED");
+  await verifyOrigin();
   return withAccess(pool, session, context, async (a) => {
     for (const note of notes) {
       const currentNote = (
@@ -246,6 +280,7 @@ AUTHORIZED EVIDENCE: ${JSON.stringify(evidence)} AUTHOR PRIVATE NOTES: ${JSON.st
             previousRunId: d.previousRunId ?? null,
             timezone: d.timezone,
             submittedAt,
+            originCareMessageId: d.originCareMessageId ?? null,
           }),
           response.evidenceIds,
           notes.map((n) => n.id),

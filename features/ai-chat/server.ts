@@ -3,6 +3,11 @@ import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { withAccess, type AccessTransaction } from "@/features/access/server";
+import {
+  captureMedicationCommitment,
+  pendingRecommendations,
+  medicationQuestion,
+} from "@/features/clinical-care/medication-recommendations";
 import { appendEvent } from "@/features/audit/server";
 import { consumeAttempt } from "@/lib/db/rate-limit";
 import { digest } from "@/features/auth/sessions";
@@ -136,7 +141,7 @@ export async function conversationHistory(
       throw new DomainError("ACCESS_DENIED");
     const rows = (
       await a.tx.query(
-        `select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,(select jsonb_build_object('id',cp.id,'kind',cp.kind,'payload',cp.payload,'state',cp.state,'version',cp.version,'result_id',cp.result_id,'deliveries',(select coalesce(jsonb_agg(jsonb_build_object('connectionId',d.connection_id,'state',d.state,'resultId',d.result_id,'errorCode',d.error_code)),'[]'::jsonb) from mhistree.chat_care_deliveries d where d.proposal_id=cp.id)) from mhistree.chat_care_proposals cp where cp.reply_message_id=m.id) as "careProposal",coalesce(to_jsonb(m)->>'input_method','text') as "inputMethod",to_jsonb(m)->'transcription' as transcription,(select coalesce(to_jsonb(p)->>'input_method','text') from mhistree.chat_messages p where p.id=m.reply_to) as "replyInputMethod",g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51`,
+        `select m.id,m.sequence::text,m.role,m.content,m.timezone,m.captured_at,m.reply_to,(select jsonb_build_object('id',cp.id,'conversationId',m.conversation_id,'kind',cp.kind,'payload',cp.payload,'state',cp.state,'version',cp.version,'result_id',cp.result_id,'deliveries',(select coalesce(jsonb_agg(jsonb_build_object('connectionId',d.connection_id,'state',d.state,'resultId',d.result_id,'errorCode',d.error_code)),'[]'::jsonb) from mhistree.chat_care_deliveries d where d.proposal_id=cp.id)) from mhistree.chat_care_proposals cp where cp.reply_message_id=m.id) as "careProposal",coalesce(to_jsonb(m)->>'input_method','text') as "inputMethod",to_jsonb(m)->'transcription' as transcription,(select coalesce(to_jsonb(p)->>'input_method','text') from mhistree.chat_messages p where p.id=m.reply_to) as "replyInputMethod",g.state,g.error_code from mhistree.chat_messages m left join mhistree.chat_generations g on g.message_id=m.id where m.conversation_id=$1 and ($2::bigint is null or m.sequence<$2::bigint) order by m.sequence desc limit 51`,
         [id, before ?? null],
       )
     ).rows;
@@ -171,6 +176,20 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
           a.actor.sessionId,
         )
       : null;
+    if (receipt) {
+      await a.tx.query("select pg_advisory_xact_lock(hashtextextended($1,0))", [
+        `transcript:${receipt.id}`,
+      ]);
+      if (
+        (
+          await a.tx.query(
+            "select 1 from mhistree.care_messages where transcription->>'id'=$1",
+            [receipt.id],
+          )
+        ).rowCount
+      )
+        throw new DomainError("VERSION_CONFLICT");
+    }
     const transcription = receipt
       ? {
           id: receipt.id,
@@ -235,6 +254,12 @@ async function saveMessage(pool: Pool, session: string, input: unknown) {
       "insert into mhistree.chat_generations(message_id) values($1)",
       [id],
     );
+    await captureMedicationCommitment(a, {
+      id,
+      conversationId: data.conversationId,
+      content: data.content,
+      timezone: data.timezone,
+    });
     await a.tx.query(
       "insert into mhistree.extraction_jobs(account_id,message_id) values($1,$2)",
       [a.actor.accountId, id],
@@ -455,6 +480,12 @@ async function generatePatientReply(
       )
         ? await appointmentDiscovery(pool, session)
         : { status: "unavailable", recipients: [], slots: [], bounded: false };
+    const recommendations = await withAccess(
+      pool,
+      session,
+      { kind: "patient" },
+      (a) => pendingRecommendations(a, prepared.message.timezone),
+    );
     const system = `${patientChatPolicy}\n${careActionPolicy}\n${continuityPolicy}\nCurrent authorized context for grounded recall (bounded; identifiers/source lineage are internal only and must not appear in the conversational reply): ${JSON.stringify(
       {
         currentTime,
@@ -489,6 +520,9 @@ async function generatePatientReply(
         ...discovery,
         personalMedication: plan.personalMedication,
         medicationSafety: safety,
+        medicationRecommendations: recommendations.items,
+        recommendationPolicy:
+          "Recommendations and plans never prove actual use. Do not initiate medication follow-ups yourself; the server adds one exact eligible question and records its delivery. Never interpret a practitioner yes as patient use.",
         contactPreparationAccepted: acceptedContact,
         previousQuestion,
         appointmentRecipients: bookingOptions.recipients,
@@ -644,6 +678,32 @@ async function generatePatientReply(
           [messageId, lease],
         );
         if (!done.rowCount) return { state: "cancelled" };
+        await a.tx.query(
+          "select pg_advisory_xact_lock(hashtextextended($1,0))",
+          [`medication-workflow:${a.actor.personId}`],
+        );
+        const freshRecommendations = await pendingRecommendations(
+          a,
+          prepared.message.timezone,
+        );
+        if (
+          JSON.stringify(freshRecommendations.items) !==
+          JSON.stringify(recommendations.items)
+        )
+          throw new DomainError("VERSION_CONFLICT");
+        const followup =
+          dialogue.decision !== "urgent" &&
+          !action &&
+          plan.medication &&
+          !reply.includes("?")
+            ? freshRecommendations.due.find((r) =>
+                prepared.message.content
+                  .toLowerCase()
+                  .includes(r.name.toLowerCase()),
+              )
+            : undefined;
+        const question = followup ? medicationQuestion(followup) : null;
+        if (question) reply += ` ${question}`;
         const replyId = randomUUID();
         await a.tx.query(
           "insert into mhistree.chat_messages(id,conversation_id,person_id,account_id,role,content,timezone,reply_to,dialogue) values($1,$2,$3,$4,'assistant',$5,$6,$7,$8)",
@@ -658,6 +718,11 @@ async function generatePatientReply(
             dialogue,
           ],
         );
+        if (followup && question)
+          await a.tx.query(
+            "insert into mhistree.medication_followups(recommendation_id,local_date,reply_message_id,question) values($1,$2,$3,$4) on conflict do nothing",
+            [followup.id, freshRecommendations.day, replyId, question],
+          );
         if (action)
           await storeCareProposal(
             a,

@@ -593,6 +593,27 @@ async function extractReport(
             await a.tx.query("savepoint extraction_item");
             try {
               const item = saved.item;
+              if (
+                prepared.job.message_id &&
+                item.category === "medication-use"
+              ) {
+                const captured = (
+                  await a.tx.query(
+                    "select mc.event_id,r.name from mhistree.medication_commitments mc join mhistree.medication_recommendations r on r.id=mc.recommendation_id where mc.message_id=$1",
+                    [prepared.job.message_id],
+                  )
+                ).rows[0];
+                if (
+                  captured &&
+                  item.medicationName?.toLowerCase() ===
+                    captured.name.toLowerCase()
+                ) {
+                  if (captured.event_id)
+                    linked.set(item.quote, captured.event_id);
+                  await a.tx.query("release savepoint extraction_item");
+                  continue;
+                }
+              }
               const prior = item.relation
                 ? savedOutput.context?.reports.find(
                     (r) => r.id === item.relation!.eventId,

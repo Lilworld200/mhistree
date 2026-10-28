@@ -102,6 +102,30 @@ export async function recordSourceInAccess(
       throw new DomainError("ACCESS_DENIED");
     capturedAt = message.captured_at;
   }
+  if (data.careMessageId) {
+    if (
+      data.messageId ||
+      data.parentSourceId ||
+      data.uploaded ||
+      access.context.kind !== "patient"
+    )
+      throw new DomainError("ACCESS_DENIED");
+    const message = (
+      await access.tx.query(
+        "select m.content,m.timezone,m.sent_at,m.author_account_id,t.patient_person_id from mhistree.care_messages m join mhistree.care_threads t on t.id=m.thread_id where m.id=$1",
+        [data.careMessageId],
+      )
+    ).rows[0];
+    if (
+      !message ||
+      message.author_account_id !== access.actor.accountId ||
+      message.patient_person_id !== data.patientPersonId ||
+      message.content !== data.content ||
+      message.timezone !== data.sourceTimezone
+    )
+      throw new DomainError("ACCESS_DENIED");
+    capturedAt = message.sent_at;
+  }
   if (data.parentSourceId) {
     const original = (
       await access.tx.query("select * from mhistree.sources where id=$1", [
@@ -136,6 +160,7 @@ export async function recordSourceInAccess(
       existing.source_timezone !== data.sourceTimezone ||
       existing.source_status !== status ||
       existing.chat_message_id !== (data.messageId ?? null) ||
+      existing.care_message_id !== (data.careMessageId ?? null) ||
       existing.parent_source_id !== (data.parentSourceId ?? null)
     )
       throw new DomainError("VERSION_CONFLICT");
@@ -146,7 +171,7 @@ export async function recordSourceInAccess(
   }
   const row = (
     await access.tx.query(
-      `insert into mhistree.sources(patient_person_id,origin_person_id,author_account_id,original_context,original_organization_id,category,visibility,source_status,source_timezone,content,client_key,captured_at,chat_message_id,parent_source_id) values($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11,clock_timestamp()),$12,$13) returning id,version`,
+      `insert into mhistree.sources(patient_person_id,origin_person_id,author_account_id,original_context,original_organization_id,category,visibility,source_status,source_timezone,content,client_key,captured_at,chat_message_id,parent_source_id,care_message_id) values($1,$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11,clock_timestamp()),$12,$13,$14) returning id,version`,
       [
         data.patientPersonId,
         access.actor.accountId,
@@ -161,6 +186,7 @@ export async function recordSourceInAccess(
         capturedAt,
         data.messageId ?? null,
         data.parentSourceId ?? null,
+        data.careMessageId ?? null,
       ],
     )
   ).rows[0];

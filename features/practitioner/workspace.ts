@@ -1,3 +1,4 @@
+import { currentMedicationProjection } from "@/features/health-records/medication-projection";
 import "server-only";
 import type { Pool } from "pg";
 import { z } from "zod";
@@ -93,7 +94,7 @@ export function directWorkspace(
     const overview = await patientOverviewInAccess(a, personId);
     const state = (
       await a.tx.query(
-        "select e.* from mhistree.persistent_state p join mhistree.contributions e on e.id=p.event_id where e.patient_person_id=$1 order by e.category,e.recorded_at desc limit 100",
+        `select e.* from mhistree.persistent_state p join mhistree.contributions e on e.id=p.event_id where e.patient_person_id=$1 and ${currentMedicationProjection} order by e.category,e.recorded_at desc limit 100`,
         [personId],
       )
     ).rows;

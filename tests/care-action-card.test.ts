@@ -25,8 +25,8 @@ function sample(kind: "message" | "appointment" = "message"): CareProposal {
     result_id: null,
     payload: {
       content: "Would this medicine help?",
-      connectionId: "connection",
-      practitionerId: "doctor",
+      connectionId: "10000000-0000-4000-8000-000000000001",
+      practitionerId: "10000000-0000-4000-8000-000000000002",
       connectionRevision: 1,
       slot: null,
     },
@@ -48,8 +48,8 @@ function options(p: CareProposal) {
       bounded: false,
       recipients: [
         {
-          connectionId: "connection",
-          practitionerId: "doctor",
+          connectionId: "10000000-0000-4000-8000-000000000001",
+          practitionerId: "10000000-0000-4000-8000-000000000002",
           revision: 1,
           name: "Dr Synthetic",
           kind: "direct",
@@ -216,4 +216,37 @@ it("updates the card from a typed Send receipt loaded in conversation history", 
   );
   expect(host.textContent).toContain("Message saved to Care inbox");
   expect(host.querySelector("textarea")).toBeNull();
+});
+
+it("retains a failed handoff draft and requires retry or explicit sending without the attachment", async () => {
+  const p = { ...sample(), conversationId: crypto.randomUUID() };
+  apiMock.mockImplementation(
+    async (
+      path: string,
+      input?: { action: string; payload: CareProposal["payload"] },
+    ) => {
+      if (path === "/api/chat" && input?.action === "prepare-handoff")
+        throw new Error("PROVIDER_UNAVAILABLE");
+      if (input?.action === "update")
+        return { ...p, payload: input.payload, version: 2 };
+      if (input?.action === "confirm")
+        return { ...p, state: "completed", result_id: "saved" };
+      return options(p);
+    },
+  );
+  await mount(p);
+  expect(host.textContent).toContain("Your draft is retained");
+  expect(
+    host.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled,
+  ).toBe(true);
+  const skip = [...host.querySelectorAll("button")].find((b) =>
+    b.textContent?.includes("Send without a summary attachment"),
+  )!;
+  await act(async () => skip.click());
+  expect(host.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe(
+    p.payload.content,
+  );
+  expect(
+    host.querySelector<HTMLButtonElement>("button[type=submit]")!.disabled,
+  ).toBe(false);
 });

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Btn } from "@/components/ui/button";
 import { api, errorMessage } from "@/lib/client-api";
+import { careDraft } from "./care-action-schema";
 import type {
   CareDraft,
   CareOptions,
@@ -58,6 +59,17 @@ export function CareActionCard({
     [busy, setBusy] = useState(false),
     [loading, setLoading] = useState(false),
     [saving, setSaving] = useState(false);
+  const [summaryState, setSummaryState] = useState<
+    "pending" | "ready" | "failed"
+  >(
+    proposal.conversationId &&
+      proposal.kind === "message" &&
+      proposal.state === "draft" &&
+      proposal.payload.summary === undefined
+      ? "pending"
+      : "ready",
+  );
+  const prepareSummaryRef = useRef<() => Promise<void>>(async () => {});
   const [confirmation, setConfirmation] =
     useState<CareProposal["confirmation"]>(null);
   useEffect(() => {
@@ -103,12 +115,13 @@ export function CareActionCard({
     const pending = queue.current
       .catch(() => {})
       .then(async () => {
-        const body = structuredClone(latest.current);
+        const body = careDraft.parse(structuredClone(latest.current));
         if (
           ["completed", "dismissed", "sending"].includes(
             current.current.state,
           ) ||
-          JSON.stringify(body) === JSON.stringify(current.current.payload)
+          JSON.stringify(body) ===
+            JSON.stringify(careDraft.parse(current.current.payload))
         )
           return;
         if (mounted.current) setSaving(true);
@@ -120,7 +133,10 @@ export function CareActionCard({
             payload: body,
           });
           current.current = result;
-          if (JSON.stringify(body) === JSON.stringify(latest.current))
+          if (
+            JSON.stringify(body) ===
+            JSON.stringify(careDraft.parse(latest.current))
+          )
             pendingDrafts.delete(proposal.id);
           if (mounted.current) {
             setSaved(result);
@@ -220,13 +236,16 @@ export function CareActionCard({
     const id = setTimeout(() => {
       if (
         !active ||
+        summaryState !== "ready" ||
         saved.kind !== "message" ||
         !["draft", "partial", "failed"].includes(saved.state) ||
         !hasEligible ||
         !draft.content.trim() ||
         saving ||
         busy ||
-        JSON.stringify(draft) !== JSON.stringify(saved.payload)
+        !careDraft.safeParse(draft).success ||
+        JSON.stringify(careDraft.parse(draft)) !==
+          JSON.stringify(careDraft.parse(saved.payload))
       )
         return;
       void api<CareProposal>("/api/chat/care-actions", {
@@ -247,6 +266,7 @@ export function CareActionCard({
     };
   }, [
     active,
+    summaryState,
     saved.kind,
     saved.state,
     saved.version,
@@ -258,7 +278,61 @@ export function CareActionCard({
     proposal.id,
   ]);
 
+  async function prepareSummary() {
+    if (!proposal.conversationId) return;
+    setSummaryState("pending");
+    setBusy(true);
+    setError("");
+    try {
+      const result = await api<{
+        state: string;
+        attachment: CareDraft["summary"];
+      }>("/api/chat", {
+        action: "prepare-handoff",
+        data: { id: proposal.conversationId },
+      });
+      if (result.state !== "ready")
+        throw new Error("Summary preparation is running. Retry shortly.");
+      edit({ ...latest.current, summary: result.attachment });
+      await flush();
+      setSummaryState("ready");
+    } catch (e) {
+      setSummaryState("failed");
+      setError(
+        `${errorMessage(e)} Your draft is retained. Retry summary preparation or send without an attachment.`,
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+  useEffect(() => {
+    prepareSummaryRef.current = prepareSummary;
+  });
+  useEffect(() => {
+    if (
+      proposal.conversationId &&
+      proposal.kind === "message" &&
+      proposal.state === "draft" &&
+      proposal.payload.summary === undefined
+    )
+      void prepareSummaryRef.current();
+  }, [
+    proposal.id,
+    proposal.conversationId,
+    proposal.kind,
+    proposal.state,
+    proposal.payload.summary,
+  ]);
+  useEffect(() => {
+    if (!active)
+      void api("/api/chat/care-actions", {
+        action: "disarm",
+        id: proposal.id,
+        version: saved.version,
+      }).catch(() => {});
+  }, [active, proposal.id, saved.version]);
   async function submit(action: "confirm" | "dismiss") {
+    if (action === "confirm" && summaryState !== "ready") return;
     setBusy(true);
     setError("");
     try {
@@ -357,6 +431,60 @@ export function CareActionCard({
             Review the message and selected recipients. Separate care teams
             receive separate copies.
           </p>
+          {saved.kind === "message" && (
+            <section aria-label="Reviewed summary attachment">
+              <Btn
+                type="button"
+                disabled={busy || !writable || !proposal.conversationId}
+                onClick={() => void prepareSummary()}
+              >
+                {summaryState === "pending"
+                  ? "Preparing summary…"
+                  : "Prepare / refresh summary"}
+              </Btn>
+              {summaryState === "failed" && (
+                <Btn
+                  type="button"
+                  disabled={busy}
+                  onClick={() => {
+                    edit({ ...latest.current, summary: null });
+                    setSummaryState("ready");
+                  }}
+                >
+                  Send without a summary attachment
+                </Btn>
+              )}
+              {draft.summary ? (
+                <>
+                  <label>
+                    Review summary before sharing
+                    <textarea
+                      value={draft.summary.text}
+                      maxLength={6000}
+                      disabled={busy || !writable}
+                      onChange={(e) =>
+                        edit({
+                          ...latest.current,
+                          summary: { ...draft.summary!, text: e.target.value },
+                        })
+                      }
+                    />
+                  </label>
+                  <Btn
+                    type="button"
+                    disabled={busy || !writable}
+                    onClick={() => edit({ ...latest.current, summary: null })}
+                  >
+                    Remove attachment
+                  </Btn>
+                </>
+              ) : (
+                <p>
+                  No summary attached. Send shares only the reviewed message.
+                </p>
+              )}
+            </section>
+          )}
           <fieldset
             className="care-recipient-list"
             disabled={busy || loading || saved.state === "sending"}
@@ -581,6 +709,8 @@ export function CareActionCard({
               disabled={
                 busy ||
                 loading ||
+                summaryState !== "ready" ||
+                Boolean(draft.summary && !draft.summary.text.trim()) ||
                 !hasEligible ||
                 (saved.kind === "message"
                   ? !draft.content.trim()

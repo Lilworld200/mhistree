@@ -1,3 +1,4 @@
+import { currentMedicationProjection } from "@/features/health-records/medication-projection";
 import "server-only";
 import type { Pool } from "pg";
 import { withAccess } from "@/features/access/server";
@@ -26,7 +27,7 @@ export function medicationSafetyContext(
        row_number() over(partition by e.category order by e.recorded_at desc,e.id desc) as lane
       from mhistree.record_heads h join mhistree.contributions e on e.id=h.current_id join mhistree.sources s on s.id=e.source_id
       where mhistree.canonical_person(e.patient_person_id)=mhistree.canonical_person($1) and e.visibility='finalized'
-       and e.category in ('medication-use','prescription','allergy','ongoing','baseline'))
+       and e.category in ('medication-use','prescription','allergy','ongoing','baseline') and ${currentMedicationProjection})
       select * from authorized where lane<=4 order by lane,category,id limit 21`,
         [patientId],
       )

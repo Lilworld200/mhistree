@@ -61,6 +61,8 @@ export function proposalGaps(proposal: z.infer<typeof practitionerProposal>) {
     for (const field of ["name", "dose", "frequency"] as const)
       if (
         !proposal.medicationDetails?.[field] ||
+        (field === "name" &&
+          /^para$/i.test(proposal.medicationDetails[field].trim())) ||
         /\b(or|maybe|unsure|unknown|either|possibly)\b/i.test(
           proposal.medicationDetails[field],
         )

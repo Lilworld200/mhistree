@@ -10,6 +10,13 @@ type State = {
     medicationPresentation: { useStatus: string; explanation: string } | null;
   })[];
   prescriptions: DisplayRecord[];
+  recommendations?: {
+    id: string;
+    name: string;
+    details: string;
+    state: string;
+    version: number;
+  }[];
   limited: boolean;
 };
 export function HealthView() {
@@ -55,6 +62,38 @@ export function HealthView() {
       </p>
       {error && <p role="alert">{error}</p>}
       {!state && !error && <p role="status">Loading health details…</p>}
+      {Boolean(state?.recommendations?.length) && (
+        <section
+          className="card health-category"
+          aria-label="Medication recommendations"
+        >
+          <h2>Recommendations & plans</h2>
+          {state?.recommendations?.map((r) => (
+            <article key={r.id}>
+              <h3>
+                {r.name} · {r.state}
+              </h3>
+              <p>{r.details}</p>
+              <p>A recommendation or planned start does not confirm use.</p>
+              <Btn
+                onClick={async () => {
+                  try {
+                    await api("/api/health", {
+                      action: "dismiss-recommendation",
+                      data: { id: r.id, version: r.version },
+                    });
+                    setState(await api<State>("/api/health"));
+                  } catch (e) {
+                    setError(errorMessage(e));
+                  }
+                }}
+              >
+                Dismiss follow-ups for {r.name}
+              </Btn>
+            </article>
+          ))}
+        </section>
+      )}
       <div className="grid2 health-grid">
         {["medication-use", "allergy", "baseline", "ongoing"].map(
           (category) => (
@@ -83,7 +122,7 @@ export function HealthView() {
                   <div key={record.id}>
                     {record.medicationPresentation && (
                       <p>
-                        Current use: {record.medicationPresentation.useStatus}.{" "}
+                        Reported use: {record.medicationPresentation.useStatus}.{" "}
                         {record.medicationPresentation.explanation}
                       </p>
                     )}

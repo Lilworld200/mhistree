@@ -482,7 +482,7 @@ it("organization capture preserves institution/context and loses write access on
       patientPersonId: f.patient.personId,
       requestKey: randomUUID(),
       method: "in-person",
-      categories: ["clinical"],
+      categories: ["clinical", "prescription"],
       exclusions: [],
       evidence: "Synthetic organizational consent and identity verified.",
     })
@@ -491,7 +491,7 @@ it("organization capture preserves institution/context and loses write access on
     organizationId: org,
     connectionId: orgConnection,
     accountId: f.doctor.accountId,
-    categories: ["clinical"],
+    categories: ["clinical", "prescription"],
   });
   const context = {
     kind: "organization" as const,
@@ -536,6 +536,46 @@ it("organization capture preserves institution/context and loses write access on
   expect(event.original_context).toBe(`organization:${orgConnection}`);
   expect(event.original_organization_id).toBe(org);
   expect(event.author_account_id).toBe(f.doctor.accountId);
+  const rx = "I prescribe Omeprazole 20 mg once daily.";
+  const prescribed = await practitionerAssistance(
+    db.pool,
+    f.doctor.session,
+    {
+      connectionId: orgConnection,
+      question: rx,
+      purpose: "draft",
+      includeOwnNotes: false,
+      conversation: true,
+    },
+    {
+      generate: async () =>
+        JSON.stringify({
+          text: "Review the prescription.",
+          evidenceIds: [],
+          limitations: [],
+          proposals: [
+            {
+              ...proposal("prescription", rx),
+              medicationDetails: {
+                name: "Omeprazole",
+                dose: "20 mg",
+                frequency: "once daily",
+              },
+            },
+          ],
+        }),
+    },
+    context,
+  );
+  await savePractitionerProposal(
+    db.pool,
+    f.doctor.session,
+    context,
+    input(prescribed),
+  );
+  expect(
+    (await healthState(db.pool, f.patient.session)).recommendations[0].name,
+  ).toBe("Omeprazole");
   await db.pool.query(
     "update mhistree.memberships set active=false where organization_id=$1 and account_id=$2",
     [org, f.doctor.accountId],

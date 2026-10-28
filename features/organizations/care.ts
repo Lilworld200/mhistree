@@ -1,3 +1,4 @@
+import { currentMedicationProjection } from "@/features/health-records/medication-projection";
 import "server-only";
 import type { Pool } from "pg";
 import { randomUUID } from "node:crypto";
@@ -192,9 +193,21 @@ export async function organizationWorkspace(
       }
     }
     if (!allowed) throw new DomainError("ACCESS_DENIED");
+    const permissionRows = (
+      await a.tx.query(
+        "select category,mhistree.can_access($1,$1,category,'finalized',$2,$3,'read',$4) can_read,mhistree.can_access($1,$1,category,'finalized',$2,$3,'write',$4) can_write from unnest($5::text[]) category",
+        [
+          row.patient_person_id,
+          a.actor.accountId,
+          a.contextId,
+          context.organizationId,
+          category.options,
+        ],
+      )
+    ).rows;
     const state = (
       await a.tx.query(
-        "select e.* from mhistree.persistent_state s join mhistree.contributions e on e.id=s.event_id where e.patient_person_id=$1 order by e.recorded_at desc limit 100",
+        `select e.* from mhistree.persistent_state s join mhistree.contributions e on e.id=s.event_id where e.patient_person_id=$1 and ${currentMedicationProjection} order by e.recorded_at desc limit 100`,
         [row.patient_person_id],
       )
     ).rows;
@@ -212,6 +225,14 @@ export async function organizationWorkspace(
     });
     return {
       patientPersonId: row.patient_person_id,
+      permissions: {
+        read: permissionRows
+          .filter((r) => r.can_read)
+          .map((r) => r.category as string),
+        write: permissionRows
+          .filter((r) => r.can_write)
+          .map((r) => r.category as string),
+      },
       revision: row.revision,
       state,
       recent,

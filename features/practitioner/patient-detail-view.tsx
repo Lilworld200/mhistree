@@ -185,7 +185,7 @@ function SharedHistory({
 }
 const titles: Record<Panel, string> = {
   summary: "Health",
-  ai: "Ask Mhistree",
+  ai: "Talk to Mhistree",
   work: "Care notes",
   requests: "Requests & results",
   messages: "Care inbox",

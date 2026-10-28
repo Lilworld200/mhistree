@@ -53,9 +53,18 @@ export const selectedRecipient = z
   })
   .strict();
 export type SelectedRecipient = z.infer<typeof selectedRecipient>;
+export const sharedSummary = z
+  .object({
+    sourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+    conversationId: z.uuid(),
+    throughSequence: z.string().regex(/^\d{1,18}$/),
+    text: z.string().trim().min(1).max(6000),
+  })
+  .strict();
 export const careDraft = z
   .object({
     content: z.string().max(10000),
+    summary: sharedSummary.nullable().optional(),
     recipients: z.array(selectedRecipient).max(100).optional(),
     connectionId: z.uuid().nullable(),
     practitionerId: z.uuid().nullable(),
@@ -73,6 +82,7 @@ export const careDraft = z
 export type CareDraft = z.infer<typeof careDraft>;
 export type CareProposal = {
   id: string;
+  conversationId?: string;
   kind: "message" | "appointment";
   version: number;
   state: "draft" | "dismissed" | "completed" | "partial" | "failed" | "sending";

@@ -123,6 +123,7 @@ export async function prepareMemory(
   id: string,
   gateway: AIGateway,
   signal?: AbortSignal,
+  handoff = false,
 ): Promise<{ state: string }> {
   z.uuid().parse(id);
   const lease = randomUUID();
@@ -132,13 +133,32 @@ export async function prepareMemory(
     { kind: "patient" },
     async (a) => {
       await requireOwnedConversation(a, id);
-      const link = (
+      const departureLink = (
         await a.tx.query(
           "select * from mhistree.chat_memory_links where conversation_id=$1",
           [id],
         )
       ).rows[0];
+      const link = handoff
+        ? {
+            previous_id: id,
+            through_sequence: (
+              await a.tx.query(
+                "select coalesce(max(sequence),0)::text as checkpoint from mhistree.chat_messages where conversation_id=$1",
+                [id],
+              )
+            ).rows[0].checkpoint,
+            prepared: false,
+          }
+        : departureLink;
+      if (handoff)
+        await a.tx.query(
+          "insert into mhistree.chat_memory_jobs(conversation_id) values($1) on conflict do nothing",
+          [id],
+        );
       if (!link || link.prepared) return { state: "ready" as const };
+      if (BigInt(link.through_sequence) === 0n)
+        return { state: "ready" as const };
       const previous = link.previous_id as string;
       await requireOwnedConversation(a, previous);
       const summary = (
@@ -300,7 +320,7 @@ export async function prepareMemory(
         "update mhistree.chat_memory_links set prepared=true where conversation_id=$1 and previous_id=$2 and through_sequence=$3 returning conversation_id",
         [id, work.previous, work.through],
       );
-      return { state: done.rowCount ? "ready" : "pending" };
+      return { state: handoff || done.rowCount ? "ready" : "pending" };
     });
   } catch (error) {
     try {
@@ -316,7 +336,7 @@ export async function prepareMemory(
 }
 
 /** Clinical corrections invalidate recall tied to superseded evidence, including earlier versions. */
-async function correctedMessageIds(a: AccessTransaction, ids: string[]) {
+export async function correctedMessageIds(a: AccessTransaction, ids: string[]) {
   if (!ids.length) return new Set<string>();
   const rows = (
     await a.tx.query(
@@ -404,4 +424,73 @@ export async function recallMemoryInAccess(
     items.push(item);
   }
   return { items, bounded: true, fingerprint: fingerprint(items) };
+}
+
+/** Patient-only editable projection. No live summary identifier is exposed to a practitioner. */
+export async function handoffSummary(
+  pool: Pool,
+  session: string,
+  id: string,
+  gateway: AIGateway,
+  signal?: AbortSignal,
+) {
+  const result = await prepareMemory(pool, session, id, gateway, signal, true);
+  if (result.state !== "ready") return { ...result, attachment: null };
+  return withAccess(pool, session, { kind: "patient" }, async (a) => {
+    await requireOwnedConversation(a, id);
+    const row = (
+      await a.tx.query(
+        "select through_sequence::text,items from mhistree.chat_session_summaries where conversation_id=$1",
+        [id],
+      )
+    ).rows[0];
+    const items: MemoryItem[] = row?.items ?? [];
+    const corrected = await correctedMessageIds(
+      a,
+      items.flatMap((i) => i.sources.map((s) => s.messageId)),
+    );
+    const shareable = items.filter(
+      (i) =>
+        [
+          "patient-report",
+          "life-context",
+          "preference",
+          "open-question",
+        ].includes(i.kind) &&
+        i.sources.every((s) => !corrected.has(s.messageId)),
+    );
+    const sourceFingerprint = fingerprint(shareable);
+    const text = shareable
+      .map(
+        (i) =>
+          `${i.kind === "open-question" ? (i.sources.every((source) => source.role === "patient") ? "Patient question" : "Mhistree question") : i.kind === "preference" ? "Patient preference" : i.kind === "life-context" ? "Patient context" : "Patient report"} (captured ${i.sources[0]?.capturedAt.slice(0, 10)}): ${i.text}`,
+      )
+      .join("\n");
+    if (row && text)
+      await a.tx.query(
+        "insert into mhistree.chat_handoff_preparations(conversation_id,through_sequence,source_fingerprint,source_ids) values($1,$2,$3,$4) on conflict do nothing",
+        [
+          id,
+          row.through_sequence,
+          sourceFingerprint,
+          [
+            ...new Set(
+              shareable.flatMap((i) => i.sources.map((s) => s.messageId)),
+            ),
+          ],
+        ],
+      );
+    return {
+      state: "ready",
+      attachment:
+        row && text
+          ? {
+              conversationId: id,
+              throughSequence: row.through_sequence,
+              sourceFingerprint,
+              text,
+            }
+          : null,
+    };
+  });
 }

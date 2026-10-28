@@ -7,6 +7,7 @@ import { sendCareMessageInAccess } from "@/features/messaging/server";
 import { DomainError, applicationErrorCode } from "@/lib/errors";
 import {
   careDraft,
+  sharedSummary,
   confirmationAnswer,
   type CareDraft,
   type CareProposal,
@@ -49,6 +50,14 @@ export async function decoratedProposal(
     ).rows[0] ?? null;
   return {
     id: row.id,
+    conversationId:
+      row.conversationId ??
+      (
+        await a.tx.query(
+          "select m.conversation_id from mhistree.chat_care_proposals p join mhistree.chat_messages m on m.id=p.reply_message_id where p.id=$1",
+          [row.id],
+        )
+      ).rows[0]?.conversation_id,
     kind: row.kind,
     payload: careDraft.parse(row.payload),
     state: row.state,
@@ -174,15 +183,23 @@ export async function confirmCareMessages(
       for (const target of targets) {
         const old = (
           await a.tx.query(
-            "select reviewed_content from mhistree.chat_care_deliveries where proposal_id=$1 and connection_id=$2",
+            "select reviewed_content,reviewed_summary from mhistree.chat_care_deliveries where proposal_id=$1 and connection_id=$2",
             [id, target.connectionId],
           )
         ).rows[0];
-        if (old && old.reviewed_content !== payload.content)
+        if (
+          old &&
+          (old.reviewed_content !== payload.content ||
+            JSON.stringify(
+              old.reviewed_summary
+                ? sharedSummary.parse(old.reviewed_summary)
+                : null,
+            ) !== JSON.stringify(payload.summary ?? null))
+        )
           throw new DomainError("VERSION_CONFLICT");
         await a.tx.query(
-          "insert into mhistree.chat_care_deliveries(proposal_id,connection_id,reviewed_content) values($1,$2,$3) on conflict do nothing",
-          [id, target.connectionId, payload.content],
+          "insert into mhistree.chat_care_deliveries(proposal_id,connection_id,reviewed_content,reviewed_summary) values($1,$2,$3,$4) on conflict do nothing",
+          [id, target.connectionId, payload.content, payload.summary ?? null],
         );
       }
       await a.tx.query(
@@ -235,6 +252,13 @@ export async function confirmCareMessages(
             connectionId: target.connectionId,
             requestKey: child.operation_key,
             content: child.reviewed_content,
+            summary: child.reviewed_summary ?? undefined,
+            originConversationId: (
+              await a.tx.query(
+                "select m.conversation_id from mhistree.chat_care_proposals p join mhistree.chat_messages m on m.id=p.reply_message_id where p.id=$1",
+                [id],
+              )
+            ).rows[0].conversation_id,
           });
           await a.tx.query(
             "update mhistree.chat_care_deliveries set state='stored',result_id=$3,error_code=null,updated_at=clock_timestamp() where proposal_id=$1 and connection_id=$2",

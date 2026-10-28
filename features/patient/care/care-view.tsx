@@ -37,6 +37,8 @@ type Inbox = {
   items: {
     id: string;
     content: string;
+    summary_attachment?: { text: string };
+    clinical_attachments?: { eventId: string; text: string }[];
     sent_at: string;
     delivery_state: string;
     author_account_id: string;
@@ -312,6 +314,17 @@ export function CareView({
           {messages.items.map((m) => (
             <article className="record-card" key={m.id}>
               <p style={{ whiteSpace: "pre-wrap" }}>{m.content}</p>
+              {m.summary_attachment && (
+                <aside aria-label="Patient reviewed summary">
+                  {m.summary_attachment.text}
+                </aside>
+              )}
+              {m.clinical_attachments?.map((attachment) => (
+                <aside key={attachment.eventId}>
+                  <strong>Reviewed patient-record entry</strong>
+                  <p>{attachment.text}</p>
+                </aside>
+              ))}
               <small>
                 {new Date(m.sent_at).toLocaleString()} · {m.delivery_state} ·{" "}
                 {m.author_account_id}
@@ -329,6 +342,8 @@ export function CareView({
                 const body = {
                   connectionId: connection,
                   content: f.get("content"),
+                  replyToMessageId: messages.items.at(-1)?.id,
+                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
                 };
                 try {
                   await api("/api/care", {

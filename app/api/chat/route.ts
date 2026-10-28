@@ -20,7 +20,7 @@ import { retryPatientReply } from "@/features/ai-chat/assessment";
 import { aiDebug, aiDebugError, withAIDebug } from "@/lib/ai/debug";
 import { withAccess } from "@/features/access/server";
 import { linkPreviousConversation } from "@/features/ai-chat/memory";
-import { prepareMemory } from "@/features/ai-chat/memory";
+import { handoffSummary, prepareMemory } from "@/features/ai-chat/memory";
 import { invalidateCareConfirmation } from "@/features/ai-chat/care-delivery";
 import { generateTitle } from "@/features/ai-chat/titles";
 export const maxDuration = 120;
@@ -56,6 +56,7 @@ async function chatRequest(request: NextRequest) {
           "generate",
           "cancel",
           "prepare-memory",
+          "prepare-handoff",
           "title",
         ]),
         data: z.unknown(),
@@ -90,6 +91,12 @@ async function chatRequest(request: NextRequest) {
           data.id,
           data.previousConversationId,
         ),
+      );
+    }
+    if (input.action === "prepare-handoff") {
+      const { id } = z.object({ id: z.uuid() }).strict().parse(input.data);
+      return success(
+        await handoffSummary(pool, session, id, aiGateway(), request.signal),
       );
     }
     if (input.action === "prepare-memory" || input.action === "title") {

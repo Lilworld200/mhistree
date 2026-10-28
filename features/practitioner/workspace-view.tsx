@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { PatientAssistant } from "./patient-assistant";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
@@ -44,6 +45,7 @@ type RequestRow = {
   result_event_id: string | null;
 };
 export type Workspace = {
+  permissions?: { read: string[]; write: string[] };
   patientPersonId: string;
   revision: number;
   state: Entry[];
@@ -56,7 +58,17 @@ export type Workspace = {
       content: string;
       sent_at: string;
       delivery_state: string;
+      author_account_id?: string;
+      own?: boolean;
+      recommendations?: {
+        id: string;
+        name: string;
+        state: string;
+        version: number;
+      }[];
+      clinical_attachments?: { eventId: string; text: string }[];
       sequence?: string;
+      summary_attachment?: { text: string } | null;
     }[];
   } | null;
   notifications?: { health: boolean; messages: boolean; ai: boolean };
@@ -78,6 +90,13 @@ export function WorkspaceView({
     clear: () => void;
   };
 }) {
+  const [reviewMessage, setReviewMessage] = useState<{
+    id: string;
+    content: string;
+  } | null>(null);
+  const [noteDestination, setNoteDestination] = useState<"note" | "record">(
+    "note",
+  );
   const endpoint = organizationContext
     ? "/api/organizations/workspace"
     : "/api/practitioner/workspace";
@@ -127,13 +146,58 @@ export function WorkspaceView({
       window.removeEventListener("focus", refresh);
     };
   }, [refresh, endpoint, query, controller]);
+  const [patientOnline, setPatientOnline] = useState(false);
+  useEffect(() => {
+    if (section !== "messages" || organizationContext?.kind === "initial-care")
+      return;
+    let alive = true,
+      running = false;
+    async function pulse() {
+      if (running || document.visibilityState !== "visible") return;
+      running = true;
+      try {
+        const result = await api<{ online: boolean }>(endpoint, {
+          ...(organizationContext
+            ? { context: organizationContext }
+            : { connectionId }),
+          action: "presence",
+          data: {},
+        });
+        if (alive) setPatientOnline(result.online);
+      } catch {
+        if (alive) setPatientOnline(false);
+      } finally {
+        running = false;
+      }
+    }
+    void pulse();
+    const timer = setInterval(() => void pulse(), 15000);
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [section, organizationContext, connectionId, endpoint]);
   const data = controller
     ? controller.ready
       ? controller.data
       : null
     : localData;
   const { refresh: refreshNotifications } = useCareNotifications();
+  const pendingOperations = useRef(new Map<string, string>());
   async function act(action: string, payload: unknown) {
+    let operation: string | undefined;
+    if (
+      (action === "save" || action === "message") &&
+      payload &&
+      typeof payload === "object"
+    ) {
+      const body = payload as Record<string, unknown>;
+      operation = JSON.stringify({ action, ...body, requestKey: undefined });
+      const key =
+        pendingOperations.current.get(operation) ?? crypto.randomUUID();
+      pendingOperations.current.set(operation, key);
+      payload = { ...body, requestKey: key };
+    }
     setBusy(true);
     setMessage("");
     try {
@@ -144,6 +208,7 @@ export function WorkspaceView({
         action,
         data: payload,
       });
+      if (operation) pendingOperations.current.delete(operation);
       await refresh();
       if (action === "read" || action === "message")
         await refreshNotifications();
@@ -229,93 +294,120 @@ export function WorkspaceView({
             Private work is not patient-facing. Suspected findings must remain
             labeled suspected. Finalization requires deliberate human review.
           </p>
-          <form
-            className="account-form"
-            onSubmit={async (e) => {
-              e.preventDefault();
-              const f = new FormData(e.currentTarget);
-              await act("save", {
-                requestKey: crypto.randomUUID(),
-                patientPersonId: data.patientPersonId,
-                kind: f.get("kind"),
-                category: f.get("category"),
-                body: {
-                  text: f.get("text"),
-                  bodySite: f.get("bodySite") || null,
-                  contextLinks: [],
-                },
-                occurredAt: f.get("eventDate")
-                  ? {
-                      precision: "exact",
-                      at: new Date(String(f.get("eventDate"))).toISOString(),
-                    }
-                  : { precision: "unknown" },
-                timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-                dueAt: f.get("due")
-                  ? new Date(String(f.get("due"))).toISOString()
-                  : null,
-                ...(suggestion && f.get("useAi")
-                  ? { aiRunId: suggestion.id }
-                  : {}),
-              });
-            }}
-          >
-            <label>
-              Type
-              <select name="kind">
-                <option value="private-note">Author-only private note</option>
-                <option value="reminder">Author-only reminder</option>
-                <option value="draft">Clinical draft</option>
-              </select>
-            </label>
-            <label>
-              Category
-              <select name="category">
-                {[
-                  "clinical",
-                  "allergy",
-                  "medication-use",
-                  "baseline",
-                  "ongoing",
-                  "prescription",
-                  "result",
-                ].map((c) => (
-                  <option key={c}>{c}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Content
-              <textarea
-                name="text"
-                key={suggestion?.id ?? "manual"}
-                defaultValue={suggestion?.text ?? ""}
-                required
-                maxLength={10000}
-              />
-            </label>
-            <label>
-              Body site
-              <input name="bodySite" />
-            </label>
-            <label>
-              Exact event time, only if known
-              <input type="datetime-local" name="eventDate" />
-            </label>
-            <label>
-              Reminder time, if applicable
-              <input type="datetime-local" name="due" />
-            </label>
-            {suggestion && (
-              <label>
-                <input type="checkbox" name="useAi" />
-                Retain this AI suggestion’s provenance (draft or private note)
-              </label>
-            )}
-            <Btn type="submit" disabled={busy}>
-              Save private work
+          <nav className="sharing-tabs" aria-label="Care note destination">
+            <Btn
+              onClick={() => setNoteDestination("note")}
+              aria-pressed={noteDestination === "note"}
+            >
+              Private note
             </Btn>
-          </form>
+            {organizationContext?.kind !== "initial-care" && (
+              <Btn
+                onClick={() => setNoteDestination("record")}
+                aria-pressed={noteDestination === "record"}
+              >
+                Add to patient record
+              </Btn>
+            )}
+          </nav>
+          {noteDestination === "record" ? (
+            <PatientAssistant
+              connectionId={connectionId}
+              organizationContext={organizationContext}
+              captureOnly
+              writableCategories={data.permissions?.write ?? []}
+              onSaved={() => void refresh()}
+              onDenied={() => controller?.clear()}
+            />
+          ) : (
+            <form
+              className="account-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                await act("save", {
+                  requestKey: crypto.randomUUID(),
+                  patientPersonId: data.patientPersonId,
+                  kind: f.get("kind"),
+                  category: f.get("category"),
+                  body: {
+                    text: f.get("text"),
+                    bodySite: f.get("bodySite") || null,
+                    contextLinks: [],
+                  },
+                  occurredAt: f.get("eventDate")
+                    ? {
+                        precision: "exact",
+                        at: new Date(String(f.get("eventDate"))).toISOString(),
+                      }
+                    : { precision: "unknown" },
+                  timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+                  dueAt: f.get("due")
+                    ? new Date(String(f.get("due"))).toISOString()
+                    : null,
+                  ...(suggestion && f.get("useAi")
+                    ? { aiRunId: suggestion.id }
+                    : {}),
+                });
+              }}
+            >
+              <label>
+                Type
+                <select name="kind">
+                  <option value="private-note">Author-only private note</option>
+                  <option value="reminder">Author-only reminder</option>
+                  <option value="draft">Clinical draft</option>
+                </select>
+              </label>
+              <label>
+                Category
+                <select name="category">
+                  {[
+                    "clinical",
+                    "allergy",
+                    "medication-use",
+                    "baseline",
+                    "ongoing",
+                    "prescription",
+                    "result",
+                  ].map((c) => (
+                    <option key={c}>{c}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Content
+                <textarea
+                  name="text"
+                  key={suggestion?.id ?? "manual"}
+                  defaultValue={suggestion?.text ?? ""}
+                  required
+                  maxLength={10000}
+                />
+              </label>
+              <label>
+                Body site
+                <input name="bodySite" />
+              </label>
+              <label>
+                Exact event time, only if known
+                <input type="datetime-local" name="eventDate" />
+              </label>
+              <label>
+                Reminder time, if applicable
+                <input type="datetime-local" name="due" />
+              </label>
+              {suggestion && (
+                <label>
+                  <input type="checkbox" name="useAi" />
+                  Retain this AI suggestion’s provenance (draft or private note)
+                </label>
+              )}
+              <Btn type="submit" disabled={busy}>
+                Save private work
+              </Btn>
+            </form>
+          )}
           {data.work.map((w) => (
             <article className="record-card" key={w.id}>
               <strong>
@@ -689,6 +781,9 @@ export function WorkspaceView({
         organizationContext?.kind !== "initial-care" && (
           <>
             <h2 id="care-text-inbox">Care text inbox</h2>
+            {patientOnline && (
+              <p>Patient online · You can exchange direct care messages.</p>
+            )}
             <p>
               Separate from AI chat. Stored delivery does not mean the patient
               has read or acted on a message.
@@ -736,11 +831,64 @@ export function WorkspaceView({
             {data.messages?.items.map((m) => (
               <article className="record-card" key={m.id}>
                 <p>{m.content}</p>
+                {m.clinical_attachments?.map((attachment) => (
+                  <aside key={attachment.eventId}>
+                    <strong>Reviewed patient-record entry</strong>
+                    <p>{attachment.text}</p>
+                  </aside>
+                ))}
+                {m.own &&
+                  data.permissions?.write.includes("prescription") &&
+                  m.recommendations
+                    ?.filter((r) => ["pending", "planned"].includes(r.state))
+                    .map((r) => (
+                      <Btn
+                        key={r.id}
+                        sm
+                        disabled={busy}
+                        onClick={() =>
+                          void act("recommendation-withdraw", {
+                            id: r.id,
+                            version: r.version,
+                          })
+                        }
+                      >
+                        Withdraw {r.name} initiation follow-ups
+                      </Btn>
+                    ))}
+                {m.own && (
+                  <Btn sm onClick={() => setReviewMessage(m)}>
+                    Review findings for patient record
+                  </Btn>
+                )}
+                {m.summary_attachment && (
+                  <aside aria-label="Patient shared summary">
+                    <h4>Patient reviewed summary</h4>
+                    <p>{m.summary_attachment.text}</p>
+                  </aside>
+                )}
                 <small>
                   {new Date(m.sent_at).toLocaleString()} · {m.delivery_state}
                 </small>
               </article>
             ))}
+            {reviewMessage && (
+              <section aria-label="Review care message findings">
+                <h3>Review findings</h3>
+                <PatientAssistant
+                  key={reviewMessage.id}
+                  connectionId={connectionId}
+                  organizationContext={organizationContext}
+                  captureOnly
+                  initialQuestion={reviewMessage.content}
+                  originCareMessageId={reviewMessage.id}
+                  writableCategories={data.permissions?.write ?? []}
+                  onSaved={() => void refresh()}
+                  onDenied={() => controller?.clear()}
+                />
+                <Btn onClick={() => setReviewMessage(null)}>Close review</Btn>
+              </section>
+            )}
             <form
               className="account-form"
               onSubmit={async (e) => {
@@ -750,6 +898,16 @@ export function WorkspaceView({
                   connectionId,
                   requestKey: crypto.randomUUID(),
                   content: f.get("content"),
+                  replyToMessageId: data.messages?.items.at(-1)?.id,
+                  ...(f.get("recommendationReviewed")
+                    ? {
+                        recommendation: {
+                          name: f.get("medicineName"),
+                          details: f.get("medicineDetails"),
+                          reviewed: true,
+                        },
+                      }
+                    : {}),
                 });
               }}
             >
@@ -757,6 +915,26 @@ export function WorkspaceView({
                 Message
                 <textarea name="content" required />
               </label>
+              <details>
+                <summary>Medication recommendation</summary>
+                <p>
+                  Records a reviewed recommendation only. Sending does not
+                  finalize a prescription or establish actual use. Include the
+                  exact name and details in your message.
+                </p>
+                <label>
+                  Exact medicine name
+                  <input name="medicineName" maxLength={200} />
+                </label>
+                <label>
+                  Recommendation details
+                  <input name="medicineDetails" maxLength={2000} />
+                </label>
+                <label>
+                  <input type="checkbox" name="recommendationReviewed" />I
+                  reviewed this recommendation
+                </label>
+              </details>
               <Btn type="submit" disabled={busy}>
                 Send care message
               </Btn>

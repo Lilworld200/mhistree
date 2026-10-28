@@ -1,3 +1,5 @@
+import { withdrawRecommendation } from "@/features/clinical-care/medication-recommendations";
+import { practitionerPresence } from "@/features/messaging/connected-chat";
 import { NextRequest } from "next/server";
 import { z } from "zod";
 import { actingContextSchema, withAccess } from "@/features/access/server";
@@ -74,6 +76,8 @@ export async function POST(r: NextRequest) {
           "message",
           "appointment",
           "read",
+          "presence",
+          "recommendation-withdraw",
           "ai",
           "ai-save",
         ]),
@@ -85,6 +89,29 @@ export async function POST(r: NextRequest) {
       throw new DomainError("ACCESS_DENIED");
     const pool = database(),
       session = sessionFrom(r);
+    if (d.action === "recommendation-withdraw") {
+      const data = z
+        .object({ id: z.uuid(), version: z.number().int().positive() })
+        .strict()
+        .parse(d.data);
+      return success(
+        await withAccess(pool, session, d.context, (a) =>
+          withdrawRecommendation(a, data.id, data.version),
+        ),
+      );
+    }
+    if (d.action === "presence") {
+      if (d.context.kind !== "organization")
+        throw new DomainError("ACCESS_DENIED");
+      return success(
+        await practitionerPresence(
+          pool,
+          session,
+          d.context,
+          d.context.connectionId,
+        ),
+      );
+    }
     if (d.action === "ai" || d.action === "read") {
       if (d.context.kind !== "organization")
         throw new DomainError("ACCESS_DENIED");
@@ -104,6 +131,7 @@ export async function POST(r: NextRequest) {
           includeOwnNotes: z.boolean(),
           conversation: z.boolean().optional(),
           previousRunId: z.uuid().optional(),
+          originCareMessageId: z.uuid().optional(),
           timezone: z.string().optional(),
         })
         .strict()

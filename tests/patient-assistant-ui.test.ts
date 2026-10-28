@@ -95,8 +95,8 @@ it("clarifies across turns and publishes only after explicit reviewed confirmati
     proposals: [{ ...candidate, missingDetails: ["Clarify frequency."] }],
   });
   await send("Patient takes Omeprazole 20 mg.");
-  expect(button("Yes, save").disabled).toBe(true);
-  expect(button("No, save as private note").disabled).toBe(false);
+  expect(button("Add to patient record").disabled).toBe(true);
+  expect(button("Save private note").disabled).toBe(false);
   request.mockResolvedValueOnce({
     ...reply,
     id: "run-two",
@@ -119,7 +119,7 @@ it("clarifies across turns and publishes only after explicit reviewed confirmati
     true,
   );
   request.mockRejectedValueOnce(new Error("PROVIDER_UNAVAILABLE"));
-  await act(async () => button("Yes, save").click());
+  await act(async () => button("Add to patient record").click());
   expect(
     host.querySelector<HTMLTextAreaElement>(".patient-ai-review textarea")
       ?.value,
@@ -129,7 +129,7 @@ it("clarifies across turns and publishes only after explicit reviewed confirmati
     destination: "record",
     eventId: "event-one",
   });
-  await act(async () => button("Yes, save").click());
+  await act(async () => button("Add to patient record").click());
   expect(request).toHaveBeenLastCalledWith("/api/practitioner/workspace", {
     connectionId: "connection-one",
     action: "ai-save",
@@ -149,7 +149,7 @@ it("the no choice explicitly saves a private note and reports no change to the p
   request.mockResolvedValueOnce(reply);
   await send(candidate.body.text);
   request.mockResolvedValueOnce({ destination: "note", workId: "note-one" });
-  await act(async () => button("No, save as private note").click());
+  await act(async () => button("Save private note").click());
   expect(request.mock.calls.at(-1)?.[1].data.destination).toBe("note");
   expect(host.textContent).toContain("Saved as your private note");
   expect(host.textContent).toContain("patient's record was not changed");
@@ -160,7 +160,7 @@ it("revoked confirmation clears proposals and asks the owning workspace to reche
   request.mockResolvedValueOnce(reply);
   await send(candidate.body.text);
   request.mockRejectedValueOnce(new Error("ACCESS_DENIED"));
-  await act(async () => button("Yes, save").click());
+  await act(async () => button("Add to patient record").click());
   expect(onDenied).toHaveBeenCalledTimes(1);
   expect(host.querySelector(".patient-ai-review")).toBeNull();
   expect(host.textContent).not.toContain(candidate.body.text);
@@ -176,7 +176,7 @@ it("keeps outstanding review choices available after a conversational yes, witho
     proposals: [],
   });
   await send("Yes");
-  expect(button("Yes, save")).toBeDefined();
+  expect(button("Add to patient record")).toBeDefined();
   expect(request.mock.calls.every((call) => call[1].action === "ai")).toBe(
     true,
   );

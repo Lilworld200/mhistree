@@ -305,6 +305,8 @@ export async function changeCareProposal(
           ).rows;
           if (
             payload.content !== row.payload.content ||
+            JSON.stringify(payload.summary ?? null) !==
+              JSON.stringify(careDraft.parse(row.payload).summary ?? null) ||
             targets.some(
               (t) => !attempted.some((r) => r.connection_id === t.connectionId),
             )

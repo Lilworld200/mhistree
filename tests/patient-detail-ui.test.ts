@@ -137,7 +137,7 @@ it("opens scoped summaries without an automatic AI call and keeps care tools in 
 });
 it("provides patient-scoped AI conversation and retains a failed question for retry", async () => {
   await mount();
-  await act(async () => button("Ask Mhistree").click());
+  await act(async () => button("Talk to Mhistree").click());
   const input = document.querySelector<HTMLTextAreaElement>(
     "#patient-ai-question",
   )!;
@@ -181,7 +181,7 @@ it("provides patient-scoped AI conversation and retains a failed question for re
 });
 it("access loss clears patient details and any open AI panel", async () => {
   await mount();
-  await act(async () => button("Ask Mhistree").click());
+  await act(async () => button("Talk to Mhistree").click());
   request.mockRejectedValueOnce(new Error("ACCESS_DENIED"));
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(host.textContent).not.toContain("Alex Synthetic");
@@ -190,7 +190,7 @@ it("access loss clears patient details and any open AI panel", async () => {
 });
 it("an access revision change closes an open panel before presenting refreshed scope", async () => {
   await mount();
-  await act(async () => button("Ask Mhistree").click());
+  await act(async () => button("Talk to Mhistree").click());
   request.mockResolvedValueOnce({ ...workspace, revision: 2 });
   await act(async () => window.dispatchEvent(new Event("focus")));
   expect(document.querySelector('[role="dialog"]')).toBeNull();

@@ -3,100 +3,14 @@ import { useRef, useState } from "react";
 import { Btn } from "@/components/ui/button";
 import { Icon } from "@/components/ui/icons";
 import { api, errorMessage } from "@/lib/client-api";
-import {
-  EventTime,
-  recordLabels,
-} from "@/features/health-records/timeline-view";
+import { recordLabels } from "@/features/health-records/timeline-view";
 import {
   proposalDestinations,
   type PractitionerProposal,
   type PractitionerReply,
 } from "@/features/clinical-care/ai-proposal";
 
-function ProposalReview({
-  proposal,
-  busy,
-  onSave,
-}: {
-  proposal: PractitionerProposal;
-  busy: boolean;
-  onSave: (destination: "record" | "note", text: string) => void;
-}) {
-  const [text, setText] = useState(proposal.body.text);
-  return (
-    <section
-      className="patient-ai-review"
-      aria-label={`Review ${recordLabels[proposal.category]}`}
-    >
-      <h4>{recordLabels[proposal.category]}</h4>
-      <label>
-        Review or edit this entry
-        <textarea
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          maxLength={10000}
-          disabled={busy}
-        />
-      </label>
-      <p>
-        <EventTime time={proposal.occurredAt} /> · Status: {proposal.status}
-      </p>
-      {proposal.body.medication && (
-        <p>
-          Medication use: {proposal.body.medication.useStatus}.
-          {[
-            ["Planned start", proposal.body.medication.plannedStart],
-            ["Planned end", proposal.body.medication.plannedEnd],
-            ["Started", proposal.body.medication.actualStart],
-            ["Stopped", proposal.body.medication.actualEnd],
-          ]
-            .filter(([, value]) => value)
-            .map(([label, value]) => (
-              <span key={label}>
-                {" "}
-                {label}: {value}.
-              </span>
-            ))}
-        </p>
-      )}
-      {proposal.missingDetails.length > 0 && (
-        <div role="status">
-          <p>Clarification needed before adding to the patient record:</p>
-          <ul>
-            {proposal.missingDetails.map((gap, i) => (
-              <li key={i}>{gap}</li>
-            ))}
-          </ul>
-          <p>Reply below with the details, or keep this as a private note.</p>
-        </div>
-      )}
-      <details>
-        <summary>Practitioner source</summary>
-        {proposal.sourceSpans.map((span, i) => (
-          <blockquote key={i}>{span}</blockquote>
-        ))}
-      </details>
-      <p>
-        Saving to the record confirms your review and attributes the entry to
-        you. A private note stays out of the patient&apos;s timeline and Health.
-      </p>
-      <div className="patient-ai-review-actions">
-        <Btn
-          disabled={busy || !text.trim() || proposal.missingDetails.length > 0}
-          onClick={() => onSave("record", text)}
-        >
-          Yes, save to {proposalDestinations[proposal.category]}
-        </Btn>
-        <Btn
-          disabled={busy || !text.trim()}
-          onClick={() => onSave("note", text)}
-        >
-          No, save as private note
-        </Btn>
-      </div>
-    </section>
-  );
-}
+import { ProposalReview } from "@/features/clinical-care/proposal-review";
 
 export function PatientAssistant({
   connectionId,
@@ -104,14 +18,28 @@ export function PatientAssistant({
   writableCategories = [],
   onSaved,
   onDenied,
+  organizationContext,
+  captureOnly = false,
+  initialQuestion = "",
+  originCareMessageId,
 }: {
   connectionId: string;
+  organizationContext?: import("@/features/access/server").ActingContext;
+  captureOnly?: boolean;
+  initialQuestion?: string;
+  originCareMessageId?: string;
   summary?: boolean;
   writableCategories?: string[];
   onSaved?: () => void;
   onDenied?: () => void;
 }) {
-  const [question, setQuestion] = useState(""),
+  const endpoint = organizationContext
+    ? "/api/organizations/workspace"
+    : "/api/practitioner/workspace";
+  const binding = organizationContext
+    ? { context: organizationContext }
+    : { connectionId };
+  const [question, setQuestion] = useState(initialQuestion),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
   const [turns, setTurns] = useState<
@@ -151,21 +79,21 @@ export function PatientAssistant({
     setError("");
     try {
       const previousRunId = turns.at(-1)?.id;
-      const response = await api<PractitionerReply>(
-        "/api/practitioner/workspace",
-        {
-          connectionId,
-          action: "ai",
-          data: {
-            question: text,
-            purpose,
-            includeOwnNotes: false,
-            conversation: true,
-            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-            ...(previousRunId ? { previousRunId } : {}),
-          },
+      const response = await api<PractitionerReply>(endpoint, {
+        ...binding,
+        action: "ai",
+        data: {
+          question: captureOnly
+            ? `Prepare an editable patient-record proposal from my following care description. Clarify consequential missing details before publication.\n\n${text}`
+            : text,
+          purpose,
+          includeOwnNotes: false,
+          conversation: true,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          ...(previousRunId ? { previousRunId } : {}),
+          ...(originCareMessageId ? { originCareMessageId } : {}),
         },
-      );
+      });
       setTurns((old) => [...old, { question: text, ...response }]);
       setQuestion("");
       end.current?.scrollIntoView?.({ block: "nearest" });
@@ -192,8 +120,8 @@ export function PatientAssistant({
     setBusy(true);
     setError("");
     try {
-      await api("/api/practitioner/workspace", {
-        connectionId,
+      await api(endpoint, {
+        ...binding,
         action: "ai-save",
         data: { runId, itemId: proposal.id, destination, reviewed: true, text },
       });
@@ -253,7 +181,7 @@ export function PatientAssistant({
       )}
       <div
         className="patient-assistant-turns"
-        aria-label="Patient AI conversation"
+        aria-label="Talk to Mhistree"
         aria-live="polite"
       >
         {turns.map((turn, index) => (
@@ -317,7 +245,7 @@ export function PatientAssistant({
               : "Ask about this patient..."
           }
           value={question}
-          maxLength={3000}
+          maxLength={originCareMessageId ? 10000 : captureOnly ? 2700 : 3000}
           required
           onChange={(e) => setQuestion(e.target.value)}
           disabled={busy}
