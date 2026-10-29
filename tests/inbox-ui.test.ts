@@ -102,9 +102,13 @@ it("retains separate unsent drafts when switching care conversations", async () 
   );
   await mount(createElement(InboxView, { initialConnection: "connection" }));
   await type("Keep my draft.");
-  await act(async () => button("Dr Second").click());
+  await act(async () =>
+    root.render(createElement(InboxView, { initialConnection: "second" })),
+  );
   expect(host.querySelector("textarea")!.value).toBe("");
-  await act(async () => button("Dr Synthetic").click());
+  await act(async () =>
+    root.render(createElement(InboxView, { initialConnection: "connection" })),
+  );
   expect(host.querySelector("textarea")!.value).toBe("Keep my draft.");
 });
 it("offers practitioner review without posting an automatic reply or publishing a record", async () => {
@@ -152,3 +156,108 @@ it("offers practitioner review without posting an automatic reply or publishing 
     action: "review",
   });
 });
+
+it.each([false, true])(
+  "shows newest conversations first with read/unread and search filters (practitioner=%s)",
+  async (practitioner) => {
+    const older = {
+      ...connection,
+      unread: 0,
+      latest_at: "2026-10-27T09:00:00Z",
+    };
+    const newer = {
+      ...connection,
+      connectionId: "newer",
+      name: "Newer Person",
+      unread: 3,
+      latest_at: "2026-10-29T09:00:00Z",
+    };
+    const untouched = {
+      ...connection,
+      connectionId: "empty",
+      name: "Another Person",
+      unread: 0,
+      latest_at: null,
+    };
+    request.mockResolvedValue({ items: [untouched, older, newer] });
+    await mount(createElement(InboxView, { practitioner }));
+    const rows = () => [
+      ...host.querySelectorAll<HTMLAnchorElement>(".care-conversation"),
+    ];
+    expect(rows().map((r) => r.querySelector("strong")!.textContent)).toEqual([
+      "Newer Person",
+      "Dr Synthetic",
+      "Another Person",
+    ]);
+    expect(rows()[0].getAttribute("href")).toContain(
+      `${practitioner ? "/clinician/inbox" : "/inbox"}?connection=newer&context=`,
+    );
+    expect(host.querySelector("textarea")).toBeNull();
+    await act(async () => button("Unread").click());
+    expect(rows()).toHaveLength(1);
+    await act(async () =>
+      [...host.querySelectorAll("button")]
+        .find((b) => b.textContent === "Read")!
+        .click(),
+    );
+    expect(rows()).toHaveLength(2);
+    await act(async () => button("All").click());
+    await act(async () => {
+      const field = host.querySelector("input")!;
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(field, "newer");
+      field.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(rows()).toHaveLength(1);
+    expect(request.mock.calls.some(([, body]) => body)).toBe(false);
+  },
+);
+it.each([false, true])(
+  "opens only the chosen chat with back navigation and retained pagination (practitioner=%s)",
+  async (practitioner) => {
+    const selected = practitioner
+      ? {
+          ...connection,
+          context: { kind: "direct", connectionId: "connection" },
+        }
+      : connection;
+    request.mockImplementation(async (path: string) => {
+      if (!path.includes("connection=")) return { items: [selected] };
+      if (path.includes("before="))
+        return {
+          ...page,
+          items: [
+            {
+              ...page.items[0],
+              id: "older",
+              sequence: "6",
+              content: "Earlier conversation",
+            },
+          ],
+        };
+      return { ...page, nextCursor: "6" };
+    });
+    await mount(
+      createElement(InboxView, {
+        practitioner,
+        initialConnection: "connection",
+      }),
+    );
+    expect(host.querySelector(".care-inbox-list")).toBeNull();
+    expect(
+      host
+        .querySelector('a[aria-label="Back to care inbox"]')
+        ?.getAttribute("href"),
+    ).toBe(practitioner ? "/clinician/inbox" : "/inbox");
+    expect(host.querySelector("textarea")).not.toBeNull();
+    expect(host.textContent).toContain(page.items[0].content);
+    expect(request.mock.calls.some(([, body]) => body?.action === "read")).toBe(
+      false,
+    );
+    await act(async () => button("Earlier messages").click());
+    expect(host.textContent).toContain("Earlier conversation");
+    expect(host.textContent).toContain(page.items[0].content);
+  },
+);
