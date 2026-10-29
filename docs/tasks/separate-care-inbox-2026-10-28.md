@@ -1,3 +1,5 @@
+Hosted rollout update2026-10-29: the migration below and the additive lookup-index migration are now applied to the app-configured mhistree project. [Deployment evidence and current limits](care-inbox-database-rollout-2026-10-29.md). The original implementation-time evidence below remains dated.
+
 # Separate Care Inbox and reviewed capture
 
 Date: 2026-10-28. Branch: `codex/separate-care-inbox`. Status: implemented and locally verified. Source is uncommitted. No hosted migration or deployment has been performed.

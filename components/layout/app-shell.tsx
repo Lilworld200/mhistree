@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 
 import { ChatNavigationProvider, useChatNavigation } from "./chat-navigation";
+import { useAppViewport } from "./use-app-viewport";
 import { MobileTopbarTarget } from "./mobile-topbar-actions";
 import type { WorkspaceAccess } from "@/features/auth/workspace-access";
 import {
@@ -86,7 +87,13 @@ function Navigation({
         {close && (
           <Dialog.Close
             className="btn btn-icon"
-            style={{ position: "absolute", top: 8, right: 8, width: 44, height: 44 }}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 44,
+              height: 44,
+            }}
             aria-label="Close menu"
           >
             <Icon n="x" s={18} />
@@ -119,6 +126,7 @@ function Navigation({
       )}
       <nav
         className="nav-body"
+        tabIndex={0}
         aria-label={
           professional ? "Practitioner navigation" : "Patient navigation"
         }
@@ -197,30 +205,6 @@ function Navigation({
                 </button>
               ))}
             </div>
-            <details
-              className="sidebar-care"
-              open={
-                navigation.slice(5).some((item) => item.href === pathname) ||
-                undefined
-              }
-            >
-              <summary className="nav-item">
-                <Icon n="cal" s={17} />
-                Care and appointments
-              </summary>
-              {navigation.slice(5).map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={close}
-                  className={`nav-item${pathname === item.href ? " on" : ""}`}
-                  aria-current={pathname === item.href ? "page" : undefined}
-                >
-                  <Icon n={item.icon} s={17} />
-                  {item.label}
-                </Link>
-              ))}
-            </details>
           </>
         )}
       </nav>
@@ -246,6 +230,32 @@ function Navigation({
             <Icon n="share" s={17} />
             Organizations
           </Link>
+        )}
+        {!professional && (
+          <details
+            className="sidebar-care"
+            open={
+              navigation.slice(5).some((item) => item.href === pathname) ||
+              undefined
+            }
+          >
+            <summary className="nav-item">
+              <Icon n="cal" s={17} />
+              Care and appointments
+            </summary>
+            {navigation.slice(5).map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={close}
+                className={`nav-item${pathname === item.href ? " on" : ""}`}
+                aria-current={pathname === item.href ? "page" : undefined}
+              >
+                <Icon n={item.icon} s={17} />
+                {item.label}
+              </Link>
+            ))}
+          </details>
         )}
         <Link
           href={professional ? "/profile?workspace=practitioner" : "/profile"}
@@ -295,6 +305,7 @@ function Shell({
   children: React.ReactNode;
   workspaces: WorkspaceAccess;
 }) {
+  const viewportRoot = useAppViewport();
   const [open, setOpen] = useState(false);
   const [mobileActions, setMobileActions] = useState<HTMLDivElement | null>(
     null,
@@ -314,7 +325,7 @@ function Shell({
         )?.label ?? "Mhistree");
   return (
     <MobileTopbarTarget.Provider value={mobileActions}>
-      <div className="app" data-theme="light">
+      <div className="app app-viewport" data-theme="light" ref={viewportRoot}>
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>

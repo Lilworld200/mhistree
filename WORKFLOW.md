@@ -1,3 +1,27 @@
+Global scrollbar design2026-10-29: consolidated existing scoped scrollbar rules into one universal native style for current/future scrollable elements and document scrollbars. Six-pixel rounded WebKit thumbs, transparent track/corner, light/dark neutral tokens and higher-contrast hover; standard thin/color fallback in other browsers. Forced-colors restores native rendering. No overflow, touch, keyboard or messaging handlers changed. Global Tailwind/PostCSS compilation and7/7 existing inbox interaction checks passed; no repeated live visual test.
+
+Sidebar care placement2026-10-29: moved the existing patient Care and appointments disclosure out of the scrolling navigation list into the footer directly before Your account, shared by desktop and mobile drawer. Its expanded contents retain bounded internal scrolling on short screens. Links, active state and disclosure behavior unchanged. TypeScript/targeted ESLint/whitespace checks; no repeated visual test.
+
+## Viewport-contained application shell - 2026-10-29
+
+Implemented one app-root viewport owner, desktop sidebar/main row and hamburger topbar/main rows; removed competing shell vh/dvh heights/sticky positioning. Scoped document containment preserves public-page scrolling. Shrinkable grids/flex children, explicit border-box sizing, contained internal page/message/navigation/dialog scrolling and focusable chat/nav regions keep content reachable. App-only VisualViewport height handling supports keyboard overlays without restricting pinch zoom; root metadata requests keyboard viewport resizing.
+
+Focused4-suite tests17/17, standalone TypeScript and targeted ESLint passed. Final isolated production build generated67 pages, client bundle scan passed and276 production files matched the build copy. Actual-AppShell/compiled-CSS synthetic browser checks confirm zero outer/horizontal overflow across six desktop/tablet/mobile/landscape/small-height/long-page fixtures, plus Care Inbox/empty chat/public scrolling, expanded details, last-record reachability, refresh and drawer focus return. Physical-device keyboard/Safari/native zoom remain unverified. [Evidence and component contract](docs/tasks/viewport-containment-2026-10-29.md); components/layout/README.md. No database/API/provider/deployment changes.
+
+Care Inbox mobile heading refinement2026-10-29: at the existing hamburger-navigation breakpoint (980px and below), hide only the list page heading/subtitle and remove its extra list-card top margin for both roles. Shell title and desktop presentation remain. CSS-only source check and whitespace check; no repeated visual test.
+
+## Care Inbox hosted database rollout - 2026-10-29
+
+Owner-authorized additive migrations applied to the existing mhistree project wcsizaumvthtkilrqsjr, verified to match the app connection. Hosted versions20261029052945 (separate_care_inbox) and20261029053250 (care_inbox_lookup_indexes) add durable analysis/pending findings, sender/review metadata, guarded review links and eight lookup indexes, retaining all existing messages/records. New local CLI-generated migration20261029053150 also optimizes transaction-context policy reads without changing authority.
+
+Final fresh native/HTTP tests15 passed/1 optional live-provider skip. Hosted RLS/grants/columns/trigger/index/history and five configured-app read-only/TLS schema checks passed; no patient rows queried or test messages sent on hosted. Inbox-specific performance advisories resolved; baseline unrelated security findings unchanged and documented with remediation links. No further browser tests, provider change or frontend deployment. [Rollout evidence](docs/tasks/care-inbox-database-rollout-2026-10-29.md).
+
+## Care Inbox chat UI redesign - 2026-10-29
+
+Replaced recipient-button/inline-thread layout for both roles with searchable conversation rows, All/Unread/Read filters and latest_at descending order. Existing inbox connection/context URLs now show only the chosen chat with Back navigation, initials, attributed left/right bubbles, scrolling paginated history and a bottom message composer. Retained explicit read acknowledgement, stable failed-send retry keys/drafts, practitioner Talk review/withdrawal and durable analysis recovery; no server/API/schema/provider changes. Scoped styles support mobile, dark theme, focus and reduced motion.
+
+Verification: inbox UI interaction suite7/7, standalone TypeScript and targeted ESLint passed. Tests cover both roles, ordering/filter/search, links/back, history pagination, explicit reads, failed-send replay and separate drafts. No further visual/live-account tests under the owner restriction; rendered/device appearance remains unverified. No deployment or hosted changes.
+
 ## Separate Care Inbox and reviewed capture - 2026-10-28
 
 Implemented dedicated patient/practitioner inboxes, canonical message delivery and explicit unread acknowledgement, with practitioner patient-profile/Health/workspace shortcuts navigating to /clinician/inbox. Removed private-AI care-message mixing and recipient mode; reviewed handoffs retain Open conversation receipts and health-only editable summary projection. New leased post-delivery analysis records clear patient reports through shared validation, keeps definite/suspected doctor findings author-private pending review in Talk to Mhistree, and uses existing atomic publication. Typed clarification retains pending identity; recommendation publication preserves earlier patient use and original source links. No background human replies or provider/configuration change.
