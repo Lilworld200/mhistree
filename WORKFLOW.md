@@ -1,3 +1,5 @@
+Global scrollbar design2026-10-29: consolidated existing scoped scrollbar rules into one universal native style for current/future scrollable elements and document scrollbars. Six-pixel rounded WebKit thumbs, transparent track/corner, light/dark neutral tokens and higher-contrast hover; standard thin/color fallback in other browsers. Forced-colors restores native rendering. No overflow, touch, keyboard or messaging handlers changed. Global Tailwind/PostCSS compilation and7/7 existing inbox interaction checks passed; no repeated live visual test.
+
 Sidebar care placement2026-10-29: moved the existing patient Care and appointments disclosure out of the scrolling navigation list into the footer directly before Your account, shared by desktop and mobile drawer. Its expanded contents retain bounded internal scrolling on short screens. Links, active state and disclosure behavior unchanged. TypeScript/targeted ESLint/whitespace checks; no repeated visual test.
 
 ## Viewport-contained application shell - 2026-10-29

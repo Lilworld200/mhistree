@@ -11,6 +11,8 @@
    ════════════════════════════════════════════════════════════════ */
 
 :root {
+  --scrollbar-thumb: #888c92;
+  --scrollbar-thumb-hover: #60656c;
   --stage: #f3f3f2;
   --shell: #ececeb;
   --shell2: #f1f1f0;
@@ -38,6 +40,8 @@
 }
 
 [data-theme="dark"] {
+  --scrollbar-thumb: #858a94;
+  --scrollbar-thumb-hover: #b0b5be;
   --stage: #0e0e10;
   --shell: #191a1c;
   --shell2: #1f2023;
@@ -223,46 +227,6 @@
     gap: 2px;
     padding-right: 4px;
     -webkit-overflow-scrolling: touch;
-    scrollbar-width: thin;
-    scrollbar-color: var(--bs) transparent;
-  }
-  .nav-body::-webkit-scrollbar,
-  .scroll::-webkit-scrollbar,
-  .msgs::-webkit-scrollbar,
-  .setcontainer::-webkit-scrollbar,
-  .settabs::-webkit-scrollbar,
-  .setbody::-webkit-scrollbar,
-  .setlayout::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
-  }
-  .nav-body::-webkit-scrollbar-track,
-  .scroll::-webkit-scrollbar-track,
-  .msgs::-webkit-scrollbar-track,
-  .setcontainer::-webkit-scrollbar-track,
-  .settabs::-webkit-scrollbar-track,
-  .setbody::-webkit-scrollbar-track,
-  .setlayout::-webkit-scrollbar-track {
-    background: transparent;
-  }
-  .nav-body::-webkit-scrollbar-thumb,
-  .scroll::-webkit-scrollbar-thumb,
-  .msgs::-webkit-scrollbar-thumb,
-  .setcontainer::-webkit-scrollbar-thumb,
-  .settabs::-webkit-scrollbar-thumb,
-  .setbody::-webkit-scrollbar-thumb,
-  .setlayout::-webkit-scrollbar-thumb {
-    background: var(--bs);
-    border-radius: 999px;
-  }
-  .nav-body::-webkit-scrollbar-thumb:hover,
-  .scroll::-webkit-scrollbar-thumb:hover,
-  .msgs::-webkit-scrollbar-thumb:hover,
-  .setcontainer::-webkit-scrollbar-thumb:hover,
-  .settabs::-webkit-scrollbar-thumb:hover,
-  .setbody::-webkit-scrollbar-thumb:hover,
-  .setlayout::-webkit-scrollbar-thumb:hover {
-    background: var(--ink3);
   }
   .recents {
     display: flex;
@@ -1662,16 +1626,30 @@
   }
 }
 
-.scroll::-webkit-scrollbar,
-.recents::-webkit-scrollbar,
-.msgs::-webkit-scrollbar {
-  width: 8px;
+/* Global native scrollbar design covers current and future scroll containers. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
-.scroll::-webkit-scrollbar-thumb,
-.recents::-webkit-scrollbar-thumb,
-.msgs::-webkit-scrollbar-thumb {
-  background: var(--bs);
-  border-radius: 8px;
+*:hover { scrollbar-color: var(--scrollbar-thumb-hover) transparent; }
+@supports selector(::-webkit-scrollbar) {
+  /* Non-auto standard values override rounded WebKit thumbs in modern browsers. */
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  *:hover { scrollbar-color: auto; }
+  *::-webkit-scrollbar { width: 6px; height: 6px; }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner { background: transparent; }
+  *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 999px; }
+  *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
+}
+@media (forced-colors: active) {
+  * { scrollbar-width: auto; scrollbar-color: auto; }
+  *:hover { scrollbar-color: auto; }
+  *::-webkit-scrollbar { width: revert; height: revert; }
+  *::-webkit-scrollbar-thumb { background: revert; border-radius: revert; }
+  *::-webkit-scrollbar-thumb:hover { background: revert; }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner { background: revert; }
 }
 
 /* Timeline rail: vertical line + event dots */
