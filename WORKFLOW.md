@@ -1,3 +1,9 @@
+## Viewport-contained application shell - 2026-10-29
+
+Implemented one app-root viewport owner, desktop sidebar/main row and hamburger topbar/main rows; removed competing shell vh/dvh heights/sticky positioning. Scoped document containment preserves public-page scrolling. Shrinkable grids/flex children, explicit border-box sizing, contained internal page/message/navigation/dialog scrolling and focusable chat/nav regions keep content reachable. App-only VisualViewport height handling supports keyboard overlays without restricting pinch zoom; root metadata requests keyboard viewport resizing.
+
+Focused4-suite tests17/17, standalone TypeScript and targeted ESLint passed. Final isolated production build generated67 pages, client bundle scan passed and276 production files matched the build copy. Actual-AppShell/compiled-CSS synthetic browser checks confirm zero outer/horizontal overflow across six desktop/tablet/mobile/landscape/small-height/long-page fixtures, plus Care Inbox/empty chat/public scrolling, expanded details, last-record reachability, refresh and drawer focus return. Physical-device keyboard/Safari/native zoom remain unverified. [Evidence and component contract](docs/tasks/viewport-containment-2026-10-29.md); components/layout/README.md. No database/API/provider/deployment changes.
+
 Care Inbox mobile heading refinement2026-10-29: at the existing hamburger-navigation breakpoint (980px and below), hide only the list page heading/subtitle and remove its extra list-card top margin for both roles. Shell title and desktop presentation remain. CSS-only source check and whitespace check; no repeated visual test.
 
 ## Care Inbox hosted database rollout - 2026-10-29

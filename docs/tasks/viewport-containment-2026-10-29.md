@@ -1,0 +1,26 @@
+# Viewport-contained application shell - 2026-10-29
+
+Implemented the owner's approved viewport contract without changing clinical behavior, API, schema, provider or visual tokens.
+
+## Changes
+
+The app root owns one CSS100dvh height, with a scoped VisualViewport adjustment for overlaying mobile keyboards. Stage, sidebar and main fill allocated grid space rather than independently calculating viewport heights. Removed competing vh/dvh shell rules and sticky positioning on the in-grid sidebar/mobile topbar. Desktop uses288px/minmax(0,1fr) columns and one shrinkable row; mobile<=980px uses auto/minmax(0,1fr) rows. Existing20px desktop/12px mobile stage padding and card styling remain.
+
+Explicit border-box sizing keeps padding inside dimensions; an inherited box-sizing approach initially left the native details summary content-box and produced26px horizontal navigation overflow. Direct border-box corrected it; final sidebar scrollWidth equals clientWidth252px. A bounded sidebar disclosure prevents min-content expansion.
+
+html/body are scroll-contained only while .app-viewport exists, without an effect-based global lock or disabling public scrolling. Page wrappers provide internal overflow for raw route/error content; ordinary patient pages and history sections retain their own scroll. Message history/long pages/navigation/dialog bodies contain scroll chaining. Dialog headers do not shrink, dialog bodies can shrink/scroll, and drawers use a flex navigation region. Care Inbox history min-height180px was removed so small heights can retain its composer. Nav/message-history regions are keyboard focusable.
+
+The app-root hook tracks unzoomed VisualViewport height, bounds it to innerHeight, listens to visual/window resize and cleans up on unmount. Pinch zoom keeps CSS sizing. Root Viewport metadata requests interactive-widget=resizes-content. No maximum-scale/user-scalable restrictions or gesture/wheel interception were added. [VisualViewport documentation](https://developer.mozilla.org/en-US/docs/Web/API/VisualViewport), [Next viewport metadata](https://nextjs.org/docs/app/api-reference/functions/generate-viewport).
+
+## Verification
+
+- Focused4-suite regression17/17 passed: app viewport lifecycle/keyboard-height/pinch fallback, inbox send/draft/read/page behavior, professional shell guards and chat continuity. Standalone TypeScript and targeted ESLint passed.
+- Synthetic browser fixture bundled the actual AppShell and useAppViewport, actual compiled Tailwind/global CSS, real Radix drawer and actual InboxView with invented API responses. No authentication bypass, real account, message delivery or hosted data action. Private harness: .local/viewport-shell-preview.cjs.
+- Final measured document scrollWidth/scrollHeight exactly matched viewport width/height at1440x900,980x800,390x844,800x390 and640x360. A390x844 long-record fixture also matched. Outer scrollTop0 and navOverflow0 in all six fixtures. Main bounds: desktop top20/bottom880; mobile top81.6/bottom832. Overflowing content remained in message/record scroll areas.
+- Care Inbox390x844 document390x844, page overflow0, history532px with6720px of content, composer bottom785.2px. Empty chat also retained its composer within844px. Public registration fixture had no app shell and2084px document height at844px viewport, confirming ordinary public-page scrolling.
+- Keyboard Control+End scrolled actual message/navigation regions while document/page scroll remained0. Last record button79 could be reached; the record section scrolled8458.4px and document stayed0. Expanded message details did not move shell bounds. Mobile drawer height842px matched its scrollHeight, with590px nav showing3104px content; keyboard focus scrolled its own navigation. Escape closed it and focus returned to Open menu. Reload and chat/long-page navigation kept outer document unscrolled.
+- Screenshot inspection used invented content; logo/links were mocked and typography used available fonts. This verifies containment, not pixel-identical branding. Browser viewport overrides were restored, temporary tab closed and preview process stopped.
+- Browser measurements covered responsive sizes, landscape-like dimensions and a small CSS viewport representing zoom constraints. Actual native browser zoom, physical device rotation, iOS/Android virtual keyboards, Safari elastic overscroll and full accessibility certification remain unverified. Keyboard geometry/lifecycle is unit-tested; no real-device result is claimed.
+- Initial preview tooling encountered a package-exports resolution error and Windows sandbox esbuild permissions. Corrected module resolution and ran the synthetic compiler outside the sandbox. No app/runtime security settings were weakened. An offscreen iframe click and role lookup failed; direct fixture navigation and the actual summary locator verified those cases.
+
+Final isolated production webpack build compiled, typechecked and generated67 pages successfully. Built-client identifier/canary scan passed. All276 compared production source/configuration/assets matched the successful build copy exactly. An initial client-scan command used the wrong working directory; the corrected invocation from .local/viewport-build passed. No deployment or database changes. Existing owner work remains preserved.

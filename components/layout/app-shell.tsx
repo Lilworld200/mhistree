@@ -10,6 +10,7 @@ import { Icon, type IconName } from "@/components/ui/icons";
 import logo from "@/app/assets/images/logos/mhistree_black_logo.png";
 
 import { ChatNavigationProvider, useChatNavigation } from "./chat-navigation";
+import { useAppViewport } from "./use-app-viewport";
 import { MobileTopbarTarget } from "./mobile-topbar-actions";
 import type { WorkspaceAccess } from "@/features/auth/workspace-access";
 import {
@@ -119,6 +120,7 @@ function Navigation({
       )}
       <nav
         className="nav-body"
+        tabIndex={0}
         aria-label={
           professional ? "Practitioner navigation" : "Patient navigation"
         }
@@ -295,6 +297,7 @@ function Shell({
   children: React.ReactNode;
   workspaces: WorkspaceAccess;
 }) {
+  const viewportRoot = useAppViewport();
   const [open, setOpen] = useState(false);
   const [mobileActions, setMobileActions] = useState<HTMLDivElement | null>(
     null,
@@ -314,7 +317,7 @@ function Shell({
         )?.label ?? "Mhistree");
   return (
     <MobileTopbarTarget.Provider value={mobileActions}>
-      <div className="app" data-theme="light">
+      <div className="app app-viewport" data-theme="light" ref={viewportRoot}>
         <a className="skip-link" href="#main-content">
           Skip to content
         </a>

@@ -89,7 +89,6 @@
 }
 
 .app {
-  min-height: 100vh;
   width: 100%;
   color: var(--ink);
   font-family: var(--font-manrope), "Manrope", system-ui, sans-serif;
@@ -109,10 +108,12 @@
 @layer components {
   /* ── Stage layout ───────────────────────────────────────────── */
   .stage {
-    min-height: 100vh;
+    height: 100%;
+    min-height: 0;
     width: 100%;
     display: grid;
-    grid-template-columns: 288px 1fr;
+    grid-template-columns: 288px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
     gap: 20px;
     padding: 20px;
   }
@@ -128,9 +129,8 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    position: sticky;
-    top: 20px;
-    height: calc(100vh - 40px);
+    min-height: 0;
+    height: 100%;
     overflow: hidden;
   }
   .av {
@@ -332,7 +332,7 @@
     border-radius: 32px;
     box-shadow: var(--sh3);
     overflow: hidden;
-    min-height: calc(100vh - 40px);
+    min-height: 0;
   }
   .page {
     height: 100%;
@@ -1759,8 +1759,7 @@
     border: 1px solid var(--bl);
     border-radius: 20px;
     box-shadow: var(--sh2);
-    position: sticky;
-    top: 12px;
+    position: relative;
     z-index: 40;
   }
   .tbtitle {
@@ -1771,15 +1770,13 @@
     letter-spacing: -0.02em;
   }
   .stage {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
     padding: 12px;
     gap: 12px;
   }
   .side {
     display: none;
-  }
-  .main-shell {
-    min-height: calc(100vh - 96px);
   }
   .scroll {
     padding: 20px 16px 96px;
@@ -2478,15 +2475,45 @@ textarea:focus-visible {
   }
 }
 
-/* UI restoration from 71121bd: current services, original Soft-Float layout. */
-.stage {
-  height: 100dvh;
-  min-height: 0;
+/* One viewport owner; authentication/registration retain ordinary document scrolling. */
+html { box-sizing: border-box; }
+*, *::before, *::after { box-sizing: border-box; }
+body { margin: 0; }
+html:has(.app-viewport), body:has(.app-viewport) {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
-.main-shell {
-  height: calc(100dvh - 40px);
+.app-viewport {
+  height: var(--app-viewport-height, 100dvh);
   min-height: 0;
+  overflow: hidden;
 }
+.app-viewport .stage { overflow: hidden; }
+.app-viewport .main-shell { height: 100%; }
+.app-viewport .page {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+}
+.app-viewport .page > :is(.patient-page, .scroll, .pagecol) {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+.app-viewport :is(.nav-body, .msgs, .scroll, .patient-page) {
+  overscroll-behavior-y: contain;
+}
+.app-viewport .msgs { min-height: 0; }
+.app-viewport .chead { flex-shrink: 0; }
+.app-viewport .sidebar-care { width: 100%; min-width: 0; }
+.sharing-panel-header { flex-shrink: 0; }
+.sharing-panel-body { min-height: 0; flex: 1; }
+:is(.drawer-left, .sharing-panel-body, .patient-detail-panel-body) {
+  overscroll-behavior-y: contain;
+}
+.drawer-left { display: flex; flex-direction: column; gap: 4px; }
+
 .page,
 .pagecol {
   min-height: 0;
@@ -3876,15 +3903,6 @@ textarea:focus-visible {
   justify-self: start;
 }
 @media (max-width: 980px) {
-  .stage {
-    min-height: 100dvh;
-    height: 100dvh;
-    grid-template-rows: auto minmax(0, 1fr);
-  }
-  .main-shell {
-    height: 100%;
-    min-height: 0;
-  }
   .patient-page {
     padding: 20px 16px;
   }
@@ -4685,7 +4703,7 @@ textarea:focus-visible {
 .care-chat-title p { margin:4px 0 0; font-size:12px; color:#555; }
 .care-chat-body { display:flex; flex-direction:column; min-height:0; flex:1; }
 .care-chat-review { padding:12px 20px; display:flex; align-items:center; justify-content:center; gap:8px; font-size:12px; color:#244975; flex-shrink:0; }
-.care-chat-scroll { flex:1; min-height:180px; overflow-y:auto; overscroll-behavior:contain; padding:20px 12px; }
+.care-chat-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:20px 12px; }
 .care-chat-messages { display:flex; flex-direction:column; gap:14px; }
 .care-chat-bubble { align-self:flex-start; max-width:min(80%,620px); padding:13px 16px; border-radius:18px 18px 18px 4px; background:#fff; color:#181818; box-shadow:0 2px 8px #00000008; overflow-wrap:anywhere; }
 .care-chat-bubble.inbox-message-own { align-self:flex-end; border-radius:18px 18px 4px 18px; background:#dfebfc; }

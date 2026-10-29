@@ -425,6 +425,7 @@ export function ChatView() {
       </header>
       <div
         className="msgs"
+        tabIndex={0}
         ref={scrollRef}
         aria-label="Conversation history"
         aria-busy={busy}
