@@ -87,7 +87,13 @@ function Navigation({
         {close && (
           <Dialog.Close
             className="btn btn-icon"
-            style={{ position: "absolute", top: 8, right: 8, width: 44, height: 44 }}
+            style={{
+              position: "absolute",
+              top: 8,
+              right: 8,
+              width: 44,
+              height: 44,
+            }}
             aria-label="Close menu"
           >
             <Icon n="x" s={18} />
@@ -199,30 +205,6 @@ function Navigation({
                 </button>
               ))}
             </div>
-            <details
-              className="sidebar-care"
-              open={
-                navigation.slice(5).some((item) => item.href === pathname) ||
-                undefined
-              }
-            >
-              <summary className="nav-item">
-                <Icon n="cal" s={17} />
-                Care and appointments
-              </summary>
-              {navigation.slice(5).map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={close}
-                  className={`nav-item${pathname === item.href ? " on" : ""}`}
-                  aria-current={pathname === item.href ? "page" : undefined}
-                >
-                  <Icon n={item.icon} s={17} />
-                  {item.label}
-                </Link>
-              ))}
-            </details>
           </>
         )}
       </nav>
@@ -248,6 +230,32 @@ function Navigation({
             <Icon n="share" s={17} />
             Organizations
           </Link>
+        )}
+        {!professional && (
+          <details
+            className="sidebar-care"
+            open={
+              navigation.slice(5).some((item) => item.href === pathname) ||
+              undefined
+            }
+          >
+            <summary className="nav-item">
+              <Icon n="cal" s={17} />
+              Care and appointments
+            </summary>
+            {navigation.slice(5).map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={close}
+                className={`nav-item${pathname === item.href ? " on" : ""}`}
+                aria-current={pathname === item.href ? "page" : undefined}
+              >
+                <Icon n={item.icon} s={17} />
+                {item.label}
+              </Link>
+            ))}
+          </details>
         )}
         <Link
           href={professional ? "/profile?workspace=practitioner" : "/profile"}

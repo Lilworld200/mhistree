@@ -1,3 +1,5 @@
+Sidebar care placement2026-10-29: moved the existing patient Care and appointments disclosure out of the scrolling navigation list into the footer directly before Your account, shared by desktop and mobile drawer. Its expanded contents retain bounded internal scrolling on short screens. Links, active state and disclosure behavior unchanged. TypeScript/targeted ESLint/whitespace checks; no repeated visual test.
+
 ## Viewport-contained application shell - 2026-10-29
 
 Implemented one app-root viewport owner, desktop sidebar/main row and hamburger topbar/main rows; removed competing shell vh/dvh heights/sticky positioning. Scoped document containment preserves public-page scrolling. Shrinkable grids/flex children, explicit border-box sizing, contained internal page/message/navigation/dialog scrolling and focusable chat/nav regions keep content reachable. App-only VisualViewport height handling supports keyboard overlays without restricting pinch zoom; root metadata requests keyboard viewport resizing.

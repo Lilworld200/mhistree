@@ -4756,3 +4756,6 @@ html:has(.app-viewport), body:has(.app-viewport) {
 @media(max-width:980px) { .care-inbox .care-chat-title h1 { font-size:16px; } }
 .care-inbox a.care-conversation,
 .care-inbox a.care-chat-back { text-decoration:none; }
+
+/* Keep patient care navigation above the account, outside saved-chat scrolling. */
+.sidefoot .sidebar-care { margin-top:0; max-height:min(240px,35dvh); overflow-y:auto; overscroll-behavior-y:contain; }
